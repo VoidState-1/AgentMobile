@@ -14,7 +14,7 @@
     "android": {
       "package": "com.agentmobile.app",
       "adaptiveIcon": {
-        "backgroundColor": "#F3F5F1",
+        "backgroundColor": "#F5F6F8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
         "backgroundImage": "./assets/images/android-icon-background.png",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
@@ -46,12 +46,16 @@
       [
         "expo-splash-screen",
         {
-          "backgroundColor": "#F3F5F1",
+          "backgroundColor": "#F5F6F8",
+          "dark": {
+            "backgroundColor": "#111318"
+          },
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
       ],
-      "expo-sharing"
+      "expo-sharing",
+      "./plugins/with-dev-menu"
     ],
     "experiments": {
       "typedRoutes": true

@@ -38,6 +38,26 @@ describe('Pi Agent 真实执行循环', () => {
     expect((await started.done).state).toBe('cancelled');
     workspace.claim(project.id, 'another-run'); workspace.release(project.id, 'another-run');
   });
+
+  it('下一条消息保留上一次目标和回复，不重放过去的工具调用', async () => {
+    const storage = await testStorage(); cleanups.push(storage.cleanup);
+    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('连续会话');
+    const requests: { role: string; content: string }[][] = [];
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      requests.push(JSON.parse(String(init.body)).messages);
+      return new Response('data: {"choices":[{"delta":{"content":"建议保留两段内容。"},"finish_reason":"stop"}]}\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+    const first = await startAgent(workspace, project.id, '请整理我的旅行资料', settings, 'test-only', randomUUID, () => {});
+    await first.done;
+    const second = await startAgent(workspace, project.id, '把上一个建议再简短一些', settings, 'test-only', randomUUID, () => {});
+    await second.done;
+    expect(requests[1].some((message) => message.role === 'user' && message.content === '请整理我的旅行资料')).toBe(true);
+    expect(requests[1].some((message) => message.role === 'assistant' && message.content === '建议保留两段内容。')).toBe(true);
+    expect(JSON.stringify(requests[1].at(-1)?.content)).toContain('把上一个建议再简短一些');
+  });
 });
 
 describe('流式协议', () => {

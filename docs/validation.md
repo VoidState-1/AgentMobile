@@ -82,3 +82,38 @@ Android Kotlin 插件阻塞已解除，安装 NDK 27.1/27.0 和 Build Tools 36 �
 Android arm64 真机、原生掉电/空间不足测试、SecureStore 写入验证和 iOS 原生编译仍未完成。原型 Git 后端为 isomorphic-git；libgit2 原生桥接未实现。
 
 新增依赖后 npm audit 仍为 30 项（18 high、12 moderate），0 critical；没有使用破坏 Expo 兼容性的强制修复。
+
+## 2026-10-13 前端重做
+
+设计基线：深浅两色、简约现代、紧凑工具界面。会话、资料、版本有独立操作区，移动端输入区固定，编辑器使用全屏或桌面侧栏。
+
+已验证的浏览器流程（6 项）：
+
+1. 编辑 → Pi 任务 → 逐行变化 → 恢复 → 刷新后读取。
+2. 未保存保护、保存后离开、文件搜索。
+3. 深浅切换、跟随系统变化、主题偏好持久化、项目输入草稿保留。
+4. 360px 手机和 500px 短视口：固定输入区可操作、无横向溢出、全屏编辑。
+5. 图片导入、兼容服务工具调用、文件结果读取。
+6. Shift+Enter 换行、Enter 发送、Ctrl+S 保存、新建/重命名/删除。
+
+检查发现并修复了嵌套 Modal 确认按钮被预览层挡住、快捷保存事件被 TextInput 拦截的问题；没有用强制点击绕过。
+
+领域/协议测试增至 25 项，包含连续任务保留上一轮目标与回复。TypeScript 和 ESLint 通过。Expo Doctor 21/21 通过。
+
+截图经视觉检查：work/workbench-mobile-light.png、work/workbench-mobile-dark.png、work/workbench-desktop-editor-light.png。
+
+Lucide 图标按公开单图标子路径导入，Web bundle 约 2.3 MB，避免把整个图标目录打入应用。
+
+Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜单配置。API 36.1、x86_64 模拟器实际操作通过：
+
+- 软键盘保持展开时输入项目名称并创建工作区。
+- 打开文字资料、全屏编辑、离开触发未保存提示、继续编辑保留草稿、保存后离开。
+- 输入任务并发送，Pi 读取资料、写入 summary.md，Git 保存版本。
+- 强制停止应用后重开，自动恢复项目选择；整理文件与手动编辑的内容仍存在。
+- 原生浅色/深色切换及重启后外观偏好保留；截图经视觉检查：work/workbench-android-light.png、work/workbench-android-dark.png。
+
+原生验证发现 Android 软键盘遮挡底部面板的创建按钮，已为面板和全屏编辑器增加键盘避让，并在键盘展开时重新操作通过。新建面板截图在 work/workbench-android-keyboard.png。
+
+实时主题切换后原生导航层曾保留浅色状态栏，已统一导航主题、页面主题与状态栏选项。深色状态栏以及键盘展开时的编辑界面也经截图检查；编辑截图在 work/workbench-android-editor.png。
+
+最终 npm run check 通过（25 项测试），6 项浏览器流程全部通过；Android/iOS/Web JavaScript 导出成功。iOS JavaScript 打包不代表 iOS 原生编译通过，arm64 真机和真实付费模型服务仍未验证。

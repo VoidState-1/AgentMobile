@@ -10,6 +10,8 @@
 - 默认演示模式无需密钥；可配置 Chat Completions 兼容模型服务。
 - 查看真实 Git 提交、任务文件变化，撤销最新任务或恢复历史。
 - 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
+- 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
+- 独立编辑器、Markdown 阅读、未保存保护、逐行差异和恢复预览。
 
 演示使用预设步骤，不进行语义理解。真实模型模式需要用户配置服务、模型和 API Key。
 
@@ -32,7 +34,7 @@ Android Development Build：
 npm run android
 ```
 
-需要 Android Studio、SDK、兼容的 JDK、NDK 和 CMake。首次编译后，仅修改 TypeScript 可运行 npm start；新增原生依赖后重新编译。当前新增了 expo-crypto，旧开发客户端需要重建。
+需要 Android Studio、SDK、兼容的 JDK、NDK 和 CMake。首次编译后，仅修改 TypeScript 可运行 npm start；新增原生依赖后重新编译。本次增加 react-native-svg 和开发菜单配置，旧开发客户端需要重建。
 
 iOS 在 macOS/Xcode 上运行 npm run ios，或配置云构建。
 
@@ -69,7 +71,8 @@ src/adapters/model/   兼容服务的 SSE 流式传输
 src/adapters/storage/ SQLite/私有文件与 Web IndexedDB 适配
 src/adapters/git/     真实 Git 和自定义 fs 适配
 src/adapters/workspace/ 文件权限、修订、操作日志与恢复
-src/features/prototype/ 项目、资料、Agent、历史与模型设置界面
+src/features/workbench/ 主题、会话、文件、编辑器、版本与设置
+plugins/             可重建的原生配置，包括不遮挡界面的开发菜单
 modules/             libgit2 原生模块预留
 tests/               核心一致性与浏览器流程测试
 ```
