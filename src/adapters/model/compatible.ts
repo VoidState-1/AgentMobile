@@ -6,6 +6,7 @@ import {
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ModelSettings } from '@/core/prototype/types';
 import { SseDecoder } from './sse';
+import { isDeepseek, modelAddress, ModelServiceError, validateConnection } from './settings';
 
 export function modelFor(settings: ModelSettings): Model<string> {
   return {
@@ -51,12 +52,8 @@ function wireMessages(messages: Message[], allowImages: boolean): Record<string,
 }
 
 export function compatibleTransport(settings: ModelSettings, apiKey: string): StreamFn {
-  const base = new URL(settings.baseUrl);
-  if (base.protocol !== 'https:' && !(base.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(base.hostname))) {
-    throw new Error('模型地址必须使用 HTTPS（本地开发地址除外）');
-  }
-  if (base.username || base.password || base.search || base.hash) throw new Error('模型地址不能包含凭证、查询参数或片段');
-  if (!settings.model.trim() || !apiKey) throw new Error('请先配置模型名称和 API Key');
+  validateConnection(settings, apiKey);
+  const endpoint = modelAddress(settings).href.replace(/\/+$/, '') + '/chat/completions';
   return (model, context, options) => {
     const stream = createAssistantMessageEventStream();
     const message: AssistantMessage = {
@@ -70,6 +67,9 @@ export function compatibleTransport(settings: ModelSettings, apiKey: string): St
         const tools = getCurrentTools(context.messages);
         const body = {
           model: settings.model, stream: true, max_tokens: 4096,
+          // Pi runs this prototype with thinking off. DeepSeek enables thinking
+          // by default, so transmit the same choice instead of dropping CoT.
+          ...(isDeepseek(settings) ? { thinking: { type: 'disabled' }, stream_options: { include_usage: true } } : {}),
           messages: [
             { role: 'system', content: getCurrentSystemPrompt(context.messages) },
             ...wireMessages(context.messages, settings.imageInput),
@@ -79,11 +79,11 @@ export function compatibleTransport(settings: ModelSettings, apiKey: string): St
           } })),
         };
         if (JSON.stringify(body).length > 2 * 1024 * 1024) throw new Error('本次模型输入过大，请减少资料');
-        const response = await fetch(settings.baseUrl.replace(/\/+$/, '') + '/chat/completions', {
-          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey },
+        const response = await fetch(endpoint, {
+          method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + apiKey.trim() },
           body: JSON.stringify(body), signal: options?.signal,
         });
-        if (!response.ok) throw new Error('模型服务返回 HTTP ' + response.status);
+        if (!response.ok) throw new ModelServiceError(response.status);
         if (!response.body) throw new Error('服务没有返回可读取的响应');
         if (!response.headers.get('content-type')?.includes('text/event-stream')) throw new Error('服务未返回 SSE 流，请确认兼容性');
         stream.push({ type: 'start', partial: message });
@@ -94,16 +94,17 @@ export function compatibleTransport(settings: ModelSettings, apiKey: string): St
         const sse = new SseDecoder();
         const calls = new Map<number, { id: string; name: string; arguments: string }>();
         let finished = false;
+        let markedDone = false;
         let reason = '';
         let responseBytes = 0;
         try {
-          while (!finished) {
+          while (!markedDone) {
             const chunk = await reader.read();
             if (chunk.done) break;
             responseBytes += chunk.value.byteLength;
             if (responseBytes > 512 * 1024) throw new Error('模型输出超过原型限制');
             for (const data of sse.push(decoder.decode(chunk.value, { stream: true }))) {
-              if (data === '[DONE]') { finished = true; continue; }
+              if (data === '[DONE]') { markedDone = true; break; }
               const event = JSON.parse(data);
               const choice = event.choices?.[0];
               if (choice?.finish_reason) { reason = choice.finish_reason; finished = true; }
@@ -124,12 +125,15 @@ export function compatibleTransport(settings: ModelSettings, apiKey: string): St
               if (event.usage) {
                 message.usage.input = event.usage.prompt_tokens ?? 0;
                 message.usage.output = event.usage.completion_tokens ?? 0;
-                message.usage.totalTokens = message.usage.input + message.usage.output;
+                message.usage.cacheRead = event.usage.prompt_cache_hit_tokens ?? event.usage.prompt_tokens_details?.cached_tokens ?? 0;
+                message.usage.totalTokens = event.usage.total_tokens ?? message.usage.input + message.usage.output;
               }
             }
           }
         } finally { await reader.cancel().catch(() => {}); }
         if (!finished) throw new Error('模型响应意外中断，未执行不完整的工具调用');
+        if (!['stop', 'tool_calls', 'function_call', 'length'].includes(reason)) throw new Error('模型响应未正常完成');
+        if ((reason === 'tool_calls' || reason === 'function_call') && !calls.size) throw new Error('模型未返回声明的工具调用');
         if (reason === 'length') {
           message.stopReason = 'length'; // The loop rejects incomplete tool batches.
         } else if (calls.size) {
@@ -142,9 +146,10 @@ export function compatibleTransport(settings: ModelSettings, apiKey: string): St
           message.stopReason = 'toolUse';
         }
         stream.push({ type: 'done', reason: message.stopReason as 'stop' | 'toolUse' | 'length', message });
-      } catch {
+      } catch (error) {
         message.stopReason = options?.signal?.aborted ? 'aborted' : 'error';
-        message.errorMessage = options?.signal?.aborted ? '任务已取消' : '模型请求失败或响应不完整；请检查地址、模型、网络和服务兼容性。';
+        message.errorMessage = options?.signal?.aborted ? '任务已取消' : error instanceof ModelServiceError ? error.message :
+          '模型请求失败或响应不完整；请检查地址、模型、网络和服务兼容性。';
         stream.push({ type: 'error', reason: message.stopReason, error: message });
       }
     })();

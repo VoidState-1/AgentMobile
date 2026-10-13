@@ -173,6 +173,12 @@ export async function startAgent(
       update({ ...task, events: [...task.events] });
     };
     agent.subscribe(async (event: AgentEvent) => {
+      if (event.type === 'message_start' && event.message.role === 'assistant') {
+        // Keep the current answer readable instead of joining narration from
+        // separate tool rounds. The full sequence remains in the transcript.
+        task.response = '';
+        update({ ...task, events: [...task.events] });
+      }
       if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
         task.response += event.assistantMessageEvent.delta;
         update({ ...task, events: [...task.events] });

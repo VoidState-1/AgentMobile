@@ -117,3 +117,39 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 实时主题切换后原生导航层曾保留浅色状态栏，已统一导航主题、页面主题与状态栏选项。深色状态栏以及键盘展开时的编辑界面也经截图检查；编辑截图在 work/workbench-android-editor.png。
 
 最终 npm run check 通过（25 项测试），6 项浏览器流程全部通过；Android/iOS/Web JavaScript 导出成功。iOS JavaScript 打包不代表 iOS 原生编译通过，arm64 真机和真实付费模型服务仍未验证。
+
+## 2026-10-13 DeepSeek 真实服务验证
+
+本节更新前面“真实供应商”和“Android SecureStore 尚未验证”的状态。使用临时授权密钥、合成文字与测试图片连接 DeepSeek 官方 https://api.deepseek.com，模型为 deepseek-flash。
+
+| 检查 | 结果 |
+| --- | --- |
+| 身份与模型列表 | /models 返回 HTTP 200，包含确切模型 deepseek-flash |
+| 文本工具闭环 | 从 notes.md 整理到 plan.md，读取保存内容核对时间、预算、饮食和联系人 |
+| 连续对话与修改 | 追问把预算从 300 改为 250，原笔记逐字保持不变 |
+| Git 差异与恢复 | 预览本轮行程变化，撤销后与修改前全文完全一致 |
+| 真实图片理解 | 提示中未提供图片答案；inspect_image 读取合成图片后保存 B-17、14:30 和 6 人，原图保留 |
+| 页面重开 | 重开后图片提取文档内容完全一致 |
+| Android 原生真实调用 | API 36.1 x86_64 的原生 SSE、读取文字、保存文档和 Git 修改通过 |
+| Android 凭证与重启 | SecureStore 保存密钥后强制停止重开，不重新输入密钥，追问生成的新文档保留源资料识别码 |
+| 原生可重跑脚本 | npm run test:android:live -- emulator-5556 完整通过 |
+| 最终真实浏览器回归 | npm run test:live 通过；本轮 9 次模型请求全部 HTTP 200，协议记录合计 11,524 tokens |
+| 常规回归 | npm run check 通过，31 项测试；6 项浏览器流程通过 |
+| 三平台 JavaScript 导出 | Android、iOS、Web 导出成功 |
+
+修复与补充：
+
+- DeepSeek 预设填写官方地址、模型及图片输入；增加不生成内容的 /models 连接检测。
+- 将 Pi 的 off 明确传给 DeepSeek thinking.type=disabled。思考模式的上下文传递仍未实现。
+- SSE 读取到 DONE/EOF，保留完成帧后的用量；只有 DONE、异常完成标记或不完整工具调用不判为成功。
+- 服务错误按 HTTP 状态展示可采取操作的提示；不把原始错误响应或密钥写入任务。
+- 每个模型生成轮次刷新当前回复，最终只显示最终答案；完整中间轮次保留在 transcript。
+- 新任务与重新打开会话时滚动到最新消息。
+
+原生自动化中定位到 React Native 调试包的快捷键干扰：Modal 内 ADB 硬件输入连续 R，会被 Activity 的“RR”识别器当作重载，导致编辑页面退出。已在测试文字中避开这个调试快捷键；ReactDelegate 对 release 模式不启用该重载逻辑。屏外旧会话不会出现在原生无障碍树中，因此原生测试以实际生成的文件和内容为验收依据。
+
+最终截图经视觉核对：work/deepseek-live-conversation.png、work/deepseek-android-result.png、work/deepseek-android-followup.png、work/deepseek-android-conversation.png。
+
+真实服务测试仅在显式提供 DEEPSEEK_API_KEY 时运行，浏览器套件另有限制最多 20 次模型请求；普通 check/e2e 不调用付费服务。协议报告、截图、临时凭证及账户数据仅放在忽略目录，凭证在验证结束后清理。费用以供应商账单为准；单轮回归的余额可能尚未变化，金额精度和结算时延均可能影响显示，不能据此宣称免费调用。
+
+参考：[DeepSeek 模型与价格](https://api-docs.deepseek.com/quick_start/pricing)、[思考与工具调用](https://api-docs.deepseek.com/guides/thinking_mode)、[图片输入](https://api-docs.deepseek.com/guides/vision)。其他兼容供应商、iOS 原生、arm64 真机、异常掉电和空间不足场景仍需单独验证。

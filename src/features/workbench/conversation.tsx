@@ -1,4 +1,4 @@
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import {
   ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, ChevronRight, CircleAlert, FileText, Image as ImageIcon,
@@ -95,6 +95,12 @@ export function Conversation({ controller }: { controller: Workbench }) {
   const [inputHeight, setInputHeight] = useState(54);
   const tasks = [...controller.tasks.filter((task) => task.id !== controller.projectActive?.id)].reverse();
   if (controller.projectActive) tasks.push(controller.projectActive);
+  const latestTaskId = tasks[tasks.length - 1]?.id;
+  useEffect(() => {
+    stick.current = true;
+    const frame = requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
+    return () => cancelAnimationFrame(frame);
+  }, [controller.projectId, latestTaskId]);
   const otherTask = !!controller.active && !controller.projectActive;
   const sendDisabled = !controller.prompt.trim() || controller.busy || !!controller.active || controller.projectLoading;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface }}>

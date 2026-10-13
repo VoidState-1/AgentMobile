@@ -58,9 +58,11 @@
     "check": "npm run typecheck && npm run lint && npm test",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:live": "playwright test --config playwright.live.config.ts",
     "build:web": "expo export --platform web --output-dir work/prototype-export",
     "preview": "node scripts/preview.mjs",
-    "test:android": "node scripts/android-smoke.mjs"
+    "test:android": "node scripts/android-smoke.mjs",
+    "test:android:live": "node scripts/android-live.mjs"
   },
   "private": true
 }

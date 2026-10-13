@@ -42,10 +42,12 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | TypeScript、ESLint、Vitest、Playwright | 已配置并验证核心流程 |
 | Pi Agent Core 1.1.0 | 已接入；上游核心未修改，Metro 使用纯工具函数入口 |
 | SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
+| 模型密钥持久化 | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证 |
 | SQLite schema | 原型为版本 1 的 records(bucket,id,payload) 表；第 7 节规范化 schema/FTS 未实现 |
 | 本地 Git 提交、历史、任务差异、历史恢复与撤销 | 已实现，原型使用 isomorphic-git 1.44.2 的真实 Git 格式 |
 | Android/iOS libgit2 构建与原生桥接 | 待实现 |
-| 模型调用与 Agent 循环 | 演示传输与 Chat Completions 兼容 SSE 接口已实现；真实供应商待配置验证 |
+| 模型调用与 Agent 循环 | 演示传输与兼容 SSE 接口已实现；DeepSeek 官方 deepseek-flash 的文字、图片、工具调用及追问已实测 |
+| 服务配置与诊断 | DeepSeek 预设、免费模型列表检测、HTTP 状态诊断；DeepSeek 使用非思考模式 |
 | 操作日志与崩溃恢复 | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证 |
 | 任务恢复 | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求 |
 | 图片 | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现 |

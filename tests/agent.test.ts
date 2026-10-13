@@ -58,6 +58,27 @@ describe('Pi Agent 真实执行循环', () => {
     expect(requests[1].some((message) => message.role === 'assistant' && message.content === '建议保留两段内容。')).toBe(true);
     expect(JSON.stringify(requests[1].at(-1)?.content)).toContain('把上一个建议再简短一些');
   });
+
+  it('多轮工具执行后回复只保留最终答案，完整过程保存在 transcript', async () => {
+    const storage = await testStorage(); cleanups.push(storage.cleanup);
+    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('回复排版');
+    let round = 0;
+    vi.stubGlobal('fetch', async () => {
+      round++;
+      const event = round === 1 ? { choices: [{ delta: { content: '我先查看项目。', tool_calls: [{
+        index: 0, id: 'list-once', function: { name: 'list_files', arguments: '{}' },
+      }] }, finish_reason: 'tool_calls' }] } : { choices: [{ delta: { content: '已查看项目资料。' }, finish_reason: 'stop' }] };
+      return new Response('data: ' + JSON.stringify(event) + '\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+    const started = await startAgent(workspace, project.id, '查看资料', settings, 'test-only', randomUUID, () => {});
+    const task = await started.done;
+    expect(task.response).toBe('已查看项目资料。');
+    expect(task.events).toMatchObject([{ tool: 'list_files', state: 'done' }]);
+    const transcript = await storage.metadata.get<{ messages: unknown[] }>('transcripts', task.id);
+    expect(JSON.stringify(transcript)).toContain('我先查看项目。');
+  });
 });
 
 describe('流式协议', () => {

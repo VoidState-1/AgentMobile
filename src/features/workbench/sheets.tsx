@@ -7,6 +7,7 @@ import { Button, Field, Sheet, T } from './ui';
 import { useWorkbenchTheme } from './theme';
 import { dateLabel, fileName } from './format';
 import { isImage } from '@/core/workspace/path';
+import { deepseekSettings, isDeepseek } from '@/adapters/model/settings';
 
 function RenameSheet({ controller }: { controller: Workbench }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
@@ -45,7 +46,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       </Pressable>)}
     </Sheet>
     <Sheet visible={controller.sheet === 'settings'} title="设置" onClose={() => { controller.setSheet(undefined); controller.setSecret(''); }}
-      busy={controller.busy} footer={<Button label="保存设置" busy={controller.busy} disabled={!!controller.active}
+      busy={controller.busy} footer={<Button label="保存设置" busy={controller.busy && !controller.testingConnection} disabled={!!controller.active || controller.testingConnection}
         onPress={() => { void controller.saveSettings(); }} />}>
       <View style={{ gap: 11 }}>
         <T style={{ fontSize: 12, fontWeight: '600' }}>外观</T>
@@ -66,7 +67,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
         <T style={{ fontSize: 12, fontWeight: '600' }}>模型连接</T>
         <View style={{ flexDirection: 'row', gap: 7 }}>
           {(['demo', 'remote'] as const).map((mode) => <Pressable key={mode} accessibilityRole="button"
-            accessibilityLabel={mode === 'demo' ? '演示模式' : '真实模型'} disabled={!!controller.active}
+            accessibilityLabel={mode === 'demo' ? '演示模式' : '真实模型'} disabled={!!controller.active || controller.busy}
             onPress={() => controller.setSettingsDraft({ ...controller.settingsDraft, mode })}
             style={{ flex: 1, borderWidth: 1, borderColor: controller.settingsDraft.mode === mode ? theme.accent : theme.border,
               borderRadius: 9, padding: 13, backgroundColor: controller.settingsDraft.mode === mode ? theme.accentSoft : theme.surface }}>
@@ -76,17 +77,32 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
         </View>
       </View>
       {controller.settingsDraft.mode === 'remote' ? <>
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Button label="DeepSeek" compact variant={isDeepseek(controller.settingsDraft) ? 'primary' : 'secondary'}
+            disabled={!!controller.active || controller.busy} onPress={() => {
+              if (!isDeepseek(controller.settingsDraft)) controller.setSecret('');
+              controller.setSettingsDraft({ ...deepseekSettings });
+            }} />
+          <T tone="secondary" style={{ flex: 1, fontSize: 11, lineHeight: 18 }}>选择预设，或在下方填写其他兼容服务。</T>
+        </View>
         <Field label="服务基础地址" value={controller.settingsDraft.baseUrl} placeholder="https://your-provider.example/v1"
-          editable={!controller.active} onChangeText={(baseUrl) => { controller.setSecret(''); controller.setSettingsDraft({ ...controller.settingsDraft, baseUrl }); }} />
-        <Field label="模型名称" value={controller.settingsDraft.model} placeholder="供应商提供的模型 ID" editable={!controller.active}
+          editable={!controller.active && !controller.busy} onChangeText={(baseUrl) => { controller.setSecret(''); controller.setSettingsDraft({ ...controller.settingsDraft, baseUrl }); }} />
+        <Field label="模型名称" value={controller.settingsDraft.model} placeholder="供应商提供的模型 ID" editable={!controller.active && !controller.busy}
           onChangeText={(model) => controller.setSettingsDraft({ ...controller.settingsDraft, model })} />
-        <Field label="API Key" value={controller.secret} secureTextEntry placeholder="输入服务密钥" editable={!controller.active} onChangeText={controller.setSecret} />
+        <Field label="API Key" value={controller.secret} secureTextEntry placeholder="输入服务密钥" editable={!controller.active && !controller.busy} onChangeText={controller.setSecret} />
+        <Button label="测试连接" variant="secondary" busy={controller.testingConnection}
+          disabled={!!controller.active || controller.busy || !controller.secret.trim() || !controller.settingsDraft.model.trim()}
+          onPress={() => { void controller.checkConnection(); }} />
+        {!!controller.connectionResult && <T accessibilityLiveRegion="polite" style={{ fontSize: 12, lineHeight: 20, color: theme.success }}>{controller.connectionResult}</T>}
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
           <View style={{ flex: 1 }}><T style={{ fontSize: 13 }}>图片理解</T><T tone="muted" style={{ fontSize: 11 }}>所选模型需要支持图片输入</T></View>
-          <Switch accessibilityLabel="图片理解" disabled={!!controller.active} value={controller.settingsDraft.imageInput}
+          <Switch accessibilityLabel="图片理解" disabled={!!controller.active || controller.busy} value={controller.settingsDraft.imageInput}
             trackColor={{ true: theme.accent, false: theme.border }}
             onValueChange={(imageInput) => controller.setSettingsDraft({ ...controller.settingsDraft, imageInput })} />
         </View>
+        {isDeepseek(controller.settingsDraft) && <T tone="secondary" style={{ fontSize: 11, lineHeight: 18 }}>
+          deepseek-flash 支持文字、图片与工具调用。本原型使用非思考模式。
+        </T>}
         <View style={{ flexDirection: 'row', gap: 8, padding: 11, borderRadius: 8, backgroundColor: theme.inset }}>
           <ShieldCheck size={16} color={theme.secondary} />
           <T tone="secondary" style={{ flex: 1, fontSize: 11, lineHeight: 18 }}>{Platform.OS === 'web' ?

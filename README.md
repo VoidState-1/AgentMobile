@@ -8,6 +8,7 @@
 - 编辑、移动、删除文字与图片，预览图片，导出单文件。
 - 通过 Pi Agent Core 1.1.0 运行任务，查看工具进度和结果。
 - 默认演示模式无需密钥；可配置 Chat Completions 兼容模型服务。
+- DeepSeek 预设与免费连接检测；deepseek-flash 已实测文字、图片和工具调用。
 - 查看真实 Git 提交、任务文件变化，撤销最新任务或恢复历史。
 - 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
 - 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
@@ -61,6 +62,8 @@ check 包含 TypeScript、ESLint 和 Vitest。端到端测试需要本机 Chrome
 浏览器测试不能替代 Android/iOS 原生测试，尤其是权限、安全存储、后台行为、掉电持久化和 Hermes 运行。
 
 已验证 Android API 36.1 x86_64 模拟器：创建工作区、Pi 任务、Git 写入与强制关闭后的持久化。可用 npm run test:android -- <serial> 重跑操作检查；需要已启动的开发客户端、Metro、ANDROID_HOME 和 adb reverse tcp:8081 tcp:8081。初次开发菜单提示需要关闭。arm64 真机和 iOS 仍需验证。
+
+真实服务回归通过环境变量 DEEPSEEK_API_KEY 提供密钥，运行 npm run test:live；Android 运行 npm run test:android:live -- <serial>。这些检查会实际调用模型并产生费用，普通 check/test:e2e 不使用真实密钥。Metro 使用其他端口时设置 AGENT_MOBILE_METRO_PORT 并配置对应 adb reverse。原生操作期间应保持界面源码稳定；ADB 在 Modal 内模拟硬件输入时，连续 R 可能触发调试包的“RR”重载，测试文字需避开这个快捷键。
 
 ## 模块
 

@@ -7,6 +7,7 @@ import { defaultSettings } from '@/core/prototype/types';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { getRuntime, type Runtime } from '@/adapters/runtime';
 import { startAgent } from '@/adapters/agent/runner';
+import { deepseekSettings, testModelConnection, validateConnection } from '@/adapters/model/settings';
 import { pickFile, exportFile } from '@/adapters/io/files';
 import { useWorkbenchUi, type AppearanceMode } from './ui-store';
 import { fileName } from './format';
@@ -32,6 +33,8 @@ export function useWorkbench() {
   const [settings, setSettings] = useState<ModelSettings>(defaultSettings);
   const [settingsDraft, setSettingsDraft] = useState<ModelSettings>(defaultSettings);
   const [secret, setSecret] = useState('');
+  const [connectionResult, setConnectionResult] = useState('');
+  const [testingConnection, setTestingConnection] = useState(false);
   const [loading, setLoading] = useState(true);
   const [projectLoading, setProjectLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -265,7 +268,25 @@ export function useWorkbench() {
   async function openSettings() {
     if (!runtime) return;
     await action(async () => {
+      setConnectionResult('');
       setSettingsDraft({ ...settings }); setSecret(await runtime.credentials.get()); setSheet('settings');
+    });
+  }
+
+  function updateSettingsDraft(value: ModelSettings) {
+    setConnectionResult(''); setError('');
+    setSettingsDraft(value.mode === 'remote' && settingsDraft.mode !== 'remote' && !value.baseUrl ? { ...deepseekSettings, ...value,
+      baseUrl: deepseekSettings.baseUrl, model: deepseekSettings.model, imageInput: true } : value);
+  }
+
+  function updateSecret(value: string) { setSecret(value); setConnectionResult(''); setError(''); }
+
+  async function checkConnection() {
+    if (active) return;
+    await action(async () => {
+      setConnectionResult(''); setTestingConnection(true);
+      try { setConnectionResult(await testModelConnection(settingsDraft, secret)); }
+      finally { setTestingConnection(false); }
     });
   }
 
@@ -273,14 +294,12 @@ export function useWorkbench() {
     if (!runtime) return;
     await action(async () => {
       if (settingsDraft.mode === 'remote') {
-        const url = new URL(settingsDraft.baseUrl);
-        if (url.protocol !== 'https:' && !(url.protocol === 'http:' && ['localhost', '127.0.0.1'].includes(url.hostname))) throw new Error('服务地址需要 HTTPS。');
-        if (url.username || url.password || url.hash || url.search) throw new Error('基础地址不能包含凭证或查询参数。');
-        if (!settingsDraft.model.trim() || !secret) throw new Error('请填写模型名称和密钥。');
+        validateConnection(settingsDraft, secret);
       }
-      await runtime.credentials.set(secret);
-      await runtime.metadata.put('settings', 'model', settingsDraft);
-      setSettings({ ...settingsDraft }); setSecret(''); setSheet(undefined); setNotice('设置已保存。');
+      const config = { ...settingsDraft, baseUrl: settingsDraft.baseUrl.trim().replace(/\/+$/, ''), model: settingsDraft.model.trim() };
+      await runtime.credentials.set(secret.trim());
+      await runtime.metadata.put('settings', 'model', config);
+      setSettings(config); setSecret(''); setSheet(undefined); setNotice('设置已保存。');
     });
   }
 
@@ -351,7 +370,8 @@ export function useWorkbench() {
 
   return {
     ...ui, runtime, projects, selectedProject, files, versions, tasks, active, projectActive, operations, loading, projectLoading, busy,
-    error, notice, setError, settings, settingsDraft, setSettingsDraft, secret, setSecret, editor, setEditor, dirty,
+    error, notice, setError, settings, settingsDraft, setSettingsDraft: updateSettingsDraft, secret, setSecret: updateSecret, editor, setEditor, dirty,
+    connectionResult, testingConnection, checkConnection,
     sheet, setSheet, projectName, setProjectName, prompt, setPrompt, attachment, setAttachment, review, setReview,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
     stop: () => cancellation.current?.(), openSettings, saveSettings, reviewTask, reviewVersion, confirmRestore, deleteEditor,
