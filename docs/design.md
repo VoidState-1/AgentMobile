@@ -48,6 +48,7 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | Android/iOS libgit2 构建与原生桥接 | 待实现 |
 | 模型调用与 Agent 循环 | 演示传输与兼容 SSE 接口已实现；DeepSeek 官方 deepseek-flash 的文字、图片、工具调用及追问已实测 |
 | 服务配置与诊断 | DeepSeek 预设、免费模型列表检测、HTTP 状态诊断；DeepSeek 使用非思考模式 |
+| 多供应商/模型配置器 | [需求草案](provider-model-configurator.md)；首轮包含兼容协议、Anthropic、Gemini 原生适配，多连接/模型目录/运行快照尚未实现 |
 | 操作日志与崩溃恢复 | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证 |
 | 任务恢复 | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求 |
 | 图片 | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现 |
