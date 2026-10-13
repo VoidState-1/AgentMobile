@@ -14,6 +14,7 @@
 - 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
 - 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
 - 独立编辑器、Markdown 阅读、未保存保护、逐行差异和恢复预览。
+- 项目下多个独立对话，分别保存消息、草稿、附件引用与模型选择，支持归档/恢复；共享项目资料和 Git 历史。
 
 演示使用预设步骤，不进行语义理解。真实模型模式需要用户配置服务、模型和 API Key。
 
@@ -67,6 +68,8 @@ check 包含 TypeScript、ESLint 和 Vitest。端到端测试需要本机 Chrome
 真实服务回归通过环境变量 DEEPSEEK_API_KEY 提供密钥，运行 npm run test:live；Android 运行 npm run test:android:live -- <serial>。这些检查会实际调用模型并产生费用，普通 check/test:e2e 不使用真实密钥。Metro 使用其他端口时设置 AGENT_MOBILE_METRO_PORT 并配置对应 adb reverse。原生操作期间应保持界面源码稳定；ADB 在 Modal 内模拟硬件输入时，连续 R 可能触发调试包的“RR”重载，测试文字需避开这个快捷键。
 
 配置器原生模拟验证：在一个终端运行 npm run test:mock-model，再在已连接开发客户端的模拟器上运行 npm run test:android:config -- <serial>。脚本使用 adb reverse 连接本机 4181 的三协议模拟服务，不调用付费供应商。测试会创建本地测试项目与连接；使用独立模拟器。Mock 脚本使用 Node.js 的 TypeScript 类型剥离，当前验证环境为 Node 24。
+
+多对话原生验证：`node scripts/android-conversations.mjs <serial>`，检查 A/B 消息、草稿、附件隔离、强制停止恢复、归档恢复与主题。使用演示传输，不调用真实模型。
 
 ## 模块
 

@@ -232,13 +232,20 @@ export class ModelConfigurationService {
         if (!ownerId) throw new Error('缺少选择范围。');
         const map = scope === 'project' ? next.defaults.projects : next.defaults.sessions;
         if (modelId) map[ownerId] = modelId; else delete map[ownerId];
+        if (scope === 'session') {
+          next.sessionModes ??= {};
+          if (modelId) next.sessionModes[ownerId] = 'remote'; else delete next.sessionModes[ownerId];
+        }
       }
       if (modelId) { next.mode = 'remote'; next.recent = [modelId, ...next.recent.filter((id) => id !== modelId)].slice(0, 8); }
       await this.persist(next);
     });
   }
-  async setMode(mode: ModelConfiguration['mode']): Promise<void> {
-    await this.exclusive(async () => { const next = clone(this.state); next.mode = mode; await this.persist(next); });
+  async setMode(mode: ModelConfiguration['mode'], sessionId?: string): Promise<void> {
+    await this.exclusive(async () => { const next = clone(this.state);
+      if (sessionId) { next.sessionModes ??= {}; next.sessionModes[sessionId] = mode; } else next.mode = mode;
+      await this.persist(next);
+    });
   }
   async recordCheck(connectionId: string, modelId: string | undefined, kind: CheckKind, result: DiagnosticResult): Promise<void> {
     await this.exclusive(async () => {

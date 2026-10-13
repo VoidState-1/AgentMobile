@@ -8,6 +8,7 @@ import { useWorkbenchTheme } from './theme';
 import { dateLabel, fileName } from './format';
 import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
+import { ConversationsPanel } from '@/features/conversations/panel';
 
 function RenameSheet({ controller }: { controller: Workbench }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
@@ -23,6 +24,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
   const theme = useWorkbenchTheme();
   const [projectSearch, setProjectSearch] = useState('');
   return <>
+    {(controller.sheet === 'conversations' || controller.sheet === 'conversation-name') && <ConversationsPanel controller={controller} />}
     <Sheet visible={controller.sheet === 'create'} title="新建项目" subtitle="文字、图片和会话都在同一个工作区里。"
       onClose={() => controller.setSheet(undefined)} busy={controller.busy}
       footer={<Button label="创建工作区" icon={Plus} busy={controller.busy} disabled={!controller.projectName.trim() || !controller.runtime}
@@ -31,13 +33,13 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       {!!controller.error && <T tone="danger" style={{ fontSize: 12 }}>{controller.error}</T>}
     </Sheet>
     <Sheet visible={controller.sheet === 'projects'} title="切换项目" onClose={() => controller.setSheet(undefined)}
-      footer={<Button label="新建项目" icon={Plus} variant="secondary" onPress={controller.newProject} />}>
+      footer={<Button label="新建项目" icon={Plus} variant="secondary" disabled={controller.busy} onPress={controller.newProject} />}>
       <View style={{ flexDirection: 'row', backgroundColor: theme.inset, paddingHorizontal: 12, borderRadius: 8, gap: 8, alignItems: 'center' }}>
         <Search size={16} color={theme.muted} /><TextInput accessibilityLabel="搜索项目" placeholder="搜索项目…" placeholderTextColor={theme.muted}
           value={projectSearch} onChangeText={setProjectSearch} style={{ height: 42, color: theme.text, fontSize: 13, flex: 1 }} />
       </View>
       {controller.projects.filter((project) => project.name.includes(projectSearch)).map((project) => <Pressable key={project.id}
-        accessibilityRole="button" accessibilityLabel={'切换到 ' + project.name} onPress={() => controller.selectProject(project.id)}
+        accessibilityRole="button" accessibilityLabel={'切换到 ' + project.name} disabled={controller.busy} onPress={() => controller.selectProject(project.id)}
         style={{ flexDirection: 'row', gap: 12, alignItems: 'center', padding: 12, borderRadius: 9,
           backgroundColor: controller.projectId === project.id ? theme.accentSoft : theme.surface }}>
         <Folder size={20} color={theme.accent} /><View style={{ flex: 1 }}><T style={{ fontSize: 13, fontWeight: '500' }}>{project.name}</T>
@@ -65,7 +67,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       <T tone="secondary" style={{ fontSize: 12 }}>管理服务连接、模型、默认选择与检测。</T>
     </Sheet>
     {controller.sheet === 'models' && controller.runtime && <ModelPicker service={controller.runtime.models}
-      configuration={controller.configuration} projectId={controller.projectId}
+      configuration={controller.configuration} projectId={controller.projectId} conversationId={controller.conversationId}
       onClose={() => controller.setSheet(undefined)} onManage={controller.openModelConfig} />}
     <Sheet visible={controller.sheet === 'attach'} title="参考资料" subtitle="选择当前项目文件，或导入新的资料。"
       onClose={() => controller.setSheet(undefined)}

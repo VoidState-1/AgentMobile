@@ -64,6 +64,7 @@ export interface ModelConfiguration {
   schemaVersion: 1;
   revision: number;
   mode: 'demo' | 'remote';
+  sessionModes?: Record<string, 'demo' | 'remote'>;
   connections: ProviderConnection[];
   models: ModelEntry[];
   defaults: { global?: string; projects: Record<string, string>; sessions: Record<string, string> };

@@ -3,17 +3,18 @@ import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-nat
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ModelConfigurationService } from '@/core/models/service';
 import type { ModelConfiguration } from '@/core/models/types';
-import { mainSessionId, selectedModelId } from '@/core/models/rules';
+import { selectedModelId, selectedModelMode } from '@/core/models/rules';
 import { Button, Field, IconButton, T } from '@/features/workbench/ui';
 import { Check, X } from '@/features/workbench/icons';
 import { useWorkbenchTheme } from '@/features/workbench/theme';
 import { Choices } from './common';
 
-export function ModelPicker({ service, configuration, projectId, onClose, onManage }: { service: ModelConfigurationService; configuration: ModelConfiguration; projectId?: string;
+export function ModelPicker({ service, configuration, projectId, conversationId, onClose, onManage }: { service: ModelConfigurationService; configuration: ModelConfiguration; projectId?: string; conversationId?: string;
   onClose: () => void; onManage: () => void }) {
   const theme = useWorkbenchTheme(); const inset = useSafeAreaInsets(); const { width, height } = useWindowDimensions();
   const [search, setSearch] = useState(''); const [filter, setFilter] = useState<'all' | 'favorite'>('all'); const [error, setError] = useState(''); const [busy, setBusy] = useState(false);
-  const selected = selectedModelId(configuration, projectId, projectId ? mainSessionId(projectId) : undefined);
+  const selected = selectedModelId(configuration, projectId, conversationId);
+  const mode = selectedModelMode(configuration, conversationId);
   const models = configuration.models.filter((model) => model.enabled && configuration.connections.some((c) => c.id === model.connectionId && c.enabled) && model.capabilities.tools.support !== 'unsupported' &&
     (filter === 'all' || model.favorite) && (model.name + model.apiId + configuration.connections.find((c) => c.id === model.connectionId)?.name).toLowerCase().includes(search.toLowerCase()))
     .sort((a, b) => Number(b.favorite) - Number(a.favorite) ||
@@ -33,17 +34,17 @@ export function ModelPicker({ service, configuration, projectId, onClose, onMana
         <FlatList data={models} keyExtractor={(item) => item.id} style={{ flex: 1 }} keyboardShouldPersistTaps="handled"
           ListEmptyComponent={<T tone="muted" style={{ padding: 20, fontSize: 12 }}>没有可选模型。请添加连接与模型，或调整筛选。</T>}
           renderItem={({ item }) => <Pressable accessibilityRole="button" accessibilityLabel={'选择模型 ' + (configuration.connections.find((c) => c.id === item.connectionId)?.name ?? '') + ' · ' + item.name}
-            disabled={busy} onPress={() => { void change(() => service.setSelection(projectId ? 'session' : 'global', item.id, projectId ? mainSessionId(projectId) : undefined)); }}
-            style={{ paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: configuration.mode === 'remote' && selected === item.id ? theme.accentSoft : theme.surface,
+            disabled={busy} onPress={() => { void change(() => service.setSelection(conversationId ? 'session' : 'global', item.id, conversationId)); }}
+            style={{ paddingHorizontal: 20, paddingVertical: 12, flexDirection: 'row', gap: 10, alignItems: 'center', backgroundColor: mode === 'remote' && selected === item.id ? theme.accentSoft : theme.surface,
               borderBottomWidth: 1, borderBottomColor: theme.border }}>
             <View style={{ flex: 1 }}><T style={{ fontSize: 13, fontWeight: '500' }}>{item.favorite ? '★ ' : ''}{item.name}</T>
               <T tone="secondary" style={{ fontSize: 11 }}>{configuration.connections.find((c) => c.id === item.connectionId)?.name} · {item.capabilities.tools.support === 'unknown' ? '工具未验证' : '支持工具'} · {item.parameters.allowImages ? '图片已开启' : '仅文字'}</T></View>
-            {configuration.mode === 'remote' && selected === item.id && <Check size={17} color={theme.accent} />}
+            {mode === 'remote' && selected === item.id && <Check size={17} color={theme.accent} />}
           </Pressable>} />
         <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 7 }}>
-          {projectId && configuration.defaults.sessions[mainSessionId(projectId)] && <Button label="使用项目或全局默认" compact variant="ghost" disabled={busy}
-            onPress={() => { void change(() => service.setSelection('session', undefined, mainSessionId(projectId))); }} />}
-          <View style={{ flexDirection: 'row', gap: 8 }}><Button label="演示模式" variant="secondary" disabled={busy} style={{ flex: 1 }} onPress={() => { void change(() => service.setMode('demo')); }} />
+          {conversationId && (configuration.defaults.sessions[conversationId] || configuration.sessionModes?.[conversationId]) && <Button label="使用项目或全局默认" compact variant="ghost" disabled={busy}
+            onPress={() => { void change(() => service.setSelection('session', undefined, conversationId)); }} />}
+          <View style={{ flexDirection: 'row', gap: 8 }}><Button label="演示模式" variant="secondary" disabled={busy} style={{ flex: 1 }} onPress={() => { void change(() => service.setMode('demo', conversationId)); }} />
             <Button label="管理模型" style={{ flex: 1 }} disabled={busy} onPress={onManage} /></View>
         </View>
       </View>

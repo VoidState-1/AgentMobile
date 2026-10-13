@@ -32,6 +32,9 @@ export function selectedModelId(state: ModelConfiguration, projectId?: string, s
   return (sessionId && state.defaults.sessions[sessionId]) || (projectId && state.defaults.projects[projectId]) || state.defaults.global;
 }
 export function mainSessionId(projectId: string): string { return projectId + ':main'; }
+export function selectedModelMode(state: ModelConfiguration, sessionId?: string): ModelConfiguration['mode'] {
+  return (sessionId && state.sessionModes?.[sessionId]) || state.mode;
+}
 export function configurationFingerprint(connection: ProviderConnection, model?: ModelEntry): string {
   return JSON.stringify([connection.protocol, connection.baseUrl, connection.auth, connection.credentialRef ?? '',
     connection.compatibility, connection.apiVersion, model?.apiId, model?.parameters]);

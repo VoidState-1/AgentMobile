@@ -3,7 +3,6 @@ import { Platform, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ModelInput } from '@/core/models/service';
 import { defaultModelParameters, unknownCapabilities, type CapabilityName, type CheckKind, type ModelEntry } from '@/core/models/types';
-import { mainSessionId } from '@/core/models/rules';
 import { presetModelEvidence, protocolNames } from '@/core/models/presets';
 import { geminiResource } from '@/adapters/model/http';
 import { runDiagnostic } from '@/adapters/model/diagnostics';
@@ -27,6 +26,7 @@ export function ModelScreen() {
 function ModelEditor({ controller, model, connectionId }: { controller: ConfigurationController; model?: ModelEntry; connectionId: string }) {
   const { runtime, config, error, busy, action } = controller; const router = useRouter();
   const projectId = useWorkbenchUi((state) => state.projectId); const connection = config.connections.find((c) => c.id === connectionId)!;
+  const conversationId = useWorkbenchUi((state) => state.conversationId);
   const initial: ModelInput = model ? edit(model) : { connectionId, apiId: '', name: '', enabled: true, favorite: false,
     parameters: { ...defaultModelParameters }, capabilities: { tools: 'unknown', images: 'unknown', reasoning: 'unknown' } };
   const [draft, setDraft] = useState(initial); const [output, setOutput] = useState(String(initial.parameters.maxOutputTokens));
@@ -55,7 +55,7 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
     finally { probe.current = undefined; setProbing(undefined); }
   }); };
   const select = (scope: 'global' | 'project' | 'session') => { void action(async () => {
-    await runtime!.models.setSelection(scope, model!.id, scope === 'session' ? mainSessionId(projectId!) : projectId);
+    await runtime!.models.setSelection(scope, model!.id, scope === 'session' ? conversationId : projectId);
     setNotice('默认选择已更新，下次任务使用此模型。');
   }); };
   const defaults = [config.defaults.global, ...Object.values(config.defaults.projects), ...Object.values(config.defaults.sessions)].filter((id) => id === model?.id).length;
@@ -104,9 +104,9 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
       <Section title="默认选择" hint="会话选择优先于项目默认，项目默认优先于全局默认。">
         <Button label={config.defaults.global === model?.id && model ? '已为全局默认' : '设为全局默认'} variant="secondary" disabled={disabled || !draft.enabled || !connection.enabled} onPress={() => select('global')} />
         <Button label={projectId && config.defaults.projects[projectId] === model?.id && model ? '已为项目默认' : '设为当前项目默认'} variant="secondary" disabled={disabled || !projectId || !draft.enabled || !connection.enabled} onPress={() => select('project')} />
-        <Button label={projectId && config.defaults.sessions[mainSessionId(projectId)] === model?.id && model ? '已选用于此会话' : '用于当前会话'} variant="secondary" disabled={disabled || !projectId || !draft.enabled || !connection.enabled} onPress={() => select('session')} />
+        <Button label={conversationId && config.defaults.sessions[conversationId] === model?.id && model ? '已选用于此会话' : '用于当前会话'} variant="secondary" disabled={disabled || !conversationId || !draft.enabled || !connection.enabled} onPress={() => select('session')} />
         {projectId && config.defaults.projects[projectId] && <Button label="清除项目默认" variant="ghost" disabled={busy} onPress={() => { void action(() => runtime!.models.setSelection('project', undefined, projectId)); }} />}
-        {projectId && config.defaults.sessions[mainSessionId(projectId)] && <Button label="清除会话选择" variant="ghost" disabled={busy} onPress={() => { void action(() => runtime!.models.setSelection('session', undefined, mainSessionId(projectId))); }} />}
+        {conversationId && (config.defaults.sessions[conversationId] || config.sessionModes?.[conversationId]) && <Button label="清除会话选择" variant="ghost" disabled={busy} onPress={() => { void action(() => runtime!.models.setSelection('session', undefined, conversationId)); }} />}
         {!projectId && <T tone="muted" style={{ fontSize: 11 }}>先打开一个项目，才能设置项目与会话选择。</T>}
       </Section>
       {model && <Button label="删除模型" variant="danger" disabled={busy} onPress={() => setDeleting(true)} />}

@@ -4,7 +4,8 @@ import { Buffer } from 'buffer';
 import { useRouter } from 'expo-router';
 import type { Operation, Project, ProjectFile, TaskRecord, Version } from '@/core/prototype/types';
 import { emptyModelConfiguration } from '@/core/models/types';
-import { mainSessionId, selectedModelId } from '@/core/models/rules';
+import { selectedModelId, selectedModelMode } from '@/core/models/rules';
+import { emptyConversationState, type Conversation } from '@/core/conversations/types';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { getRuntime, type Runtime } from '@/adapters/runtime';
 import { pickFile, exportFile } from '@/adapters/io/files';
@@ -19,6 +20,7 @@ export interface EditorDocument {
 export interface ReviewFile { path: string; kind: string; before: string; after: string }
 export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord }
 type Confirmation = { title: string; description: string; label: string; danger?: boolean; perform: () => Promise<void>; saveFirst?: boolean };
+type ComposerDraft = { conversationId?: string; text: string; attachment?: string };
 
 export function useWorkbench() {
   const ui = useWorkbenchUi();
@@ -31,6 +33,7 @@ export function useWorkbench() {
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [configuration, setConfiguration] = useState(emptyModelConfiguration());
+  const [conversationState, setConversationState] = useState(emptyConversationState());
   const [loading, setLoading] = useState(true);
   const [projectLoading, setProjectLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -41,22 +44,64 @@ export function useWorkbench() {
   const [editor, setEditor] = useState<EditorDocument>();
   const editorRef = useRef<EditorDocument | undefined>(undefined);
   useEffect(() => { editorRef.current = editor; }, [editor]);
-  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models'>();
+  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name'>();
   const [projectName, setProjectName] = useState('');
-  const [prompt, setPrompt] = useState('');
-  const [attachment, setAttachment] = useState<string>();
-  const drafts = useRef<Record<string, { text: string; attachment?: string }>>({});
+  const [conversationName, setConversationName] = useState('');
+  const [conversationToRename, setConversationToRename] = useState<string>();
+  const [composer, setComposer] = useState<ComposerDraft>({ text: '' });
+  const composerRef = useRef<ComposerDraft>({ text: '' });
+  const draftWrites = useRef(new Map<string, Promise<unknown>>());
+  const [draftSaved, setDraftSaved] = useState(true);
+  const [draftSaving, setDraftSaving] = useState(false);
   const [review, setReview] = useState<Review>();
   const [confirmation, setConfirmation] = useState<Confirmation>();
   const refreshId = useRef(0);
   const selectedProject = projects.find((project) => project.id === ui.projectId);
   const dirty = !!editor && (editor.fresh || editor.text !== editor.savedText || editor.name !== editor.savedName);
   const projectActive = active?.projectId === ui.projectId ? active : undefined;
-  const modelId = selectedModelId(configuration, ui.projectId, ui.projectId ? mainSessionId(ui.projectId) : undefined);
+  const selectedConversation = conversationState.conversations.find((item) => item.id === ui.conversationId && item.projectId === ui.projectId && !item.archivedAt);
+  const conversations = conversationState.conversations.filter((item) => item.projectId === ui.projectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const conversationActive = projectActive?.conversationId === ui.conversationId ? projectActive : undefined;
+  const prompt = composer.conversationId === ui.conversationId ? composer.text : '';
+  const attachment = composer.conversationId === ui.conversationId ? composer.attachment : undefined;
+  const modelId = selectedModelId(configuration, ui.projectId, ui.conversationId);
   const selectedModel = configuration.models.find((model) => model.id === modelId);
   const selectedConnection = configuration.connections.find((connection) => connection.id === selectedModel?.connectionId);
-  const settings = { mode: configuration.mode, model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false };
-  const modelLabel = configuration.mode === 'demo' ? '演示模式' : selectedModel ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name : '选择模型';
+  const settings = { mode: selectedModelMode(configuration, ui.conversationId), model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false };
+  const modelLabel = settings.mode === 'demo' ? '演示模式' : selectedModel ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name : '选择模型';
+
+  function installConversation(conversation: Conversation) {
+    const draft = runtimeRef.current?.conversations.getSnapshot().drafts[conversation.id];
+    const next = { conversationId: conversation.id, text: draft?.text ?? '', attachment: draft?.attachment };
+    composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
+  }
+  function writeComposer(next: ComposerDraft) {
+    composerRef.current = next; setComposer(next); const value = runtimeRef.current;
+    if (!value || !next.conversationId) return;
+    setDraftSaved(false); setDraftSaving(true);
+    const pending = value.conversations.saveDraft(next.conversationId, { text: next.text, attachment: next.attachment });
+    draftWrites.current.set(next.conversationId, pending);
+    void pending.then(() => { if (composerRef.current === next) { setDraftSaved(true); setDraftSaving(false); } }).catch(() => {
+      if (composerRef.current === next) { setDraftSaved(false); setDraftSaving(false); }
+      setError('草稿保存失败，请重试或复制输入内容后保留。');
+    });
+  }
+  function setPrompt(text: string) {
+    if (composerRef.current.conversationId !== ui.conversationId) return;
+    writeComposer({ ...composerRef.current, text });
+  }
+  function setAttachment(path?: string) {
+    if (composerRef.current.conversationId !== ui.conversationId) return;
+    writeComposer({ ...composerRef.current, attachment: path });
+  }
+  async function flushDraft(draft = composerRef.current) {
+    const value = runtimeRef.current;
+    if (!value || !draft.conversationId) return;
+    await draftWrites.current.get(draft.conversationId)?.catch(() => {});
+    const saved = await value.conversations.saveDraft(draft.conversationId, { text: draft.text, attachment: draft.attachment });
+    if (composerRef.current === draft) { setDraftSaved(true); setDraftSaving(false); }
+    return saved;
+  }
 
   const refresh = useCallback(async (projectId?: string) => {
     const value = runtimeRef.current;
@@ -98,10 +143,13 @@ export function useWorkbench() {
         value.metadata.get<{ projectId?: string; appearance?: AppearanceMode }>('preferences', 'workbench'),
       ]);
       if (!mounted) return;
-      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setActive(value.agent.getSnapshot().active);
+      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setConversationState(value.conversations.getSnapshot()); setActive(value.agent.getSnapshot().active);
       if (preference?.appearance) useWorkbenchUi.getState().setAppearance(preference.appearance);
       const selected = preference?.projectId && list.some((item) => item.id === preference.projectId) ? preference.projectId : list[0]?.id;
-      useWorkbenchUi.getState().selectProject(selected);
+      const conversation = selected ? await value.conversations.ensureProject(selected) : undefined;
+      if (!mounted) return;
+      if (conversation) installConversation(conversation);
+      useWorkbenchUi.getState().selectProject(selected, conversation?.id);
       if (value.workspace.recoveryIssues.length) setError(value.workspace.recoveryIssues.join('\n'));
     }).catch(() => { if (mounted) setError('暂时无法打开本地资料。请保留本地数据后重新打开应用。'); })
       .finally(() => { if (mounted) setLoading(false); });
@@ -111,6 +159,7 @@ export function useWorkbench() {
   useEffect(() => {
     if (!runtime) return;
     const configSubscription = runtime.models.subscribe(() => setConfiguration(runtime.models.getSnapshot()));
+    const conversationSubscription = runtime.conversations.subscribe(() => setConversationState(runtime.conversations.getSnapshot()));
     const taskSubscription = runtime.agent.subscribe(() => {
       const state = runtime.agent.getSnapshot(); setActive(state.active);
       if (!state.active && !state.starting) {
@@ -118,7 +167,7 @@ export function useWorkbench() {
         if (state.error || state.completed?.error) setError(state.error ?? state.completed?.error ?? '');
       }
     });
-    return () => { configSubscription(); taskSubscription(); };
+    return () => { configSubscription(); conversationSubscription(); taskSubscription(); };
   }, [runtime, refresh]);
 
   useEffect(() => {
@@ -142,11 +191,11 @@ export function useWorkbench() {
   }, [notice]);
 
   useEffect(() => {
-    if (Platform.OS !== 'web' || !dirty) return;
+    if (Platform.OS !== 'web' || (!dirty && (draftSaved || (!prompt && !attachment)))) return;
     const handle = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', handle);
     return () => window.removeEventListener('beforeunload', handle);
-  }, [dirty]);
+  }, [dirty, draftSaved, prompt, attachment]);
 
   async function action(work: () => Promise<void>): Promise<boolean> {
     if (busyRef.current) return false;
@@ -197,10 +246,60 @@ export function useWorkbench() {
 
   function selectProject(id: string) {
     guard(() => {
-      if (ui.projectId) drafts.current[ui.projectId] = { text: prompt, attachment };
-      const draft = drafts.current[id];
-      setEditor(undefined); setAttachment(draft?.attachment); setPrompt(draft?.text ?? ''); setSheet(undefined); ui.selectProject(id);
+      void action(async () => {
+        if (!runtime) return; await flushDraft();
+        const conversation = await runtime.conversations.ensureProject(id); installConversation(conversation);
+        setEditor(undefined); editorRef.current = undefined; setSheet(undefined); ui.selectProject(id, conversation.id);
+      });
     });
+  }
+  async function selectConversation(id: string) {
+    await action(async () => {
+      if (!runtime || !ui.projectId) return; await flushDraft();
+      await runtime.conversations.select(id, ui.projectId);
+      const conversation = runtime.conversations.getSnapshot().conversations.find((item) => item.id === id)!;
+      installConversation(conversation); ui.selectConversation(id); setSheet(undefined); setError('');
+    });
+  }
+  async function newConversation() {
+    await action(async () => {
+      if (!runtime || !ui.projectId) return; await flushDraft();
+      const conversation = await runtime.conversations.create(ui.projectId); installConversation(conversation);
+      ui.selectConversation(conversation.id); setSheet(undefined);
+    });
+  }
+  function startRenameConversation(conversation: Conversation) {
+    setConversationToRename(conversation.id); setConversationName(conversation.title); setSheet('conversation-name');
+  }
+  async function renameConversation() {
+    await action(async () => {
+      if (!runtime || !conversationToRename) return;
+      await runtime.conversations.rename(conversationToRename, conversationName); setSheet(undefined); setNotice('对话名称已保存。');
+    });
+  }
+  function archiveConversation(conversation: Conversation) {
+    setConfirmation({ title: '归档“' + conversation.title + '”？', description: '归档后保留消息和草稿，可在已归档列表恢复。', label: '归档对话', perform: async () => {
+      if (!runtime || !ui.projectId) return; await flushDraft(); await runtime.conversations.archive(conversation.id);
+      if (ui.conversationId === conversation.id) {
+        const selected = await runtime.conversations.ensureProject(ui.projectId); installConversation(selected); ui.selectConversation(selected.id);
+      }
+      setSheet(undefined); setNotice('对话已归档。');
+    } });
+  }
+  async function restoreConversation(conversation: Conversation) {
+    await action(async () => {
+      if (!runtime) return; await flushDraft(); await runtime.conversations.restore(conversation.id);
+      installConversation(conversation); ui.selectConversation(conversation.id); setSheet(undefined); setNotice('对话已恢复。');
+    });
+  }
+  function returnToActiveConversation() {
+    if (!active?.conversationId) return;
+    if (active.projectId === ui.projectId) { void selectConversation(active.conversationId); return; }
+    guard(() => { void action(async () => {
+      if (!runtime || !active.conversationId) return; await flushDraft(); await runtime.conversations.select(active.conversationId, active.projectId);
+      const conversation = runtime.conversations.getSnapshot().conversations.find((item) => item.id === active.conversationId)!;
+      installConversation(conversation); setEditor(undefined); editorRef.current = undefined; ui.selectProject(active.projectId, active.conversationId);
+    }); });
   }
 
   function closeEditor() { guard(() => { setEditor(undefined); }); }
@@ -208,10 +307,10 @@ export function useWorkbench() {
   async function createProject() {
     if (!runtime || !projectName.trim()) return;
     await action(async () => {
+      await flushDraft();
       const created = await runtime.workspace.create(projectName);
-      if (ui.projectId) drafts.current[ui.projectId] = { text: prompt, attachment };
-      setEditor(undefined); setPrompt(''); setAttachment(undefined);
-      setSheet(undefined); setProjectName(''); ui.selectProject(created.id); await refresh(created.id);
+      const conversation = await runtime.conversations.ensureProject(created.id); installConversation(conversation); setEditor(undefined);
+      setSheet(undefined); setProjectName(''); ui.selectProject(created.id, conversation.id); await refresh(created.id);
     });
   }
 
@@ -250,11 +349,17 @@ export function useWorkbench() {
   }
 
   async function beginTask() {
-    if (!runtime || !ui.projectId || !prompt.trim() || active) return;
+    if (!runtime || !ui.projectId || !ui.conversationId || !prompt.trim() || active) return;
+    const submitted = composerRef.current;
+    const saved = await flushDraft(submitted);
+    if (submitted.conversationId !== ui.conversationId) throw new Error('对话已切换，请确认当前输入后发送。');
     const projectId = ui.projectId;
-    const text = prompt.trim() + (attachment ? '\n\n参考文件：' + attachment : '');
-    await runtime.agent.start(projectId, text, !!attachment && isImage(attachment));
-    setPrompt(''); setAttachment(undefined); ui.selectTab('agent');
+    const text = submitted.text.trim() + (submitted.attachment ? '\n\n参考文件：' + submitted.attachment : '');
+    await runtime.agent.start(projectId, text, !!submitted.attachment && isImage(submitted.attachment), ui.conversationId, saved?.revision);
+    if (composerRef.current === submitted) {
+      const next = { conversationId: ui.conversationId, text: '' }; composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
+    }
+    ui.selectTab('agent');
   }
 
   async function submit() {
@@ -338,9 +443,13 @@ export function useWorkbench() {
     .flatMap((operation) => operation.changes.map((change) => change.path)))];
 
   return {
-    ...ui, runtime, projects, selectedProject, files, versions, tasks, active, projectActive, operations, loading, projectLoading, busy,
+    ...ui, runtime, projects, selectedProject, files, versions,
+    tasks: tasks.filter((task) => task.projectId === ui.projectId && task.conversationId === ui.conversationId),
+    active, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy,
     error, notice, setError, settings, configuration, modelLabel, selectedModel, selectedConnection, editor, setEditor, dirty,
     sheet, setSheet, projectName, setProjectName, prompt, setPrompt, attachment, setAttachment, review, setReview,
+    conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
+    startRenameConversation, renameConversation, archiveConversation, restoreConversation, returnToActiveConversation,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
     stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,

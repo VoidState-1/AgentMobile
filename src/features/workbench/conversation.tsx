@@ -6,7 +6,7 @@ import {
 } from './icons';
 import type { TaskRecord } from '@/core/prototype/types';
 import type { Workbench } from './use-workbench';
-import { Brand, IconButton, T } from './ui';
+import { Brand, Button, IconButton, T } from './ui';
 import { useWorkbenchTheme } from './theme';
 import { Markdown } from './markdown';
 import { dateLabel, fileName, toolLabels } from './format';
@@ -95,16 +95,16 @@ export function Conversation({ controller }: { controller: Workbench }) {
   const stick = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
   const [inputHeight, setInputHeight] = useState(54);
-  const tasks = [...controller.tasks.filter((task) => task.id !== controller.projectActive?.id)].reverse();
-  if (controller.projectActive) tasks.push(controller.projectActive);
+  const tasks = [...controller.tasks.filter((task) => task.id !== controller.conversationActive?.id)].reverse();
+  if (controller.conversationActive) tasks.push(controller.conversationActive);
   const latestTaskId = tasks[tasks.length - 1]?.id;
   useEffect(() => {
     stick.current = true;
     const frame = requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
     return () => cancelAnimationFrame(frame);
-  }, [controller.projectId, latestTaskId]);
-  const otherTask = !!controller.active && !controller.projectActive;
-  const sendDisabled = !controller.prompt.trim() || controller.busy || !!controller.active || controller.projectLoading;
+  }, [controller.conversationId, latestTaskId]);
+  const otherTask = !!controller.active && !controller.conversationActive;
+  const sendDisabled = !controller.selectedConversation || !controller.prompt.trim() || controller.busy || !!controller.active || controller.projectLoading;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface }}>
     <ScrollView ref={scroll} testID="conversation-scroll" style={{ flex: 1 }}
       contentContainerStyle={{ flexGrow: 1, width: '100%', maxWidth: 800, alignSelf: 'center', paddingHorizontal: mobile ? 18 : 30, paddingTop: 22, paddingBottom: 22 }}
@@ -142,7 +142,10 @@ export function Conversation({ controller }: { controller: Workbench }) {
     </View>}
     <View testID="composer" style={{ paddingHorizontal: mobile ? 14 : 25, paddingTop: 10, paddingBottom: mobile ? 9 : 16,
       width: '100%', maxWidth: 830, alignSelf: 'center', backgroundColor: theme.surface }}>
-      {otherTask && <T tone="secondary" style={{ fontSize: 11, paddingBottom: 7 }}>另一个项目的任务仍在运行，可继续阅读资料。</T>}
+      {otherTask && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
+        <T tone="secondary" style={{ flex: 1, fontSize: 11 }}>{controller.active?.projectId === controller.projectId ? '另一个对话的任务仍在运行' : '另一个项目的任务仍在运行'}，可继续准备草稿。</T>
+        <Button label="返回运行中的对话" compact variant="ghost" disabled={controller.busy} onPress={controller.returnToActiveConversation} />
+      </View>}
       <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 13, paddingHorizontal: 13, paddingTop: 9, paddingBottom: 8,
         backgroundColor: theme.background }}>
         {!!controller.attachment && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, backgroundColor: theme.accentSoft,
@@ -152,7 +155,7 @@ export function Conversation({ controller }: { controller: Workbench }) {
         </View>}
         <TextInput ref={input} accessibilityLabel="任务目标" testID="task-prompt" value={controller.prompt} onChangeText={controller.setPrompt}
           multiline maxLength={4000} placeholder="描述你的任务，或选择一份资料开始…" placeholderTextColor={theme.muted}
-          editable={!controller.projectActive} textAlignVertical="top"
+          editable={!controller.conversationActive && !controller.busy && !!controller.selectedConversation} textAlignVertical="top"
           onContentSizeChange={(event) => setInputHeight(Math.max(54, Math.min(130, event.nativeEvent.contentSize.height)))}
           onKeyPress={(event) => {
             if (Platform.OS === 'web' && event.nativeEvent.key === 'Enter' && !(event.nativeEvent as unknown as { shiftKey?: boolean }).shiftKey) {
@@ -161,24 +164,25 @@ export function Conversation({ controller }: { controller: Workbench }) {
           }}
           style={{ height: inputHeight, color: theme.text, fontSize: 14, lineHeight: 23, paddingVertical: 5 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-          <IconButton icon={Paperclip} label="添加参考资料" disabled={!!controller.active} size={36} onPress={() => controller.setSheet('attach')} />
+          <IconButton icon={Paperclip} label="添加参考资料" disabled={!!controller.conversationActive || controller.busy} size={36} onPress={() => controller.setSheet('attach')} />
           <Pressable accessibilityRole="button" accessibilityLabel="模型设置" onPress={controller.openModels}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minHeight: 36 }}>
             <T tone="secondary" numberOfLines={1} style={{ fontSize: 11 }}>{controller.modelLabel}</T>
             <ChevronDown size={12} color={theme.muted} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={controller.projectActive ? '停止任务' : '发送任务'}
+          <Pressable accessibilityRole="button" accessibilityLabel={controller.conversationActive ? '停止任务' : '发送任务'}
             hitSlop={4}
-            disabled={!controller.projectActive && sendDisabled}
-            onPress={() => { if (controller.projectActive) controller.stop(); else { stick.current = true; void controller.submit(); } }}
+            disabled={!controller.conversationActive && sendDisabled}
+            onPress={() => { if (controller.conversationActive) controller.stop(); else { stick.current = true; void controller.submit(); } }}
             style={({ pressed }) => ({ width: 38, height: 38, borderRadius: 10, alignItems: 'center', justifyContent: 'center',
-              backgroundColor: controller.projectActive || !sendDisabled ? theme.accent : theme.border, opacity: pressed ? 0.75 : 1 })}>
-            {controller.projectActive ? <Square size={14} fill={theme.accentText} color={theme.accentText} /> :
+              backgroundColor: controller.conversationActive || !sendDisabled ? theme.accent : theme.border, opacity: pressed ? 0.75 : 1 })}>
+            {controller.conversationActive ? <Square size={14} fill={theme.accentText} color={theme.accentText} /> :
               <ArrowUp size={20} color={sendDisabled ? theme.muted : theme.accentText} strokeWidth={2.3} />}
           </Pressable>
         </View>
       </View>
       <T tone="muted" style={{ fontSize: 10, textAlign: 'center', marginTop: 7, lineHeight: 15 }}>
+        {(controller.prompt || controller.attachment) ? (controller.draftSaving ? '正在保存草稿…' : controller.draftSaved ? '草稿已保存' : '草稿未保存') + ' · ' : ''}
         {controller.settings.mode === 'remote' ? '任务相关资料将发送到已配置的模型服务' : '资料保存在本地 · 每次修改可恢复'}
       </T>
     </View>

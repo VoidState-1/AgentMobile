@@ -41,6 +41,8 @@ export interface Operation {
 export interface TaskRecord {
   id: string;
   projectId: string;
+  conversationId?: string;
+  draftRevision?: number;
   prompt: string;
   mode: 'demo' | 'remote';
   modelSnapshot?: ModelRunSnapshot;

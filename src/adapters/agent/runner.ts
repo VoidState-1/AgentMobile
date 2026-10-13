@@ -9,6 +9,7 @@ import type { WorkspaceService } from '@/adapters/workspace/service';
 import { compatibleTransport, modelFor } from '@/adapters/model/compatible';
 import { protocolModel, protocolTransport } from '@/adapters/model/protocols';
 import type { ModelRunSnapshot } from '@/core/models/types';
+import { mainSessionId } from '@/core/models/rules';
 import { demoTransport } from './demo';
 
 const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
@@ -32,6 +33,7 @@ export async function startAgent(
   workspace: WorkspaceService, projectId: string, prompt: string, settings: ModelSettings, apiKey: string,
   id: () => string, update: (task: TaskRecord) => void,
   snapshot?: ModelRunSnapshot, web = false,
+  conversationId = mainSessionId(projectId), draftRevision?: number,
 ): Promise<{ cancel: () => void; done: Promise<TaskRecord>; task: TaskRecord }> {
   const transport = settings.mode === 'demo' ? demoTransport(prompt) : snapshot ? {
     model: protocolModel(snapshot), streamFn: protocolTransport(snapshot, apiKey, web),
@@ -42,7 +44,7 @@ export async function startAgent(
   workspace.claim(projectId, runId);
   try {
     const previous = (await workspace.metadata.all<TaskRecord>('tasks'))
-      .filter((task) => task.projectId === projectId && task.mode === settings.mode && task.state !== 'running')
+      .filter((task) => task.projectId === projectId && (task.conversationId ?? mainSessionId(task.projectId)) === conversationId && task.mode === settings.mode && task.state !== 'running')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt)).slice(-6);
     // Carry conversational intent between tasks; stale tool calls are never
     // replayed. Files and versions are re-read through the current run's tools.
@@ -57,7 +59,7 @@ export async function startAgent(
       },
     ]);
     const task: TaskRecord = {
-      id: runId, projectId, prompt, mode: settings.mode, modelSnapshot: snapshot, state: 'running',
+      id: runId, projectId, conversationId, draftRevision, prompt, mode: settings.mode, modelSnapshot: snapshot, state: 'running',
       baseCommit: await workspace.git.head(projectId), response: '', events: [], createdAt: new Date().toISOString(),
     };
     await workspace.metadata.put('tasks', runId, task);
