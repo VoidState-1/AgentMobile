@@ -74,11 +74,17 @@ export async function createStorage(): Promise<{
   return {
     fs, metadata,
     credentials: {
-      get: async () => await SecureStore.getItemAsync('model-api-key') ?? '',
-      set: async (key) => {
-        if (key) await SecureStore.setItemAsync('model-api-key', key);
-        else await SecureStore.deleteItemAsync('model-api-key');
+      get: async (reference) => await SecureStore.getItemAsync(credentialName(reference)) ?? '',
+      set: async (key, reference) => {
+        if (key) await SecureStore.setItemAsync(credentialName(reference), key);
+        else await SecureStore.deleteItemAsync(credentialName(reference));
       },
     },
   };
+}
+
+function credentialName(reference?: string): string {
+  if (!reference) return 'model-api-key';
+  if (!/^[a-zA-Z0-9._-]{1,128}$/.test(reference)) throw new Error('无效的凭证引用。');
+  return 'model-credential.' + reference;
 }

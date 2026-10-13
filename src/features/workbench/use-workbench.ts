@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { Buffer } from 'buffer';
-import * as Crypto from 'expo-crypto';
-import type { ModelSettings, Operation, Project, ProjectFile, TaskRecord, Version } from '@/core/prototype/types';
-import { defaultSettings } from '@/core/prototype/types';
+import { useRouter } from 'expo-router';
+import type { Operation, Project, ProjectFile, TaskRecord, Version } from '@/core/prototype/types';
+import { emptyModelConfiguration } from '@/core/models/types';
+import { mainSessionId, selectedModelId } from '@/core/models/rules';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { getRuntime, type Runtime } from '@/adapters/runtime';
-import { startAgent } from '@/adapters/agent/runner';
-import { deepseekSettings, testModelConnection, validateConnection } from '@/adapters/model/settings';
 import { pickFile, exportFile } from '@/adapters/io/files';
 import { useWorkbenchUi, type AppearanceMode } from './ui-store';
 import { fileName } from './format';
@@ -23,6 +22,7 @@ type Confirmation = { title: string; description: string; label: string; danger?
 
 export function useWorkbench() {
   const ui = useWorkbenchUi();
+  const router = useRouter();
   const [runtime, setRuntime] = useState<Runtime>();
   const runtimeRef = useRef<Runtime | undefined>(undefined);
   const [projects, setProjects] = useState<Project[]>([]);
@@ -30,11 +30,7 @@ export function useWorkbench() {
   const [versions, setVersions] = useState<Version[]>([]);
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
-  const [settings, setSettings] = useState<ModelSettings>(defaultSettings);
-  const [settingsDraft, setSettingsDraft] = useState<ModelSettings>(defaultSettings);
-  const [secret, setSecret] = useState('');
-  const [connectionResult, setConnectionResult] = useState('');
-  const [testingConnection, setTestingConnection] = useState(false);
+  const [configuration, setConfiguration] = useState(emptyModelConfiguration());
   const [loading, setLoading] = useState(true);
   const [projectLoading, setProjectLoading] = useState(false);
   const [busy, setBusy] = useState(false);
@@ -45,18 +41,22 @@ export function useWorkbench() {
   const [editor, setEditor] = useState<EditorDocument>();
   const editorRef = useRef<EditorDocument | undefined>(undefined);
   useEffect(() => { editorRef.current = editor; }, [editor]);
-  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename'>();
+  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models'>();
   const [projectName, setProjectName] = useState('');
   const [prompt, setPrompt] = useState('');
   const [attachment, setAttachment] = useState<string>();
   const drafts = useRef<Record<string, { text: string; attachment?: string }>>({});
   const [review, setReview] = useState<Review>();
   const [confirmation, setConfirmation] = useState<Confirmation>();
-  const cancellation = useRef<(() => void) | undefined>(undefined);
   const refreshId = useRef(0);
   const selectedProject = projects.find((project) => project.id === ui.projectId);
   const dirty = !!editor && (editor.fresh || editor.text !== editor.savedText || editor.name !== editor.savedName);
   const projectActive = active?.projectId === ui.projectId ? active : undefined;
+  const modelId = selectedModelId(configuration, ui.projectId, ui.projectId ? mainSessionId(ui.projectId) : undefined);
+  const selectedModel = configuration.models.find((model) => model.id === modelId);
+  const selectedConnection = configuration.connections.find((connection) => connection.id === selectedModel?.connectionId);
+  const settings = { mode: configuration.mode, model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false };
+  const modelLabel = configuration.mode === 'demo' ? '演示模式' : selectedModel ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name : '选择模型';
 
   const refresh = useCallback(async (projectId?: string) => {
     const value = runtimeRef.current;
@@ -93,20 +93,33 @@ export function useWorkbench() {
   useEffect(() => {
     let mounted = true;
     getRuntime().then(async (value) => {
-      const [list, config, preference] = await Promise.all([
-        value.workspace.projects(), value.settings(),
+      const [list, preference] = await Promise.all([
+        value.workspace.projects(),
         value.metadata.get<{ projectId?: string; appearance?: AppearanceMode }>('preferences', 'workbench'),
       ]);
       if (!mounted) return;
-      runtimeRef.current = value; setRuntime(value); setProjects(list); setSettings(config);
+      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setActive(value.agent.getSnapshot().active);
       if (preference?.appearance) useWorkbenchUi.getState().setAppearance(preference.appearance);
       const selected = preference?.projectId && list.some((item) => item.id === preference.projectId) ? preference.projectId : list[0]?.id;
       useWorkbenchUi.getState().selectProject(selected);
       if (value.workspace.recoveryIssues.length) setError(value.workspace.recoveryIssues.join('\n'));
     }).catch(() => { if (mounted) setError('暂时无法打开本地资料。请保留本地数据后重新打开应用。'); })
       .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; cancellation.current?.(); };
+    return () => { mounted = false; };
   }, []);
+
+  useEffect(() => {
+    if (!runtime) return;
+    const configSubscription = runtime.models.subscribe(() => setConfiguration(runtime.models.getSnapshot()));
+    const taskSubscription = runtime.agent.subscribe(() => {
+      const state = runtime.agent.getSnapshot(); setActive(state.active);
+      if (!state.active && !state.starting) {
+        void refresh(useWorkbenchUi.getState().projectId).catch(() => setError('读取任务结果失败，请重试。'));
+        if (state.error || state.completed?.error) setError(state.error ?? state.completed?.error ?? '');
+      }
+    });
+    return () => { configSubscription(); taskSubscription(); };
+  }, [runtime, refresh]);
 
   useEffect(() => {
     if (!runtime || !ui.projectId) return;
@@ -238,22 +251,10 @@ export function useWorkbench() {
 
   async function beginTask() {
     if (!runtime || !ui.projectId || !prompt.trim() || active) return;
-      if (settings.mode === 'remote' && !await runtime.credentials.get()) {
-        setSettingsDraft({ ...settings }); setSecret(''); setSheet('settings');
-        throw new Error('请先填写模型服务的密钥。');
-      }
-      const projectId = ui.projectId!;
-      const text = prompt.trim() + (attachment ? '\n\n参考文件：' + attachment : '');
-      const started = await startAgent(runtime.workspace, projectId, text, settings,
-        await runtime.credentials.get(), Crypto.randomUUID, (task) => setActive({ ...task, events: [...task.events] }));
-      cancellation.current = started.cancel; setPrompt(''); setAttachment(undefined); ui.selectTab('agent');
-      void started.done.then(async (task) => {
-        await refresh(useWorkbenchUi.getState().projectId);
-        setActive(undefined); cancellation.current = undefined;
-        if (task.error) setError(task.error);
-      }).catch(() => {
-        setActive(undefined); cancellation.current = undefined; setError('任务状态保存失败，请重新打开应用恢复。');
-      });
+    const projectId = ui.projectId;
+    const text = prompt.trim() + (attachment ? '\n\n参考文件：' + attachment : '');
+    await runtime.agent.start(projectId, text, !!attachment && isImage(attachment));
+    setPrompt(''); setAttachment(undefined); ui.selectTab('agent');
   }
 
   async function submit() {
@@ -265,44 +266,12 @@ export function useWorkbench() {
     await action(beginTask);
   }
 
-  async function openSettings() {
-    if (!runtime) return;
-    await action(async () => {
-      setConnectionResult('');
-      setSettingsDraft({ ...settings }); setSecret(await runtime.credentials.get()); setSheet('settings');
-    });
+  function openSettings() { setSheet('settings'); }
+  function openModelConfig() {
+    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+      requestAnimationFrame(() => router.push('/models')); });
   }
-
-  function updateSettingsDraft(value: ModelSettings) {
-    setConnectionResult(''); setError('');
-    setSettingsDraft(value.mode === 'remote' && settingsDraft.mode !== 'remote' && !value.baseUrl ? { ...deepseekSettings, ...value,
-      baseUrl: deepseekSettings.baseUrl, model: deepseekSettings.model, imageInput: true } : value);
-  }
-
-  function updateSecret(value: string) { setSecret(value); setConnectionResult(''); setError(''); }
-
-  async function checkConnection() {
-    if (active) return;
-    await action(async () => {
-      setConnectionResult(''); setTestingConnection(true);
-      try { setConnectionResult(await testModelConnection(settingsDraft, secret)); }
-      finally { setTestingConnection(false); }
-    });
-  }
-
-  async function saveSettings() {
-    if (!runtime) return;
-    await action(async () => {
-      if (settingsDraft.mode === 'remote') {
-        validateConnection(settingsDraft, secret);
-      }
-      const config = { ...settingsDraft, baseUrl: settingsDraft.baseUrl.trim().replace(/\/+$/, ''), model: settingsDraft.model.trim() };
-      await runtime.credentials.set(secret.trim());
-      await runtime.metadata.put('settings', 'model', config);
-      setSettings(config); setSecret(''); setSheet(undefined); setNotice('设置已保存。');
-    });
-  }
-
+  function openModels() { setSheet('models'); }
   async function reviewTask(task: TaskRecord) {
     if (!runtime) return;
     await action(async () => {
@@ -370,11 +339,10 @@ export function useWorkbench() {
 
   return {
     ...ui, runtime, projects, selectedProject, files, versions, tasks, active, projectActive, operations, loading, projectLoading, busy,
-    error, notice, setError, settings, settingsDraft, setSettingsDraft: updateSettingsDraft, secret, setSecret: updateSecret, editor, setEditor, dirty,
-    connectionResult, testingConnection, checkConnection,
+    error, notice, setError, settings, configuration, modelLabel, selectedModel, selectedConnection, editor, setEditor, dirty,
     sheet, setSheet, projectName, setProjectName, prompt, setPrompt, attachment, setAttachment, review, setReview,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
-    stop: () => cancellation.current?.(), openSettings, saveSettings, reviewTask, reviewVersion, confirmRestore, deleteEditor,
+    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {
       const next = confirmation;

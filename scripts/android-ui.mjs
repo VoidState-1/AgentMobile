@@ -53,6 +53,21 @@ async function tap(label) {
   await adb('shell', 'input', 'tap', String((coordinates[0] + coordinates[2]) / 2), String((coordinates[1] + coordinates[3]) / 2));
   await sleep(400);
 }
+async function scrollTo(label, inputOnly = false) {
+  for (let i = 0; i < 12; i++) {
+    const list = nodes(await dump());
+    const footer = list.find((node) => ['保存连接', '保存模型'].includes(node['content-desc']));
+    const maximumY = footer ? Number([...footer.bounds.matchAll(/\d+/g)][1][0]) - 20 : 2350;
+    if (list.some((node) => {
+      const bounds = [...node.bounds.matchAll(/\d+/g)].map((m) => Number(m[0]));
+      return inputOnly ? node.class === 'android.widget.EditText' && node['content-desc'] === label && bounds[3] - bounds[1] > 60 && bounds[1] > 240 && bounds[3] < maximumY :
+        (node['content-desc'] === label || node.text === label) && (bounds[1] + bounds[3]) / 2 > 240 && (bounds[1] + bounds[3]) / 2 < maximumY;
+    })) return;
+    await adb('shell', 'input', 'swipe', '520', '1700', '520', '620', '350'); await sleep(300);
+  }
+  throw new Error('滚动后未找到：' + label);
+}
+async function tapScrolled(label) { await scrollTo(label); await tap(label); }
 async function screenshot(name) {
   const file = '/sdcard/agent-mobile-smoke.png';
   try {
@@ -60,4 +75,4 @@ async function screenshot(name) {
     await adb('pull', file, 'work/' + name);
   } finally { await adb('shell', 'rm', '-f', file).catch(() => {}); }
 }
-export { adb, sleep, dump, nodes, waitFor, tap, screenshot, metroPort };
+export { adb, sleep, dump, nodes, waitFor, tap, scrollTo, tapScrolled, screenshot, metroPort };

@@ -1,4 +1,4 @@
-import { adb, dump, waitFor, tap, screenshot, metroPort } from './android-ui.mjs';
+import { adb, dump, waitFor, tap, scrollTo, tapScrolled, screenshot, metroPort } from './android-ui.mjs';
 
 const apiKey = process.env.DEEPSEEK_API_KEY;
 if (!apiKey || !/^[a-zA-Z0-9._-]+$/.test(apiKey)) throw new Error('请通过 DEEPSEEK_API_KEY 提供测试密钥。此脚本会调用付费模型。');
@@ -11,15 +11,16 @@ try {
   await openApp();
   if ((await dump()).includes('Continue')) await tap('Continue');
   if ((await dump()).includes('Go home')) await tap('Close');
-  await tap('设置'); await tap('真实模型'); await tap('DeepSeek');
-  await tap('API Key');
+  await tap('设置'); await tap('模型与供应商'); await tap('添加连接'); await tap('DeepSeek');
+  await scrollTo('API Key', true); await tap('API Key');
   // Clear an existing saved key without printing it or placing it in a log.
   await adb('shell', 'input', 'keycombination', '113', '29');
   await adb('shell', 'input', 'text', apiKey);
-  await adb('shell', 'input', 'keyevent', '66');
-  await tap('测试连接');
-  await waitFor('连接已通过，密钥有效且模型可用。此检查不会生成内容。');
-  await tap('保存设置');
+  if ((await adb('shell', 'dumpsys', 'input_method')).includes('mInputShown=true')) await adb('shell', 'input', 'keyevent', '4');
+  await tap('保存连接');
+  await tapScrolled('检测连接并发现模型'); await tapScrolled('编辑模型 deepseek-flash');
+  await tapScrolled('允许图片输入'); await tap('保存模型');
+  await tapScrolled('设为全局默认'); await tap('返回'); await tap('返回'); await tap('返回');
   if ((await dump()).includes('切换项目') && !(await dump()).includes('新建项目')) await tap('切换项目');
   await tap('新建项目'); await tap('项目名称');
   await adb('shell', 'input', 'text', 'DeepSeekAndroid-' + Date.now());

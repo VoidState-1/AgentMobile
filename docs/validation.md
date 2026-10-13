@@ -153,3 +153,32 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 真实服务测试仅在显式提供 DEEPSEEK_API_KEY 时运行，浏览器套件另有限制最多 20 次模型请求；普通 check/e2e 不调用付费服务。协议报告、截图、临时凭证及账户数据仅放在忽略目录，凭证在验证结束后清理。费用以供应商账单为准；单轮回归的余额可能尚未变化，金额精度和结算时延均可能影响显示，不能据此宣称免费调用。
 
 参考：[DeepSeek 模型与价格](https://api-docs.deepseek.com/quick_start/pricing)、[思考与工具调用](https://api-docs.deepseek.com/guides/thinking_mode)、[图片输入](https://api-docs.deepseek.com/guides/vision)。其他兼容供应商、iOS 原生、arm64 真机、异常掉电和空间不足场景仍需单独验证。
+
+## 2026-10-13 多供应商配置器
+
+本轮按用户确认完成实现与模拟验证，不需要 Anthropic/Gemini 官方凭证。普通测试完全不调用付费服务。
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript、ESLint 通过，60 项测试通过 |
+| 配置存储和迁移 | 两连接同名模型密钥隔离、失败注入、旧凭证延迟清理、幂等迁移、Origin 绑定、目录合并、删除明确选择后阻止隐式回退通过 |
+| 三协议 Pi 闭环 | Chat Completions、Anthropic Messages、Gemini 分别执行真实工作区工具写入与 Git 提交，通过 |
+| 协议细节 | 任意字节分片、多个工具调用、截断/输出上限、流内错误、取消、认证、图片格式与授权、原生签名和调用关联通过 |
+| 目录与检测 | 分页、生成模型筛选、能力来源、内置文本/工具/图片样本核对通过 |
+| 运行配置固定 | 界面取消订阅后任务继续；运行中替换密钥和参数，后续轮次仍使用原配置；新任务采用新配置，通过 |
+| 浏览器流程 | 11 项通过；包含三协议生成/工具/图片检测和文件结果、密钥隔离、收藏筛选、复制无凭证、未保存保护、刷新缺失凭证时保留草稿 |
+| 浏览器视觉 | 390px 深浅配置页经截图检查，无横向溢出；原工作台编辑、恢复、键盘快捷操作回归通过 |
+| Android 工作台回归 | API 36.1 x86_64，编辑、未保存保护、Pi/Git 修改、强制停止重开、主题持久化通过 |
+| Android 配置器 | API 36.1 x86_64：三协议目录、工具/图片检测、Pi 文件写入和 Git 历史通过；重启后 SecureStore 凭证可读、未保存保护和深浅主题通过 |
+| Android/iOS/Web 导出 | 三平台 JavaScript/Hermes 打包通过；不等同于 iOS 原生编译和真机验收 |
+| Anthropic/Gemini 官方实测 | 待提供测试凭证；本轮未调用官方服务 |
+
+浏览器截图：work/config-mobile-light.png、work/config-mobile-dark.png。配置器测试源码在 tests/model-config.test.ts、tests/provider-protocols.test.ts、tests/task-manager.test.ts、tests/e2e/model-config.spec.ts。
+
+原生截图：work/config-android-light.png、work/config-android-dark.png，以及三个协议各自的 form/result 截图，均经视觉核对。模拟服务为 scripts/mock-model-server.mjs；操作脚本为 scripts/android-model-config.mjs。运行期间使用独立 emulator-5556，已有设备不做改动。三协议与重启检查分别重跑通过；调试自动化曾因同名认证选项、输入框被固定页脚遮挡和末行边界判断过严失败，已修正定位与滚动条件。
+
+生成诊断每项最多 2 次模型生成、128 输出 tokens、30 秒；目录最多 20 页/5,000 条，不自动发起付费测试。服务错误正文与认证头不进入公开记录；检测失败不会被误记为能力不支持，后续编辑参数保留已验证能力依据。Gemini 无原生 ID 的调用按请求轮次分配宿主 ID，避免相同时间戳下的重试日志冲突。价格资料尚未实现，Pi 用量 cost 占位不作为费用估算。
+
+本轮还修正原生配置页的软键盘避让；原生 UI 自动化按字段类型定位 API Key，避免把认证选项的同名文本当成输入框。调试包的硬件 R 重载干扰仍通过测试样本规避，正式包不使用该调试逻辑。
+
+保留限制：iOS 原生、arm64 真机、真实供应商网络/账号差异、后台限制、空间不足和异常掉电仍需验证；模拟服务只能证明客户端协议和宿主执行链路。

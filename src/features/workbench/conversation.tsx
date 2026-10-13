@@ -57,6 +57,8 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
             {{ completed: '已完成', running: '执行中', failed: '执行失败', cancelled: '已停止', interrupted: '已中断' }[task.state]}
           </T>
         </View>
+        <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?
+          task.modelSnapshot.connectionName + ' · ' + task.modelSnapshot.modelName : '历史模型未知'}</T>
         <Activity task={task} />
         {task.response ? <Markdown content={task.response} /> : task.state === 'running' ?
           <T tone="secondary" style={{ fontSize: 13, marginTop: 6 }}>正在读取与整理资料…</T> : null}
@@ -160,9 +162,9 @@ export function Conversation({ controller }: { controller: Workbench }) {
           style={{ height: inputHeight, color: theme.text, fontSize: 14, lineHeight: 23, paddingVertical: 5 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
           <IconButton icon={Paperclip} label="添加参考资料" disabled={!!controller.active} size={36} onPress={() => controller.setSheet('attach')} />
-          <Pressable accessibilityRole="button" accessibilityLabel="模型设置" onPress={() => { void controller.openSettings(); }}
+          <Pressable accessibilityRole="button" accessibilityLabel="模型设置" onPress={controller.openModels}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minHeight: 36 }}>
-            <T tone="secondary" numberOfLines={1} style={{ fontSize: 11 }}>{controller.settings.mode === 'demo' ? '演示模式' : controller.settings.model}</T>
+            <T tone="secondary" numberOfLines={1} style={{ fontSize: 11 }}>{controller.modelLabel}</T>
             <ChevronDown size={12} color={theme.muted} />
           </Pressable>
           <Pressable accessibilityRole="button" accessibilityLabel={controller.projectActive ? '停止任务' : '发送任务'}

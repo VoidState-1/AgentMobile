@@ -1,3 +1,5 @@
+import type { ModelRunSnapshot } from '@/core/models/types';
+
 export interface Project {
   id: string;
   name: string;
@@ -41,6 +43,7 @@ export interface TaskRecord {
   projectId: string;
   prompt: string;
   mode: 'demo' | 'remote';
+  modelSnapshot?: ModelRunSnapshot;
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   baseCommit: string;
   finalCommit?: string;

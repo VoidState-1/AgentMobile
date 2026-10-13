@@ -93,9 +93,10 @@ export async function createStorage(): Promise<{
       return { kind, size, mtime };
     },
   };
-  let sessionKey = '';
+  const sessionKeys = new Map<string, string>();
   return {
     fs, metadata,
-    credentials: { get: async () => sessionKey, set: async (value) => { sessionKey = value; } },
+    credentials: { get: async (reference = 'legacy') => sessionKeys.get(reference) ?? '',
+      set: async (value, reference = 'legacy') => { if (value) sessionKeys.set(reference, value); else sessionKeys.delete(reference); } },
   };
 }

@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test';
+import { configureModel } from './model-helpers';
 
 async function createProject(page: Page, name: string) {
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
@@ -124,12 +125,7 @@ test('图片导入与真实模型协议、文件结果直达', async ({ page }) 
   await page.getByRole('button', { name: '打开 assets/sample.png' }).click();
   await expect(page.getByText('图片预览', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
-  await page.getByRole('button', { name: '真实模型', exact: true }).click();
-  await page.getByLabel('服务基础地址', { exact: true }).fill('https://example.test/v1');
-  await page.getByLabel('模型名称', { exact: true }).fill('protocol-test');
-  await page.getByLabel('API Key', { exact: true }).fill('test-only-no-real-secret');
-  await page.getByRole('button', { name: '保存设置', exact: true }).click();
+  await configureModel(page, { key: 'test-only-no-real-secret' });
   let rounds = 0;
   await page.route('https://example.test/v1/chat/completions', async (route) => {
     rounds++;

@@ -62,7 +62,9 @@
     "build:web": "expo export --platform web --output-dir work/prototype-export",
     "preview": "node scripts/preview.mjs",
     "test:android": "node scripts/android-smoke.mjs",
-    "test:android:live": "node scripts/android-live.mjs"
+    "test:android:live": "node scripts/android-live.mjs",
+    "test:android:config": "node scripts/android-model-config.mjs",
+    "test:mock-model": "node scripts/mock-model-server.mjs"
   },
   "private": true
 }

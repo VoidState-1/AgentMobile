@@ -7,8 +7,9 @@
 - 创建项目，导入 Markdown、文本和 PNG/JPEG/WebP 图片。
 - 编辑、移动、删除文字与图片，预览图片，导出单文件。
 - 通过 Pi Agent Core 1.1.0 运行任务，查看工具进度和结果。
-- 默认演示模式无需密钥；可配置 Chat Completions 兼容模型服务。
-- DeepSeek 预设与免费连接检测；deepseek-flash 已实测文字、图片和工具调用。
+- 默认演示模式无需密钥；支持 Chat Completions、Anthropic Messages、Gemini 原生协议。
+- 多连接与独立密钥、模型发现/手工配置、收藏、参数、分层默认和文本/工具/图片检测。
+- 任务启动时冻结模型配置；进入配置页面、修改密钥或参数不影响当前任务。DeepSeek 前版已实测，Anthropic/Gemini 本轮采用模拟验证。
 - 查看真实 Git 提交、任务文件变化，撤销最新任务或恢复历史。
 - 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
 - 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
@@ -65,12 +66,14 @@ check 包含 TypeScript、ESLint 和 Vitest。端到端测试需要本机 Chrome
 
 真实服务回归通过环境变量 DEEPSEEK_API_KEY 提供密钥，运行 npm run test:live；Android 运行 npm run test:android:live -- <serial>。这些检查会实际调用模型并产生费用，普通 check/test:e2e 不使用真实密钥。Metro 使用其他端口时设置 AGENT_MOBILE_METRO_PORT 并配置对应 adb reverse。原生操作期间应保持界面源码稳定；ADB 在 Modal 内模拟硬件输入时，连续 R 可能触发调试包的“RR”重载，测试文字需避开这个快捷键。
 
+配置器原生模拟验证：在一个终端运行 npm run test:mock-model，再在已连接开发客户端的模拟器上运行 npm run test:android:config -- <serial>。脚本使用 adb reverse 连接本机 4181 的三协议模拟服务，不调用付费供应商。测试会创建本地测试项目与连接；使用独立模拟器。Mock 脚本使用 Node.js 的 TypeScript 类型剥离，当前验证环境为 Node 24。
+
 ## 模块
 
 ```text
 src/core/             平台无关类型、路径规则、存储接口
 src/adapters/agent/   Pi 适配、工具定义、任务执行器、演示传输
-src/adapters/model/   兼容服务的 SSE 流式传输
+src/adapters/model/   三协议 REST/SSE、模型目录与诊断
 src/adapters/storage/ SQLite/私有文件与 Web IndexedDB 适配
 src/adapters/git/     真实 Git 和自定义 fs 适配
 src/adapters/workspace/ 文件权限、修订、操作日志与恢复

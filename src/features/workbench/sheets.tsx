@@ -1,13 +1,13 @@
 import { useState } from 'react';
-import { Platform, Pressable, Switch, TextInput, View } from 'react-native';
-import { Check, FileText, Folder, Image as ImageIcon, Laptop, Moon, Plus, Search, ShieldCheck, Sun, Upload } from './icons';
+import { Pressable, TextInput, View } from 'react-native';
+import { Check, FileText, Folder, Image as ImageIcon, Laptop, Moon, Plus, Search, Sun, Upload } from './icons';
 import type { Workbench } from './use-workbench';
 import type { AppearanceMode } from './ui-store';
 import { Button, Field, Sheet, T } from './ui';
 import { useWorkbenchTheme } from './theme';
 import { dateLabel, fileName } from './format';
 import { isImage } from '@/core/workspace/path';
-import { deepseekSettings, isDeepseek } from '@/adapters/model/settings';
+import { ModelPicker } from '@/features/model-config/picker';
 
 function RenameSheet({ controller }: { controller: Workbench }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
@@ -45,9 +45,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
         {controller.projectId === project.id && <Check size={16} color={theme.accent} />}
       </Pressable>)}
     </Sheet>
-    <Sheet visible={controller.sheet === 'settings'} title="设置" onClose={() => { controller.setSheet(undefined); controller.setSecret(''); }}
-      busy={controller.busy} footer={<Button label="保存设置" busy={controller.busy && !controller.testingConnection} disabled={!!controller.active || controller.testingConnection}
-        onPress={() => { void controller.saveSettings(); }} />}>
+    <Sheet visible={controller.sheet === 'settings'} title="设置" onClose={() => controller.setSheet(undefined)}>
       <View style={{ gap: 11 }}>
         <T style={{ fontSize: 12, fontWeight: '600' }}>外观</T>
         <View style={{ flexDirection: 'row', gap: 7 }}>
@@ -63,56 +61,12 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
         </View>
       </View>
       <View style={{ height: 1, backgroundColor: theme.border }} />
-      <View style={{ gap: 11 }}>
-        <T style={{ fontSize: 12, fontWeight: '600' }}>模型连接</T>
-        <View style={{ flexDirection: 'row', gap: 7 }}>
-          {(['demo', 'remote'] as const).map((mode) => <Pressable key={mode} accessibilityRole="button"
-            accessibilityLabel={mode === 'demo' ? '演示模式' : '真实模型'} disabled={!!controller.active || controller.busy}
-            onPress={() => controller.setSettingsDraft({ ...controller.settingsDraft, mode })}
-            style={{ flex: 1, borderWidth: 1, borderColor: controller.settingsDraft.mode === mode ? theme.accent : theme.border,
-              borderRadius: 9, padding: 13, backgroundColor: controller.settingsDraft.mode === mode ? theme.accentSoft : theme.surface }}>
-            <T style={{ fontSize: 13, fontWeight: '500' }}>{mode === 'demo' ? '演示模式' : '真实模型'}</T>
-            <T tone="muted" style={{ fontSize: 11, marginTop: 4 }}>{mode === 'demo' ? '固定流程，无需密钥' : '连接你的模型服务'}</T>
-          </Pressable>)}
-        </View>
-      </View>
-      {controller.settingsDraft.mode === 'remote' ? <>
-        <View style={{ flexDirection: 'row', gap: 8 }}>
-          <Button label="DeepSeek" compact variant={isDeepseek(controller.settingsDraft) ? 'primary' : 'secondary'}
-            disabled={!!controller.active || controller.busy} onPress={() => {
-              if (!isDeepseek(controller.settingsDraft)) controller.setSecret('');
-              controller.setSettingsDraft({ ...deepseekSettings });
-            }} />
-          <T tone="secondary" style={{ flex: 1, fontSize: 11, lineHeight: 18 }}>选择预设，或在下方填写其他兼容服务。</T>
-        </View>
-        <Field label="服务基础地址" value={controller.settingsDraft.baseUrl} placeholder="https://your-provider.example/v1"
-          editable={!controller.active && !controller.busy} onChangeText={(baseUrl) => { controller.setSecret(''); controller.setSettingsDraft({ ...controller.settingsDraft, baseUrl }); }} />
-        <Field label="模型名称" value={controller.settingsDraft.model} placeholder="供应商提供的模型 ID" editable={!controller.active && !controller.busy}
-          onChangeText={(model) => controller.setSettingsDraft({ ...controller.settingsDraft, model })} />
-        <Field label="API Key" value={controller.secret} secureTextEntry placeholder="输入服务密钥" editable={!controller.active && !controller.busy} onChangeText={controller.setSecret} />
-        <Button label="测试连接" variant="secondary" busy={controller.testingConnection}
-          disabled={!!controller.active || controller.busy || !controller.secret.trim() || !controller.settingsDraft.model.trim()}
-          onPress={() => { void controller.checkConnection(); }} />
-        {!!controller.connectionResult && <T accessibilityLiveRegion="polite" style={{ fontSize: 12, lineHeight: 20, color: theme.success }}>{controller.connectionResult}</T>}
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-          <View style={{ flex: 1 }}><T style={{ fontSize: 13 }}>图片理解</T><T tone="muted" style={{ fontSize: 11 }}>所选模型需要支持图片输入</T></View>
-          <Switch accessibilityLabel="图片理解" disabled={!!controller.active || controller.busy} value={controller.settingsDraft.imageInput}
-            trackColor={{ true: theme.accent, false: theme.border }}
-            onValueChange={(imageInput) => controller.setSettingsDraft({ ...controller.settingsDraft, imageInput })} />
-        </View>
-        {isDeepseek(controller.settingsDraft) && <T tone="secondary" style={{ fontSize: 11, lineHeight: 18 }}>
-          deepseek-flash 支持文字、图片与工具调用。本原型使用非思考模式。
-        </T>}
-        <View style={{ flexDirection: 'row', gap: 8, padding: 11, borderRadius: 8, backgroundColor: theme.inset }}>
-          <ShieldCheck size={16} color={theme.secondary} />
-          <T tone="secondary" style={{ flex: 1, fontSize: 11, lineHeight: 18 }}>{Platform.OS === 'web' ?
-            '浏览器只在本次会话中保留密钥。刷新后需要重新输入，服务需允许跨域。' :
-            '密钥保存在设备安全存储中。任务相关资料会发送到你配置的服务。'}</T>
-        </View>
-      </> : <T tone="secondary" style={{ fontSize: 12, lineHeight: 21 }}>演示会读取项目资料并保存一份整理文档，使用预设步骤，不进行语义理解。</T>}
-      {!!controller.active && <T tone="secondary" style={{ fontSize: 12 }}>任务进行中，暂时不能更改模型连接。</T>}
-      {!!controller.error && <T tone="danger" style={{ fontSize: 12 }}>{controller.error}</T>}
+      <Button label="模型与供应商" variant="secondary" onPress={controller.openModelConfig} />
+      <T tone="secondary" style={{ fontSize: 12 }}>管理服务连接、模型、默认选择与检测。</T>
     </Sheet>
+    {controller.sheet === 'models' && controller.runtime && <ModelPicker service={controller.runtime.models}
+      configuration={controller.configuration} projectId={controller.projectId}
+      onClose={() => controller.setSheet(undefined)} onManage={controller.openModelConfig} />}
     <Sheet visible={controller.sheet === 'attach'} title="参考资料" subtitle="选择当前项目文件，或导入新的资料。"
       onClose={() => controller.setSheet(undefined)}
       footer={<Button label="导入资料" icon={Upload} variant="secondary" busy={controller.busy} onPress={() => { void controller.importFile(true); }} />}>

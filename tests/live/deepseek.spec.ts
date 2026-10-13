@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
+import { openModels, returnToWorkbench } from '../e2e/model-helpers';
 
 const apiKey = process.env.DEEPSEEK_API_KEY ?? '';
 test.skip(!apiKey, '显式设置 DEEPSEEK_API_KEY 才会执行付费测试。');
@@ -72,14 +73,19 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     await page.getByRole('button', { name: '保存', exact: true }).click();
     await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-    await page.getByRole('button', { name: '设置', exact: true }).click();
-    await page.getByRole('button', { name: '真实模型', exact: true }).click();
+    await openModels(page);
+    await page.getByRole('button', { name: '添加连接', exact: true }).click();
     await page.getByRole('button', { name: 'DeepSeek', exact: true }).click();
-    await expect(page.getByLabel('模型名称', { exact: true })).toHaveValue('deepseek-flash');
     await page.getByLabel('API Key', { exact: true }).fill(apiKey);
-    await page.getByRole('button', { name: '测试连接', exact: true }).click();
-    await expect(page.getByText(/连接已通过/)).toBeVisible();
-    await page.getByRole('button', { name: '保存设置', exact: true }).click();
+    await page.getByRole('button', { name: '保存连接', exact: true }).click();
+    await page.getByRole('button', { name: '检测连接并发现模型', exact: true }).click();
+    await expect(page.getByText(/目录检测通过/)).toBeVisible();
+    await page.getByRole('button', { name: '编辑模型 deepseek-flash', exact: true }).click();
+    await page.getByRole('switch', { name: '允许图片输入', exact: true }).click();
+    await page.getByRole('button', { name: '保存模型', exact: true }).click();
+    await page.getByRole('button', { name: '设为全局默认', exact: true }).click();
+    await expect(page.getByRole('button', { name: '已为全局默认', exact: true })).toBeVisible();
+    await returnToWorkbench(page);
 
     await task(page, '请读取 documents/notes.md，创建 documents/plan.md，用不超过 200 字整理成中文行程。准确保留时间、预算、饮食、住宿和联系人信息。实际保存文件，最后只说结果。', 1);
     const plan = await readDocument(page, 'documents/plan.md');

@@ -21,6 +21,6 @@ export interface HostFileSystem {
 }
 
 export interface CredentialStore {
-  get(): Promise<string>;
-  set(value: string): Promise<void>;
+  get(reference?: string): Promise<string>;
+  set(value: string, reference?: string): Promise<void>;
 }

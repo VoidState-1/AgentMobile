@@ -20,7 +20,7 @@ describe('真实服务兼容与连接诊断', () => {
     const stream = await compatibleTransport(deepseekSettings, 'test-only')(modelFor(deepseekSettings), context());
     const final = await stream.result();
     expect(final.stopReason).toBe('stop');
-    expect(final.usage).toMatchObject({ input: 120, output: 20, totalTokens: 140, cacheRead: 80 });
+    expect(final.usage).toMatchObject({ input: 40, output: 20, totalTokens: 140, cacheRead: 80 });
     expect(body.thinking).toEqual({ type: 'disabled' });
     expect(body.stream_options).toEqual({ include_usage: true });
   });

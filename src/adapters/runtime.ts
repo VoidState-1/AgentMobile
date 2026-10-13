@@ -1,7 +1,9 @@
 import '@/adapters/polyfills';
 import * as Crypto from 'expo-crypto';
-import type { ModelSettings, TaskRecord } from '@/core/prototype/types';
-import { defaultSettings } from '@/core/prototype/types';
+import { Platform } from 'react-native';
+import type { TaskRecord } from '@/core/prototype/types';
+import { ModelConfigurationService } from '@/core/models/service';
+import { TaskManager } from './agent/task-manager';
 import { createStorage } from './storage/platform';
 import { WorkspaceService } from './workspace/service';
 
@@ -11,6 +13,8 @@ export type Runtime = Awaited<ReturnType<typeof initialize>>;
 async function initialize() {
   const storage = await createStorage();
   const workspace = new WorkspaceService(storage.fs, storage.metadata, Crypto.randomUUID);
+  const models = new ModelConfigurationService(storage.metadata, storage.credentials, Crypto.randomUUID);
+  await models.initialize();
   await workspace.recover();
   const tasks = await storage.metadata.all<TaskRecord>('tasks');
   for (const task of tasks) {
@@ -21,8 +25,7 @@ async function initialize() {
     });
   }
   return {
-    workspace, ...storage,
-    settings: async () => await storage.metadata.get<ModelSettings>('settings', 'model') ?? defaultSettings,
+    workspace, ...storage, models, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web'),
     tasks: async (projectId: string) => (await storage.metadata.all<TaskRecord>('tasks'))
       .filter((task) => task.projectId === projectId).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };

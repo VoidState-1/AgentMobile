@@ -7,6 +7,8 @@ import type { ModelSettings, TaskRecord } from '@/core/prototype/types';
 import { isImage, mimeFor } from '@/core/workspace/path';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import { compatibleTransport, modelFor } from '@/adapters/model/compatible';
+import { protocolModel, protocolTransport } from '@/adapters/model/protocols';
+import type { ModelRunSnapshot } from '@/core/models/types';
 import { demoTransport } from './demo';
 
 const result = (value: unknown) => ({ content: [{ type: 'text' as const, text: JSON.stringify(value) }], details: {} });
@@ -29,8 +31,11 @@ const defineTool = <T extends TSchema>(tool: AgentTool<T>): AgentTool<T> => ({
 export async function startAgent(
   workspace: WorkspaceService, projectId: string, prompt: string, settings: ModelSettings, apiKey: string,
   id: () => string, update: (task: TaskRecord) => void,
+  snapshot?: ModelRunSnapshot, web = false,
 ): Promise<{ cancel: () => void; done: Promise<TaskRecord>; task: TaskRecord }> {
-  const transport = settings.mode === 'demo' ? demoTransport(prompt) : {
+  const transport = settings.mode === 'demo' ? demoTransport(prompt) : snapshot ? {
+    model: protocolModel(snapshot), streamFn: protocolTransport(snapshot, apiKey, web),
+  } : {
     model: modelFor(settings), streamFn: compatibleTransport(settings, apiKey),
   };
   const runId = id();
@@ -52,7 +57,7 @@ export async function startAgent(
       },
     ]);
     const task: TaskRecord = {
-      id: runId, projectId, prompt, mode: settings.mode, state: 'running',
+      id: runId, projectId, prompt, mode: settings.mode, modelSnapshot: snapshot, state: 'running',
       baseCommit: await workspace.git.head(projectId), response: '', events: [], createdAt: new Date().toISOString(),
     };
     await workspace.metadata.put('tasks', runId, task);
