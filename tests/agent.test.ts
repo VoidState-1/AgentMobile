@@ -1,0 +1,84 @@
+import { randomUUID } from 'node:crypto';
+import { afterEach, describe, expect, it, vi } from 'vitest';
+import { WorkspaceService } from '../src/adapters/workspace/service';
+import { startAgent } from '../src/adapters/agent/runner';
+import { defaultSettings } from '../src/core/prototype/types';
+import { SseDecoder } from '../src/adapters/model/sse';
+import { compatibleTransport, modelFor } from '../src/adapters/model/compatible';
+import { normalizeContext } from '@earendil-works/pi-ai';
+import { testStorage } from './storage';
+
+const cleanups: (() => Promise<void>)[] = [];
+afterEach(async () => { vi.unstubAllGlobals(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
+
+describe('Pi Agent 真实执行循环', () => {
+  it('演示经过工具读取和写入，产生真实 Git 修改，并可整次撤销', async () => {
+    const storage = await testStorage(); cleanups.push(storage.cleanup);
+    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('原型测试');
+    const started = await startAgent(workspace, project.id, '整理我的资料', defaultSettings, '', randomUUID, () => {});
+    const task = await started.done;
+    expect(task.state).toBe('completed');
+    expect(task.events.map((event) => [event.tool, event.state])).toEqual([
+      ['list_files', 'done'], ['read_text', 'done'], ['write_text', 'done'],
+    ]);
+    expect((await workspace.readText(project.id, 'documents/summary.md')).text).toContain('整理我的资料');
+    expect(task.finalCommit).not.toBe(task.baseCommit);
+    expect(await workspace.git.log(project.id)).toHaveLength(2);
+    await workspace.restore(project.id, task.baseCommit, task.finalCommit!);
+    await expect(workspace.readText(project.id, 'documents/summary.md')).rejects.toThrow();
+  });
+
+  it('取消会停止新的工具动作并释放工作区', async () => {
+    const storage = await testStorage(); cleanups.push(storage.cleanup);
+    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('取消测试');
+    const started = await startAgent(workspace, project.id, '整理资料', defaultSettings, '', randomUUID, () => {});
+    started.cancel();
+    expect((await started.done).state).toBe('cancelled');
+    workspace.claim(project.id, 'another-run'); workspace.release(project.id, 'another-run');
+  });
+});
+
+describe('流式协议', () => {
+  it('在 CRLF 和数据之间任意分片仍正确组帧', () => {
+    const decoder = new SseDecoder();
+    expect(decoder.push('data: {"a":')).toEqual([]);
+    expect(decoder.push('1}\r\n\r')).toEqual([]);
+    expect(decoder.push('\ndata: [DONE]\n\n')).toEqual(['{"a":1}', '[DONE]']);
+  });
+
+  it('缺少完成标记的工具参数不会交给执行器', async () => {
+    vi.stubGlobal('fetch', async () => new Response('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"write_text","arguments":"{\\"path\\":\\"x"}}]}}]}\n\n',
+      { headers: { 'Content-Type': 'text/event-stream' } }));
+    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+    const stream = await compatibleTransport(settings, 'test-only')(modelFor(settings), normalizeContext({
+      messages: [{ role: 'user', content: 'hello', timestamp: Date.now() }],
+    }));
+    const final = await stream.result();
+    expect(final.stopReason).toBe('error');
+    expect(final.content.some((part) => part.type === 'toolCall')).toBe(false);
+  });
+
+  it('图片输入只有开启后才进入请求，凭证不会进入消息正文', async () => {
+    let requestBody = '';
+    vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
+      requestBody = String(init.body);
+      return new Response('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
+        { headers: { 'Content-Type': 'text/event-stream' } });
+    });
+    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+    const context = normalizeContext({ messages: [{
+      role: 'toolResult', toolCallId: 'img', toolName: 'inspect_image', isError: false, timestamp: Date.now(),
+      content: [{ type: 'text', text: '资料' }, { type: 'image', mimeType: 'image/png', data: 'test-image-base64' }],
+    }] });
+    const disabled = await compatibleTransport(settings, 'not-in-body')(modelFor(settings), context);
+    await disabled.result();
+    expect(requestBody).not.toContain('test-image-base64');
+    expect(requestBody).not.toContain('not-in-body');
+    const enabledSettings = { ...settings, imageInput: true };
+    const enabled = await compatibleTransport(enabledSettings, 'not-in-body')(modelFor(enabledSettings), context);
+    await enabled.result();
+    expect(requestBody).toContain('data:image/png;base64,test-image-base64');
+  });
+});

@@ -1,6 +1,6 @@
-# 初始化验证记录
+# 验证记录
 
-日期：2026-10-12。
+最近更新：2026-10-13。下方保留初始化结果，原型结果见新增章节。
 
 ## 环境和基线
 
@@ -50,4 +50,35 @@ Android 原生构建 :app:assembleDebug -PreactNativeArchitectures=x86_64 已尝
 
 生成的 android/ 与 work/ 目录已按忽略规则排除；android/ 是可重建的 Expo Prebuild 输出，work/ 只存放本次检查产物。
 
-当前页面为静态工作区空状态，没有数据存储和模型调用。
+上述“尚未验证”反映初始化阶段；当前原型已实现存储和模型协议，以下记录新的证据。
+
+## 2026-10-13 原型验证
+
+| 检查 | 结果 |
+| --- | --- |
+| TypeScript strict、ESLint、Vitest | 通过；24 个测试 |
+| Pi 工具循环 | 真实 Agent Core 驱动读取、写入、取消 |
+| 标准 Git 互通 | Git CLI 成功读取 isomorphic-git 创建的提交 |
+| 崩溃恢复 | 文件批次中断、Git 成功但元数据写入失败，恢复后不重复提交；不明部分写入保留数据并禁止继续写入 |
+| 访问限制 | 路径越界、保留路径、版本冲突、写锁、伪装图片与过大图片拒绝 |
+| SSE | 任意分片、响应不完整不执行工具、图片输入开关与凭证边界 |
+| 浏览器端到端 | 3 个流程通过：编辑/任务/撤销/刷新，390px 手机宽度，图片导入/兼容服务工具调用 |
+| Expo Doctor | 21/21 检查通过 |
+| Expo SDK 版本检查 | 依赖符合 SDK 57 |
+| Android/iOS/Web JavaScript 打包 | Pi 移动入口与 Git 浏览器构建打包通过 |
+| Android 原生 APK | Gradle assembleDebug x86_64 编译成功；安装到 API 36.1 模拟器 |
+| Android 操作流程 | 创建工作区、运行 Pi 工具、生成 summary.md、强制停止后重新打开，文件仍存在 |
+
+Pi 原始默认根入口在 Metro 报出动态 import 无法静态解析，已通过公共纯工具函数的移动入口解决。Agent Core 未 fork，模型传输单独注入。
+
+Web 最初 static 输出出现 React Suspense hydration #419；本地数据应用改为 single 输出后端到端流程通过且未捕获页面异常。
+
+浏览器协议测试使用模拟 SSE 服务和测试密钥，不代表已验证某家实际付费模型服务。桌面宽度与 390px 宽度截图分别保存在 work/prototype-desktop.png、work/prototype-mobile.png。
+
+Android Kotlin 插件阻塞已解除，安装 NDK 27.1/27.0 和 Build Tools 36 后构建成功。实际运行验证使用 x86_64、API 36.1 模拟器与 Metro Development Build；截图在 work/prototype-android.png。Pi 工具循环、SQLite 元数据、Expo 文件读写和 Git 提交在该原生环境中运行成功。
+
+最初 Metro --localhost 在 Windows 绑定 ::1，ADB reverse 的 IPv4 连接失败；测试改为 LAN 绑定并设置 REACT_NATIVE_PACKAGER_HOSTNAME=127.0.0.1 后连接成功。这是本地开发连接问题。
+
+Android arm64 真机、原生掉电/空间不足测试、SecureStore 写入验证和 iOS 原生编译仍未完成。原型 Git 后端为 isomorphic-git；libgit2 原生桥接未实现。
+
+新增依赖后 npm audit 仍为 30 项（18 high、12 moderate），0 critical；没有使用破坏 Expo 兼容性的强制修复。

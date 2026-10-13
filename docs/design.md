@@ -1,7 +1,7 @@
 # Agent Mobile 产品与技术设计
 
-日期：2026-10-12
-状态：初始设计；除第 2 节明确列出的内容外，均为待实现方案。
+日期：2026-10-13
+状态：可交互原型。第 2 节记录实际实现，其余章节中尚未实现的首版目标仍为设计方案。
 
 ## 1. 产品目标与范围
 
@@ -28,22 +28,27 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 
 长期方向：结构化 IntelligentUI → 静态网页成果 → 受控 JavaScript 网页沙箱。
 
-## 2. 本次初始化的交付边界
+## 2. 当前原型的交付边界
 
 | 内容 | 状态 |
 | --- | --- |
 | Git 开发仓库、npm 锁文件、忽略规则 | 已初始化 |
 | Expo SDK 57、React Native、TypeScript、Expo Router | 已配置 |
 | Development Build、SQLite、文件、图片、SecureStore 依赖 | 已安装并配置 |
-| 启动页与工作区空状态 | 已实现；静态展示 |
-| TypeScript、ESLint 检查命令 | 已配置 |
-| 工作区、Git、任务、模型接口 | 已定义初始接口；后续按实现扩展 |
-| SQLite schema、迁移、工作区 CRUD | 待实现 |
+| 项目创建、文件列表、文本编辑、导入导出、移动删除 | 已实现 |
+| TypeScript、ESLint、Vitest、Playwright | 已配置并验证核心流程 |
+| Pi Agent Core 1.1.0 | 已接入；上游核心未修改，Metro 使用纯工具函数入口 |
+| SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
+| SQLite schema | 原型为版本 1 的 records(bucket,id,payload) 表；第 7 节规范化 schema/FTS 未实现 |
+| 本地 Git 提交、历史、任务差异、历史恢复与撤销 | 已实现，原型使用 isomorphic-git 1.44.2 的真实 Git 格式 |
 | Android/iOS libgit2 构建与原生桥接 | 待实现 |
-| 模型调用、Agent 执行循环、恢复机制 | 待实现 |
+| 模型调用与 Agent 循环 | 演示传输与 Chat Completions 兼容 SSE 接口已实现；真实供应商待配置验证 |
+| 操作日志与崩溃恢复 | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证 |
+| 任务恢复 | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求 |
+| 图片 | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现 |
 | IntelligentUI、网页沙箱 | 后续阶段 |
 
-初始化不提供伪造的 Git 提交、模型回复或持久化结果。安装依赖不等于对应业务已经可用。
+演示模式使用显式预设传输，不进行语义理解；它经过真实 Pi 工具循环、工作区写入和 Git 提交。真实模型模式由用户配置地址、模型和密钥。详细使用与限制见 [prototype.md](prototype.md)，验证见 [validation.md](validation.md)。
 
 ## 3. 已选技术栈与架构决策
 
@@ -55,9 +60,9 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | UI 状态 | Zustand | 当前选择、输入草稿、显示进度 |
 | 数据库 | expo-sqlite，WAL，FTS5 | 任务状态、会话、元数据、全文搜索 |
 | 工作区磁盘访问 | expo-file-system | 私有目录内真实文件 |
-| 文件历史 | libgit2，本地 Expo 原生模块 | 真正 Git，Android/iOS 复用核心 |
-| 输入校验 | Zod | 工具参数、模型结果、动态 UI |
-| 模型通信 | expo/fetch + 自有适配层 | 流式请求，隔离供应商协议 |
+| 文件历史 | 原型 isomorphic-git；目标 libgit2 原生模块 | 原型先验证 Git 格式及恢复；后续替换 Git 适配器 |
+| 输入校验 | Pi 工具采用 TypeBox；Zod 留作业务/UI schema | 避免重复维护工具 schema |
+| 模型通信 | expo/fetch + 自有兼容 SSE 传输 | 作为 Pi streamFn 注入，避开 Node 供应商 SDK |
 | 图片 | expo-image、image-picker、image-manipulator | 导入、显示和基础变换 |
 | 文件导入和分享 | expo-document-picker、expo-sharing | 使用系统授权入口 |
 | 凭证 | expo-secure-store | Keychain/Keystore 支持 |
@@ -73,9 +78,13 @@ Router 所需的 Reanimated、Worklets 和 Gesture Handler 采用 Expo SDK 兼�
 2. Git 是文件版本历史的来源，不再另建一套内容寻址版本库。
 3. SQLite 是运行状态和业务元数据的来源；文件索引和搜索索引可以从磁盘重建。
 4. Agent core 不依赖 React、Expo、Node.js、原生模块，平台能力通过接口注入。
-5. 首版轻量实现单 Agent 执行循环，不引入依赖 Node.js 文件系统或子进程的框架。
+5. 单 Agent 执行循环复用 Pi Agent Core 1.1.0；任务协调、预算、持久化、权限与恢复属于宿主。
 6. 首版无需服务端；统一模型额度和账号服务确定后再加 Node.js/TypeScript 后端。
 7. 原生工程采用 Expo Prebuild 生成；持久源码放在 modules 和 config plugin。
+
+原型适配补充：Pi 默认 pi-ai 根入口包含 Metro 无法静态解析的 Node 动态导入。metro.config.js 将该根入口映射到 src/adapters/agent/pi-ai-mobile.ts，仅转出上游公开的 transcript/event-stream/json-parse/validation 子路径。没有修改 node_modules，也没有复制或 fork Agent Core。
+
+isomorphic-git 使用官方浏览器构建及自定义 fs 适配，避免 sha.js 的 Node stream 依赖。移动端落盘到应用私有目录；浏览器预览把相同的 Git 文件和业务记录分别存入 IndexedDB。Git 工程本身仍是标准仓库格式。
 
 ## 4. 模块结构
 
@@ -146,7 +155,7 @@ project.json 可保存可移植的项目名称和格式版本；数据库、会�
 
 ## 6. Git 集成和版本语义
 
-### 6.1 原生集成
+### 6.1 目标原生集成（尚未实现）
 
 Android：TypeScript → Expo Modules API（Kotlin）→ JNI/C++ → NDK/CMake 编译的 libgit2。
 
@@ -159,6 +168,8 @@ iOS：TypeScript → Expo Modules API（Swift）→ Objective-C++/C → 静态�
 原生调用返回结构化错误并正确释放资源；同一仓库的 index、refs 和写操作串行化。TypeScript 层不暴露 git shell 命令或任意底层函数。
 
 libgit2 默认访问真实文件系统。使用 SQLite 虚拟 blob 作为唯一文件存储会增加适配成本，本项目不采用该路线。
+
+原型已通过 isomorphic-git 实现 init/head/commit/log/readBlob/listFiles，并通过标准 Git CLI 验证提交。文件修订号采用 Git blob OID。每个文件工具动作产生检查点，任务记录关联开始/结束提交。libgit2 替换、后台线程性能和两端原生 ABI 验证保留为下一阶段。
 
 ### 6.2 用户可见版本
 
@@ -275,7 +286,7 @@ ModelPort 归一化消息、图片引用、完整工具调用、文本增量、�
 
 上下文仅包含当前任务相关文件；文本搜索先使用 FTS5 和路径过滤，图片按需缩放输入；暂不引入向量数据库。压缩上下文保留文件引用、版本和已完成动作。
 
-首版参考预算（实现时配置化并根据测试调整）：最多 12 轮模型请求、40 次工具调用、模型声明窗口内的上下文预算、单次输出上限、10 分钟前台任务墙钟预算。超限时暂停或结束并保留检查点，不无限重试。
+原型实际预算：最多 10 轮请求、30 次工具调用、2 分钟任务墙钟；单次模型输出 4096 tokens，SSE 原始响应 512 KB，请求 JSON 长度 2 MB。文本文件 256 KB、单次工具文字 80,000 字符，文件导入 5 MB、模型图片输入 1 MB。精确 token 预算、配置化阈值和缩图输入仍待实现。超限结束并保留检查点，不无限重试。
 
 断网与远程超时要区分请求未发送、已发送但结果未知和已返回。只能保证本地可验证操作不重复；不能承诺远程请求绝对 exactly-once 或不会重复计费。后续图片生成需供应商幂等键或可查询 jobId，未知结果不能盲目再次提交。
 
