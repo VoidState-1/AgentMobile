@@ -56,7 +56,7 @@ test('运行中修改 Agent 设置，旧任务跨轮保持原提示词和预算�
   await expect(page.getByText('已完成', { exact: true })).toHaveCount(2); expect(bodies[2].messages[0].content).toContain('UPDATED_SYSTEM_STYLE');
   const tasks = await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('agent-mobile-prototype', 1); request.onsuccess = () => resolve(request.result); });
-    const value = await new Promise<any[]>((resolve) => { const tx = db.transaction('records', 'readonly'); const keys = tx.objectStore('records').getAllKeys(); const values = tx.objectStore('records').getAll(); tx.oncomplete = () => resolve(values.result.filter((_, index) => String(keys.result[index]).startsWith('tasks/'))); });
+    const value = await new Promise<any[]>((resolve) => { const tx = db.transaction('records', 'readonly'); const keys = tx.objectStore('records').getAllKeys(); const values = tx.objectStore('records').getAll(); tx.oncomplete = () => resolve(values.result.filter((_, index) => String(keys.result[index]).startsWith('runs-v2/'))); });
     db.close(); return value;
   });
   expect(tasks.find((task) => task.prompt.length === 5000).agentSettingsSnapshot).toMatchObject({ systemPrompt: 'INITIAL_SYSTEM_STYLE', limits: { maxModelRounds: 50 } });

@@ -365,3 +365,13 @@ R1 工作区、运行生命周期、Pi SDK、工具、协议、工作台控制�
 隔离 emulator-5556：android-git 全流程通过（暂存后重启、冻结 v1 提交、v2 未暂存、演示任务待提交、SQLite 回执注入恢复、标准 Git CLI）；android-mcp 全流程通过（2025/2026、凭证/重启、进度与未知回执收束）；android-skills 全流程通过（ZIP、授权、自动/明确加载、旧版本读取与资源更新、历史、SQLite）。使用合成资料与本地 fixture，未调用付费供应商。已关闭本轮模拟器、Metro 与 fixture，保留用户 4180 预览。
 
 R2 请求资源池新增 3 项并发/公平/取消/前后台验证；运行仓库新增 2 项迁移中断/重试、索引分页、原子委派回执/去重/范围验证。当前 npm run check 共 141 项通过。新运行仓库尚未接入真实启动流程；原生 batch 端口、调度/组预算/运行树与隔离提案不能据此宣称已验证，后续继续落实。
+
+## 2026-10-14：架构 v2 R2 实际接入
+
+实际启动、上下文历史、草稿回执和启动恢复已改用 RunKernel/RunRepository；新执行不再写旧 tasks。新增 11 项验证，npm run check 共 152 项通过：冻结配置/延迟文件基线、精确草稿消费、准备/排队/初始执行槽取消、队列上限、终态保存失败、陈旧进度拒绝、单一资源清理、组预算并发预留/截止时间/存储失败、Pi 在工具等待前释放请求槽以及排队请求取消。
+
+36 条完整浏览器回归通过。迁移回归发现旧对话标题与缺失轨迹提示被 v2 投影丢失，修复后重跑通过。键盘流程在发送按钮就绪后验证 Enter，避免初始项目尚在加载时发送。
+
+Android API 36.1 x86_64 隔离模拟器：android-smoke 的编辑/未保存保护、实际 Pi 工具、重启、主题通过；android-runs 核对实际 runs-v2、launch、transcript、4 次模型请求/3 次工具预算和无旧 tasks 双写。通过 SQLite trigger 在 run-migrations 写入点注入异常，验证 run/launch/trace/marker/索引全部回滚且来源保留；移除 trigger 后重启迁移完成。合成非终态父/子/排队运行收束 interrupted，公开轨迹与活动索引恢复，已消费草稿清理，文件操作数不增加。恢复树测试不是子 Agent 执行验证。
+
+Web 与 Android/iOS JS/Hermes 导出通过。本轮未改依赖/Expo 配置。iOS 原生与 arm64 真机待验证。复现原生验证：隔离开发客户端/Metro/adb reverse 就绪后运行 `node scripts/android-smoke.mjs <serial>`，再运行 `node scripts/android-runs.mjs <serial>`；后者只能用于合成测试设备，会注入测试记录与失败 trigger。R3–R5 尚未交付。

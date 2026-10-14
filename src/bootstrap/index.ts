@@ -8,8 +8,6 @@ import { decodeSkillText, validateBundle, importSkillPackage, exportSkillPackage
 import '@/adapters/polyfills';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
-import type { TaskRecord } from '@/core/runs/types';
-import { settleTrace } from '@/core/trace';
 import { AgentSettingsService } from '@/application/settings/agent';
 import { ModelConfigurationService } from '@/application/models/configuration';
 import { ConversationService } from '@/application/conversations/service';
@@ -17,7 +15,11 @@ import { McpConfigurationService } from '@/application/mcp/configuration';
 import { McpRuntime } from '@/adapters/mcp/runtime';
 import { SkillService } from '@/application/skills/library';
 import { GitSkillRepository } from '@/adapters/skills/repository';
-import { TaskManager } from '@/adapters/agent/task-manager';
+import { runResourceFactory } from '@/adapters/agent/resources';
+import { RunKernel } from '@/application/runs/kernel';
+import { RunRepository } from '@/application/runs/repository';
+import { recoverRuns } from '@/application/runs/recovery';
+import { bindRunLifecycle } from '@/adapters/lifecycle/runs';
 import { createStorage } from '@/adapters/storage/platform';
 import { WorkspaceService } from '@/adapters/workspace/service';
 
@@ -34,33 +36,27 @@ async function initialize() {
   await mcpConfiguration.initialize();
   const mcp = new McpRuntime(mcpConfiguration, storage.metadata, Crypto.randomUUID,
     (value) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value));
+  await workspace.recover();
   await mcp.recover();
   const unknownMcp = await mcp.unknown();
-  await workspace.recover();
   const skills = new SkillService(storage.metadata, new GitSkillRepository(storage.fs, storage.metadata, Crypto.randomUUID));
   await skills.initialize();
+  const runs = new RunRepository(storage.metadata); await runs.initialize();
+  await recoverRuns(runs, workspace, unknownMcp);
   const conversations = new ConversationService(storage.metadata, Crypto.randomUUID);
-  await conversations.initialize(await workspace.projects());
-  const tasks = await storage.metadata.all<TaskRecord>('tasks');
-  for (const task of tasks) {
-    if (task.state === 'running') await storage.metadata.put('tasks', task.id, {
-      ...await workspace.taskFinal(task, true).catch(() => task), state: 'interrupted',
-      trace: settleTrace(task.trace?.map((item) => item.kind === 'tool' && unknownMcp.some((attempt) => attempt.traceId === item.id) ?
-        { ...item, state: 'unknown', output: '远端结果未知，可能已执行。请在 MCP 设置中核对后解除重试限制。', endedAt: new Date().toISOString() } : item), 'interrupted', new Date().toISOString()),
-      error: workspace.needsRecovery(task.projectId) ? '部分修改尚未完成恢复，请保留本地数据。' :
-        unknownMcp.some((attempt) => attempt.taskId === task.id) ? '任务已中断，部分 MCP 调用的远端结果未知，请先核对服务状态。' :
-        '应用运行被中断，文件修改已恢复。可查看已完成结果后发起新任务。',
-    });
-  }
+  const projects = await workspace.projects();
+  const history = (await Promise.all(projects.map((project) => runs.views(project.id)))).flat();
+  await conversations.initialize(projects, history);
+  const agent = new RunKernel(workspace, runs, runResourceFactory(models, mcp, skills, Platform.OS === 'web'), conversations, agentSettings, Crypto.randomUUID);
+  bindRunLifecycle(agent);
   return createAppServices({
-    workspace, models, conversations, agentSettings, mcp, skills, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp, skills),
+    workspace, models, conversations, agentSettings, mcp, skills, agent,
     preferences: new PreferencesService(storage.metadata),
     diagnose: (connectionId, modelId, kind, signal) => runDiagnostic(models, connectionId, modelId, kind, Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', signal),
     skillPackage: { decodeText: decodeSkillText, validateBundle, importPackage: importSkillPackage },
     io: { pickFile, pickSkillPackage, exportFile: (projectId, path) => exportFile(workspace, projectId, path),
       exportSkill: async (name, commit) => shareSkillPackage(name, exportSkillPackage([await skills.repository.bundle(commit, name)])) },
-    tasks: async (projectId: string, conversationId?: string) => (await storage.metadata.all<TaskRecord>('tasks'))
-      .filter((task) => task.projectId === projectId && (!conversationId || task.conversationId === conversationId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
+    tasks: (projectId, conversationId) => runs.views(projectId, conversationId),
   });
 }
 

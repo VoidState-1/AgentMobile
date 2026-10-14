@@ -1,4 +1,4 @@
-export type AppErrorCode = 'VALIDATION' | 'CONFLICT' | 'CANCELLED' | 'STORAGE' | 'REMOTE' | 'UNKNOWN';
+export type AppErrorCode = 'VALIDATION' | 'CONFLICT' | 'CANCELLED' | 'LIMIT' | 'STORAGE' | 'REMOTE' | 'UNKNOWN';
 
 /** Only these public fields cross the application boundary. No native cause is retained. */
 export class AppError extends Error {

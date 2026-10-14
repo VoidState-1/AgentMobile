@@ -11,7 +11,8 @@ export type EngineEvent =
 export interface EngineInput { prompt: string; systemPrompt: string; history: HistoryEntry[]; tools: ControlledTool[]; reasoning: boolean }
 export interface EngineControls {
   beforeRequest?(signal?: AbortSignal): void | Promise<void>;
-  beforeTool?(): Promise<{ block: boolean; reason: string; terminate: boolean } | undefined>;
+  afterRequest?(): void;
+  beforeTool?(invocation: { callId: string; tool: string; args: unknown; round: number }, signal?: AbortSignal): Promise<{ block: boolean; reason: string; terminate: boolean } | undefined>;
 }
 export interface EngineSession {
   readonly round: number;

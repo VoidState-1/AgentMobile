@@ -1,6 +1,6 @@
 # Agent Mobile 新架构方案
 
-日期：2026-10-14。状态：实施中。R0/R1 已完成；R2 进行中，R3–R5 尚未完成。
+日期：2026-10-14。状态：实施中。R0–R2 已完成；R3–R5 尚未完成。
 
 基线：`42403cf`，现有 React Native / Expo / TypeScript、Pi Agent Core、三类模型协议、远程 MCP、Agent Skills 和真实 Git 工作流。基线已通过 130 项单元测试和 35 项浏览器回归；这些结果不代表本文提出的多 Agent 能力已通过验证。
 
@@ -25,7 +25,7 @@
 
 ## 2. 当前结构与主要调整
 
-当前是全局单一 TaskManager → startAgent → 新建 Pi Agent。TaskManager 只保存一个 active 与 cancellation；runner 包含上下文、所有工具、Pi 事件、预算和持久化；WorkspaceService 包含文件、Git、队列、日志、恢复与任务快照；工作台 hook 同时协调项目、对话、编辑器和 Git。
+基线是全局单一 TaskManager → startAgent → 新建 Pi Agent；当时 TaskManager 只保存一个 active 与 cancellation，runner、WorkspaceService 与工作台 hook 各承担多个职责。R0–R2 已将实际入口切为 RunKernel → RunController → PiEngineAdapter；下表记录基线模块的迁移方向，实施细节见第 15 节。
 
 | 现有模块 | 迁移后的责任 |
 | --- | --- |
@@ -324,6 +324,8 @@ R1 已完成：WorkspaceApplication 组合 Reader/FileCommands/GitService/RunSna
 
 R1 验证：136 项测试、36 条浏览器回归、三平台导出通过。Android API 36.1 x86_64 隔离模拟器完成 Git/index/工作区与回执恢复、两代 MCP/未知回执、Skills 自动/明确加载与版本更新流程；SQLite 和标准 Git 仓库核对通过。R1 未启用多 Agent。
 
-R2 进行中：请求槽公平队列与取消/前后台准入、Run/LaunchSnapshot/AgentDefinition 类型、RunRepository 版本化存储/索引/旧任务迁移/原子子创建回执已建立，5 项单元验证通过。SQLite/IndexedDB 已增加原子元数据批次端口；新运行仓库尚未接入实际启动/执行，原生新事务与运行树恢复仍待验证。共享组预算、运行调度/资源租约、界面接入和 R3–R5 仍需继续完成。
+R2 已完成：实际启动、历史、草稿回执和恢复接入 RunKernel/RunRepository，新任务只写 runs-v2；旧 tasks 保留来源并迁移索引、轨迹、transcript、启动证据。配置/凭证资源入队冻结，实际开始捕获文件/index 基线；对话独占、队列上限、前后台准入、取消准备中/排队/启动中任务与统一资源清理已接入。RunGroup 持久化请求/工具预算与截止时间，Pi 每轮请求使用公平资源池，模型返回后、工具执行前释放请求槽。进度不能覆盖取消/终态，终态及轨迹原子保存、资源释放后才向 UI 发布完成；保存故障停止派发并等待重启恢复。
+
+R2 验证：152 项测试、36 条浏览器回归通过；Web 与 Android/iOS JS/Hermes 导出通过。Android API 36.1 x86_64 完成实际 v2 演示任务/预算/transcript、编辑与强制停止持久化、SQLite 迁移批次中途异常的整批回滚/重试、父子/排队记录收束、草稿回执恢复与无工具重放验证。父子记录恢复使用合成运行树，未宣称子 Agent 执行已实现。实际仍限制一个活动根任务；旧 TaskManager/startAgent 仅为现有直接调用测试提供兼容路径。R3 委派/权限/子预算分配与 R4–R5 继续实施。
 
 当前继续沿用 isomorphic-git、SQLite/IndexedDB、SecureStore、Pi 与现有三协议；libgit2、后台执行、独立角色编辑器、token/费用硬预算、上下文自动压缩、提案自动合并、仓库导出/GC 与网页沙箱分别列为后续能力，按实际需求和设备验证推进。

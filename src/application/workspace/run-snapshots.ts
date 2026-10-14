@@ -20,7 +20,7 @@ export class RunSnapshots {
     if (!task.baseSnapshot || !task.baseIndexSnapshot) return { ...task, finalCommit: await this.context.git.head(task.projectId) };
     const own = (await this.context.metadata.all<Operation>('operations')).filter((op) => op.projectId === task.projectId && op.runId === task.id && op.phase === 'recorded')
       .sort((a, b) => a.sequence !== undefined && b.sequence !== undefined ? a.sequence - b.sequence : a.createdAt.localeCompare(b.createdAt));
-    const head = recovering ? [...own].reverse().find((op) => op.kind === 'commit')?.commit ?? task.baseCommit : await this.context.git.head(task.projectId);
+    const head = recovering ? [...own].reverse().find((op) => op.kind === 'commit')?.commit ?? task.baseCommit ?? await this.context.git.head(task.projectId) : await this.context.git.head(task.projectId);
     const lastFiles = [...own].reverse().find((op) => op.kind === 'files'); const lastIndex = [...own].reverse().find((op) => op.indexAfter);
     const working = recovering ? await this.context.git.tree(task.projectId, lastFiles?.checkpoint ?? task.baseSnapshot) : await this.reader.workingTree(task.projectId);
     const index = recovering ? await this.context.git.tree(task.projectId, lastIndex?.indexAfter ?? task.baseIndexSnapshot) : await this.mutations.indexTree(task.projectId);
@@ -37,7 +37,9 @@ export class RunSnapshots {
   }
 
   async taskChanges(task: TaskRecord) {
-    const changes = await this.versions.changes(task.projectId, task.baseSnapshot ?? task.baseCommit, task.finalSnapshot ?? task.finalCommit ?? task.baseCommit);
+    const after = task.finalSnapshot ?? task.finalCommit ?? task.baseCommit;
+    if (!after) return [];
+    const changes = await this.versions.changes(task.projectId, task.baseSnapshot ?? task.baseCommit, after);
     if (task.baseIndexSnapshot && task.finalIndexSnapshot) {
       for (const change of await this.versions.changes(task.projectId, task.baseIndexSnapshot, task.finalIndexSnapshot)) {
         if (!changes.some((file) => file.path === change.path)) changes.push({ ...change, kind: '暂存' + change.kind });
@@ -49,7 +51,7 @@ export class RunSnapshots {
   undoTask(task: TaskRecord) {
     return this.mutations.serial(task.projectId, undefined, async () => {
       const beforeRef = task.baseSnapshot ?? task.baseCommit; const afterRef = task.finalSnapshot ?? task.finalCommit;
-      if (!afterRef) throw new Error('工作区任务尚无可撤销结果');
+      if (!afterRef || !beforeRef) throw new Error('工作区任务尚无可撤销结果');
       const [before, after, working, index] = await Promise.all([this.context.git.tree(task.projectId, beforeRef), this.context.git.tree(task.projectId, afterRef), this.reader.workingTree(task.projectId), this.mutations.indexTree(task.projectId)]);
       const baseIndex = task.baseIndexSnapshot ? await this.context.git.tree(task.projectId, task.baseIndexSnapshot) : before;
       const finalIndex = task.finalIndexSnapshot ? await this.context.git.tree(task.projectId, task.finalIndexSnapshot) : after;

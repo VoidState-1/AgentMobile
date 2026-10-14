@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { readRuns } from './native-runs.mjs';
 
 // Only run on the isolated fixture emulator, with its app force-stopped.
 export async function verifyGitRecords(serial, injectRecovery = false) {
@@ -20,7 +21,7 @@ export async function verifyGitRecords(serial, injectRecovery = false) {
     const project = all('projects').filter((item) => item.name.startsWith('GitNative-')).sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
     if (!project) throw new Error('未找到本轮 Git 测试项目');
     const operations = all('operations').filter((op) => op.projectId === project.id).sort((a, b) => a.sequence - b.sequence);
-    const task = all('tasks').find((item) => item.projectId === project.id);
+    const task = readRuns(db).find((item) => item.projectId === project.id);
     if (!task || task.state !== 'completed' || task.finalCommit !== task.baseCommit || task.finalSnapshot === task.baseSnapshot || !task.uncommittedPaths.includes('documents/summary.md')) throw new Error('原生任务结果/快照/未提交状态不一致');
     if (operations.some((op) => op.phase !== 'recorded') || operations.filter((op) => op.kind === 'commit').length !== 1 || !operations.some((op) => op.kind === 'index')) throw new Error('原生 Git 操作回执不完整');
     const directory = path.resolve('work/git-native-extracted-' + Date.now()); await fs.mkdir(directory, { recursive: true });

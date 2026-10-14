@@ -6,12 +6,11 @@ import type { SkillService } from '@/application/skills/library';
 import { publicError } from '@/core/errors';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import type { McpRuntime } from '@/adapters/mcp/runtime';
-import type { TaskManager } from '@/adapters/agent/task-manager';
 import type { PreferencesService } from '@/application/settings/preferences';
 
 export interface AppDependencies {
   workspace: WorkspaceService; models: ModelConfigurationService; conversations: ConversationService;
-  agentSettings: AgentSettingsService; skills: SkillService; mcp: McpRuntime; agent: TaskManager;
+  agentSettings: AgentSettingsService; skills: SkillService; mcp: McpRuntime; agent: AppServices['agent'];
   preferences: PreferencesService; tasks: AppServices['tasks']; io: AppServices['io'];
   diagnose: AppServices['models']['diagnose']; skillPackage: Pick<AppServices['skills'], 'decodeText' | 'validateBundle' | 'importPackage'>;
 }

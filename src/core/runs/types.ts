@@ -4,6 +4,9 @@ import type { AgentSettings } from '../agent/settings';
 import type { McpServerSnapshot } from '../mcp/types';
 import type { SkillSummary } from '../skills/types';
 
+export type RunState = 'queued' | 'running' | 'waiting_children' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+
+/** Public execution view, also used to read pre-v2 task records. */
 export interface TaskRecord {
   id: string;
   projectId: string;
@@ -16,8 +19,8 @@ export interface TaskRecord {
   mcpSnapshot?: McpServerSnapshot[];
   skillsSnapshot?: readonly SkillSummary[];
   skillActivations?: { name: string; revision: string; source: 'explicit' | 'agent'; at: string }[];
-  state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
-  baseCommit: string;
+  state: RunState;
+  baseCommit?: string;
   finalCommit?: string;
   baseSnapshot?: string;
   finalSnapshot?: string;

@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { readRuns } from './native-runs.mjs';
 
 // Use only with the isolated fixture emulator, after its task has settled.
 export async function verifyMcpRecords(serial) {
@@ -17,7 +18,7 @@ export async function verifyMcpRecords(serial) {
   const db = new DatabaseSync(target, { readOnly: true });
   try {
     const attempts = db.prepare("SELECT payload FROM records WHERE bucket='mcp-attempts'").all().map((row) => JSON.parse(row.payload));
-    const tasks = db.prepare("SELECT payload FROM records WHERE bucket='tasks'").all().map((row) => JSON.parse(row.payload));
+    const tasks = readRuns(db);
     for (const endpoint of ['mcp-modern', 'mcp-legacy']) {
       const attempt = attempts.find((item) => item.url.endsWith('/' + endpoint) && item.state === 'completed');
       const task = tasks.find((item) => item.id === attempt?.taskId);

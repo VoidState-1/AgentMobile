@@ -57,10 +57,10 @@ export type SkillsApi = Pick<SkillService, 'getSnapshot' | 'subscribe' | 'instal
   importPackage(name: string, bytes: Uint8Array): SkillBundle[];
 };
 export interface AgentApi {
-  getSnapshot(): { active?: TaskRecord; completed?: TaskRecord; error?: string; starting: boolean };
+  getSnapshot(): { active?: TaskRecord; completed?: TaskRecord; runs?: readonly TaskRecord[]; error?: string; starting: boolean };
   subscribe(listener: () => void): () => void;
   start(projectId: string, prompt: string, imageAttached?: boolean, conversationId?: string, draftRevision?: number): Promise<void>;
-  cancel(): void;
+  cancel(runId?: string): void | Promise<void>;
 }
 export interface AppServices {
   workspace: WorkspaceApi;

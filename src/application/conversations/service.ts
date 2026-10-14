@@ -36,17 +36,19 @@ export class ConversationService {
     if (!value || (!allowArchived && value.archivedAt)) throw new Error('对话不存在或已归档，请重新选择。');
     return value;
   }
-  async initialize(projects: Project[]): Promise<void> {
+  async initialize(projects: Project[], currentTasks: readonly TaskRecord[] = []): Promise<void> {
     await this.exclusive(async () => {
       const stored = await this.metadata.get<ConversationState>('conversations', 'state');
       if (stored && stored.schemaVersion !== 1) throw new Error('对话数据格式需要更新应用。');
       this.state = freeze(clone(stored ?? emptyConversationState()));
-      const next = clone(this.state); const tasks = await this.metadata.all<TaskRecord>('tasks');
+      const next = clone(this.state); const legacyTasks = await this.metadata.all<TaskRecord>('tasks');
+      const tasks = [...new Map([...legacyTasks, ...currentTasks].map((task) => [task.id, task])).values()];
       for (const project of projects) {
         const history = tasks.filter((task) => task.projectId === project.id);
         for (const task of history) {
           const id = task.conversationId ?? mainSessionId(project.id);
-          if (!next.conversations.some((item) => item.id === id)) this.add(next, project.id, id, task.conversationId ? titleOf(task.prompt) : '原有对话');
+          const original = legacyTasks.find((item) => item.id === task.id);
+          if (!next.conversations.some((item) => item.id === id)) this.add(next, project.id, id, original && !original.conversationId ? '原有对话' : task.conversationId ? titleOf(task.prompt) : '原有对话');
           const draft = next.drafts[id];
           // A committed task consumes that precise draft revision. Restart never
           // replays a submitted draft after a crash between task and draft writes.
@@ -61,7 +63,7 @@ export class ConversationService {
       // Commit the stable graph before rewriting legacy task records. Retrying
       // after interruption attaches to the same IDs, including existing model pins.
       if (!stored || JSON.stringify(next) !== JSON.stringify(this.state)) await this.persist(next);
-      for (const task of tasks) if (!task.conversationId && projects.some((p) => p.id === task.projectId)) {
+      for (const task of legacyTasks) if (!task.conversationId && projects.some((p) => p.id === task.projectId)) {
         await this.metadata.put('tasks', task.id, { ...task, conversationId: mainSessionId(task.projectId) });
       }
     });
@@ -123,6 +125,7 @@ export class ConversationService {
   }
   async acquireRun(id: string, projectId: string, prompt: string): Promise<{ conversation: Conversation; release(): void }> {
     return this.exclusive(async () => {
+      if (this.runs.has(id)) throw new Error('此对话已有运行中的任务。');
       const next = clone(this.state); const conversation = this.require(next, id, projectId); conversation.updatedAt = this.now();
       if (conversation.titleSource === 'auto' && conversation.title === '新对话') conversation.title = titleOf(prompt);
       await this.persist(next); this.runs.set(id, (this.runs.get(id) ?? 0) + 1); let released = false;

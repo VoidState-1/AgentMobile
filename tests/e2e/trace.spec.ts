@@ -77,9 +77,11 @@ test('重启收束正在生成的轨迹，旧任务正常回看', async ({ page 
     await new Promise<void>((resolve) => {
       const tx = db.transaction('records', 'readwrite'); const store = tx.objectStore('records'); const request = store.openCursor();
       request.onsuccess = () => { const cursor = request.result; if (!cursor) return;
-        if (String(cursor.key).startsWith('tasks/') && cursor.key !== 'tasks/legacy-trace') {
-          const task = cursor.value; task.state = 'running'; task.trace.push({ id: 'interrupted-thought', round: 5, contentIndex: 0,
-            kind: 'reasoning', visibility: 'summary', state: 'running', startedAt: task.createdAt, text: '中断前已收到的摘要。' }); cursor.update(task);
+        if (String(cursor.key).startsWith('runs-v2/')) {
+          const task = cursor.value; task.state = 'running'; cursor.update(task);
+          const traces = store.get('run-traces/' + task.id); traces.onsuccess = () => store.put([...traces.result, { id: 'interrupted-thought', round: 5, contentIndex: 0,
+            kind: 'reasoning', visibility: 'summary', state: 'running', startedAt: task.createdAt, text: '中断前已收到的摘要。' }], 'run-traces/' + task.id);
+          store.put({ ids: [task.id] }, 'run-indexes/active');
           const legacy = { ...task, id: 'legacy-trace', state: 'completed', trace: undefined, prompt: '旧任务兼容验证', response: '旧任务最终答案。' };
           store.put(legacy, 'tasks/legacy-trace');
         } cursor.continue();

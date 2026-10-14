@@ -204,7 +204,8 @@ export function useWorkbench() {
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
     startRenameConversation, renameConversation, archiveConversation, restoreConversation, returnToActiveConversation,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
-    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openAgentSettings, openMcpConfig, openSkills, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
+    stop: () => { void Promise.resolve(runtime?.agent.cancel(conversationActive?.id ?? active?.id)).catch(() => setError('停止状态保存失败，请重新打开应用恢复。')); },
+    openSettings, openModelConfig, openAgentSettings, openMcpConfig, openSkills, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {
       const next = confirmation;

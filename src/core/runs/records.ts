@@ -1,11 +1,11 @@
-import type { TaskRecord } from './types';
+import type { TaskRecord, RunState } from './types';
 import type { AgentDefinition } from '../agents/types';
 import type { AgentSettings } from '../agent/settings';
 import type { ModelRunSnapshot } from '../models/types';
 import type { McpServerSnapshot } from '../mcp/types';
 import type { SkillSummary } from '../skills/types';
 
-export type RunState = 'queued' | 'running' | 'waiting_children' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+export type { RunState } from './types';
 export interface RunRecord extends Omit<TaskRecord, 'state' | 'baseCommit' | 'trace'> {
   schemaVersion: 2;
   rootRunId: string;
@@ -19,6 +19,8 @@ export interface RunRecord extends Omit<TaskRecord, 'state' | 'baseCommit' | 'tr
   inputSnapshotRef?: string;
   baseCommit?: string;
   deadlineAt?: string;
+  revision?: number;
+  legacyTraceMissing?: boolean;
 }
 export interface LaunchSnapshot {
   id: string;

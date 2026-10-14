@@ -1,19 +1,19 @@
 import type { EngineEvent } from '@/core/agent/engine';
 import type { TaskRecord } from '@/core/runs/types';
-import type { MetadataStore } from '@/core/storage/contracts';
+import type { RunPersistence } from './persistence';
 import { finishTool, recordContent, settleTrace } from '@/core/trace';
 
 export class RunRecorder {
   private writes: Promise<unknown> = Promise.resolve();
   private timer?: ReturnType<typeof setTimeout>;
   private readonly indexes = new Map<string, number>();
-  constructor(private readonly task: TaskRecord, private readonly store: MetadataStore, private readonly update: (task: TaskRecord) => void,
+  constructor(private readonly task: TaskRecord, private readonly store: RunPersistence, private readonly update: (task: TaskRecord) => void,
     private readonly sanitize: <T>(value: T) => T = (value) => value, private readonly label: (tool: string) => string | undefined = () => undefined) { task.trace ??= []; }
   snapshot = (): TaskRecord => ({ ...this.task, events: this.task.events.map((item) => ({ ...item })), trace: this.task.trace!.map((item) => ({ ...item })), skillActivations: this.task.skillActivations?.map((item) => ({ ...item })) });
   publish() { this.update(this.snapshot()); }
   persist(): Promise<void> {
     if (this.timer) { clearTimeout(this.timer); this.timer = undefined; }
-    const copy = this.snapshot(); this.writes = this.writes.catch(() => {}).then(() => this.store.put('tasks', this.task.id, copy));
+    const copy = this.snapshot(); this.writes = this.writes.then(() => this.store.saveTask(copy));
     void this.writes.catch(() => {}); return this.writes as Promise<void>;
   }
   private schedule() { this.timer ??= setTimeout(() => { this.timer = undefined; void this.persist(); }, 200); }
@@ -48,12 +48,13 @@ export class RunRecorder {
     }
     if (event.type === 'assistant_end') {
       task.response = event.response; const transcript = event.transcript;
-      this.writes = this.writes.catch(() => {}).then(() => this.store.put('transcripts', task.id, transcript));
+      this.writes = this.writes.then(() => this.store.saveTranscript(task.id, transcript));
+      void this.writes.catch(() => {});
       this.publish(); void this.persist();
     }
   };
   async finish(publish = true) {
-    this.task.trace = settleTrace(this.task.trace, this.task.state === 'failed' ? 'error' : this.task.state === 'running' ? 'interrupted' : this.task.state, new Date().toISOString());
+    this.task.trace = settleTrace(this.task.trace, this.task.state === 'failed' ? 'error' : ['queued', 'running', 'waiting_children', 'cancelling'].includes(this.task.state) ? 'interrupted' : this.task.state as 'completed' | 'cancelled' | 'interrupted', new Date().toISOString());
     await this.persist(); if (publish) this.publish();
   }
 }

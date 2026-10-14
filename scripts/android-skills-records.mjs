@@ -3,6 +3,7 @@ import { promisify } from 'node:util';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
+import { readRuns } from './native-runs.mjs';
 
 // Inspect only the isolated fixture emulator after execution has settled.
 export async function verifySkillsRecords(serial) {
@@ -15,7 +16,7 @@ export async function verifySkillsRecords(serial) {
   }
   const db = new DatabaseSync(target, { readOnly: true });
   try {
-    const tasks = db.prepare("SELECT payload FROM records WHERE bucket='tasks'").all().map((row) => JSON.parse(row.payload));
+    const tasks = readRuns(db);
     const automatic = tasks.find((task) => task.skillActivations?.some((activation) => activation.name === 'note-workflow' && activation.source === 'agent'));
     const explicit = tasks.find((task) => task.skillActivations?.some((activation) => activation.name === 'note-workflow' && activation.source === 'explicit'));
     for (const task of [automatic, explicit]) if (!task || task.state !== 'completed' || task.baseSnapshot === task.finalSnapshot || !task.uncommittedPaths?.length || !task.trace.some((item) => item.tool === 'read_skill_resource' && item.state === 'completed')) throw new Error('缺少已完成技能调用、资源轨迹或工作区修改。');

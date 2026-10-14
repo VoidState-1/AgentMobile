@@ -30,7 +30,7 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
           <T style={{ fontWeight: '600', fontSize: 13 }}>Agent</T>
           <T tone={task.state === 'failed' ? 'danger' : task.state === 'completed' ? 'muted' : 'secondary'} style={{ fontSize: 11 }}>
-            {{ completed: '已完成', running: '执行中', failed: '执行失败', cancelled: '已停止', interrupted: '已中断' }[task.state]}
+            {{ queued: '等待启动', running: '执行中', waiting_children: '等待子任务', cancelling: '正在停止', completed: '已完成', failed: '执行失败', cancelled: '已停止', interrupted: '已中断' }[task.state]}
           </T>
         </View>
         <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?

@@ -173,6 +173,7 @@ test('键盘输入、快捷保存、新建重命名与删除', async ({ page }) 
   await input.press('Shift+Enter');
   await input.pressSequentially('第二行');
   await expect(input).toHaveValue('第一行\n第二行');
+  await expect(page.getByRole('button', { name: '发送任务', exact: true })).toBeEnabled();
   await input.press('Enter');
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '资料', exact: true }).click();

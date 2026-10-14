@@ -134,7 +134,7 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
         const store = db.transaction('records').objectStore('records');
         const keys = store.getAllKeys(); const values = store.getAll();
         values.onsuccess = () => resolve({
-          tasks: values.result.filter((_, i) => String(keys.result[i]).startsWith('tasks/')),
+          tasks: values.result.filter((_, i) => String(keys.result[i]).startsWith('runs-v2/')),
           usage: values.result.filter((_, i) => String(keys.result[i]).startsWith('transcripts/')).flatMap((value) =>
             value.messages.filter((message: { role: string; usage?: { totalTokens: number } }) => message.role === 'assistant' && message.usage?.totalTokens)
               .map((message: { usage: unknown }) => message.usage)),
