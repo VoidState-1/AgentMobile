@@ -62,6 +62,22 @@ describe('MCP 配置与凭证', () => {
   });
 });
 describe('官方 MCP SDK 协议与持久化边界', () => {
+  it('跨项目两个运行同参数派发只能发送一次；未知屏障不能被另一个运行绕过', async () => {
+    const f = await setup(); const fixture = mcpFixture(); vi.stubGlobal('fetch', fixture.handle); await grant(f); await grant(f, 'project-B');
+    const a = f.runtime.createRun(await f.configuration.acquireProject('project-A')); const b = f.runtime.createRun(await f.configuration.acquireProject('project-B')); cleanups.push(a.close, b.close);
+    const entered = Promise.withResolvers<void>(); const aborted = new AbortController(); let calls = 0;
+    vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
+      if (String(init?.body).includes('"tools/call"')) {
+        calls++; entered.resolve();
+        return new Response(new ReadableStream({ start(controller) { init?.signal?.addEventListener('abort', () => controller.error(new Error('interrupted')), { once: true }); } }), { headers: { 'Content-Type': 'text/event-stream' } });
+      } return fixture.handle(url, init);
+    });
+    const first = a.tools[0].execute('root-A', 'trace-A', { query: 'shared' }, false, aborted.signal);
+    await entered.promise; const duplicate = await b.tools[0].execute('root-B', 'trace-B', { query: 'shared' }, false);
+    expect(duplicate.isError).toBe(true); expect(calls).toBe(1); aborted.abort(); expect((await first).details.mcpStatus).toBe('unknown');
+    await a.close(); await b.tools[0].execute('root-B', 'retry-B', { query: 'shared' }, false); expect(calls).toBe(1);
+    expect((await f.runtime.unknown())[0].taskId).toBe('root-A');
+  });
   for (const modern of [false, true]) for (const streamed of [false, true]) it(`${modern ? '2026' : '2025'} 协议、${streamed ? 'SSE' : 'JSON'}、分页与进度`, async () => {
     const f = await setup(); const fixture = mcpFixture({ modern, sse: streamed, paginated: true, token: 'mcp-fixture-secret' }); vi.stubGlobal('fetch', fixture.handle);
     const tool = await grant(f); const server = f.configuration.getSnapshot().servers[0];

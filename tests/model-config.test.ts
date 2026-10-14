@@ -39,6 +39,14 @@ function edit(model: ModelEntry) {
 }
 
 describe('多连接配置、凭证和运行快照', () => {
+  it('同连接两个并行运行的旧凭证只在两个租约都释放后回收', async () => {
+    const f = fixture(); const service = f.create(); await service.initialize();
+    const connection = await service.saveConnection(connectionInput('共享连接'), { value: 'parallel-old-key' }); const model = await addModel(service, connection);
+    const a = await service.acquireModel(model.id); const b = await service.acquireModel(model.id);
+    await service.saveConnection({ ...connection, name: '新凭证连接' }, { value: 'parallel-new-key' }, connection.revision);
+    await a.release(); expect(f.keys.has(connection.credentialRef!)).toBe(true); expect(b.secret).toBe('parallel-old-key');
+    await b.release(); expect(f.keys.has(connection.credentialRef!)).toBe(false); expect([...f.keys.values()]).toContain('parallel-new-key');
+  });
   it('同名模型和两份连接独立使用密钥，快照与元数据不包含凭证', async () => {
     const f = fixture(); const service = f.create(); await service.initialize();
     const a = await service.saveConnection(connectionInput('个人'), { value: 'private-key-A' });

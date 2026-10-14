@@ -34,7 +34,7 @@ for (const explicitWait of [false, true]) test(explicitWait ? 'wait_agents 显�
   });
   await page.getByLabel('任务目标', { exact: true }).fill('主任务私密说明：并行阅读和审阅 notes.md'); await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect.poll(() => childBodies.filter((body) => body.messages.some((message: any) => message.role === 'tool')).length).toBe(2);
-  await expect(page.getByTestId('child-trace')).toHaveCount(2); await expect(page.getByText('等待子任务', { exact: true })).toBeVisible();
+  await expect(page.getByTestId('child-trace')).toHaveCount(2); await expect(page.getByTestId('conversation-scroll').getByText('等待子任务', { exact: true })).toBeVisible();
   await expect(page.getByText('已完成', { exact: true })).toHaveCount(0);
   if (explicitWait) { await page.getByRole('button', { name: '停止子 Agent 子任务A', exact: true }).click(); await expect(page.getByText('子 Agent · 已停止', { exact: true })).toBeVisible(); }
   release(); await expect(page.getByText('已完成', { exact: true })).toHaveCount(1);

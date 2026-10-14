@@ -5,6 +5,7 @@ import { Check, ChevronDown, Folder, FolderOpen, HardDrive, History, MessageSqua
 import { useWorkbench } from './use-workbench';
 import type { Workbench } from './use-workbench';
 import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { RunActivity } from '@/features/runs/activity';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
 import { Conversation } from './conversation';
 import { FilesPane } from './files';
@@ -58,13 +59,13 @@ function Sidebar({ controller }: { controller: Workbench }) {
         <View style={{ flex: 1 }}><T numberOfLines={1} tone={project.id === controller.projectId ? 'accent' : 'text'}
           style={{ fontSize: 12, fontWeight: project.id === controller.projectId ? '500' : '400' }}>{project.name}</T>
           <T tone="muted" style={{ fontSize: 10, marginTop: 2 }}>{dateLabel(project.updatedAt)}</T></View>
-        {project.id === controller.active?.projectId && <ActivityIndicator size={12} color={theme.accent} />}
+        {controller.runs.some((run) => run.projectId === project.id) && <ActivityIndicator size={12} color={theme.accent} />}
       </Pressable>
         {project.id === controller.projectId && <View style={{ paddingLeft: 15, paddingTop: 6, paddingBottom: 12, gap: 2 }}>
           {controller.conversations.filter((item) => !item.archivedAt).map((item) => <Pressable key={item.id} accessibilityRole="button" accessibilityLabel={'切换对话 ' + item.title}
             disabled={controller.busy} onPress={() => { void controller.selectConversation(item.id); }} style={({ pressed }) => ({ flexDirection: 'row', gap: 7, alignItems: 'center', minHeight: 40,
               paddingHorizontal: 10, borderRadius: 7, backgroundColor: item.id === controller.conversationId ? theme.inset : pressed ? theme.inset : 'transparent' })}>
-            {item.id === controller.active?.conversationId ? <ActivityIndicator size={12} color={theme.accent} /> : <MessageSquare size={13} color={item.id === controller.conversationId ? theme.accent : theme.muted} />}
+            {controller.runs.some((run) => run.conversationId === item.id) ? <ActivityIndicator size={12} color={theme.accent} /> : <MessageSquare size={13} color={item.id === controller.conversationId ? theme.accent : theme.muted} />}
             <T tone={item.id === controller.conversationId ? 'text' : 'secondary'} numberOfLines={1} style={{ flex: 1, fontSize: 11 }}>{item.title}</T>
           </Pressable>)}
           <Button label="新建对话" icon={Plus} compact variant="ghost" disabled={controller.busy} style={{ justifyContent: 'flex-start', paddingLeft: 10 }} onPress={() => { void controller.newConversation(); }} />
@@ -160,6 +161,7 @@ export function WorkbenchScreen() {
           </View> : <>
             {wide && <Navigation controller={controller} mobile={false} />}
             {controller.tab === 'agent' && <ConversationBar controller={controller} wide={wide} />}
+            <RunActivity controller={controller} />
             <View style={{ flex: 1, minHeight: 0 }}>
               {controller.tab === 'agent' ? <Conversation key={controller.conversationId} controller={controller} /> :
                 controller.tab === 'files' ? <FilesPane key={controller.projectId} controller={controller} /> : <HistoryPane controller={controller} />}

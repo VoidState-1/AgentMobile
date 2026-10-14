@@ -38,7 +38,7 @@ export class RunKernel {
   readonly requests: RequestScheduler;
   constructor(private readonly workspace: WorkspaceApplication, readonly repository: RunRepository, private readonly factory: RunResourceFactory,
     private readonly conversations: ConversationService, private readonly settings: AgentSettingsService, private readonly id: () => string,
-    private readonly limits: SchedulerLimits = { ...defaultSchedulerLimits, activeRoots: 1 }) {
+    private readonly limits: SchedulerLimits = { ...defaultSchedulerLimits }) {
     this.requests = new RequestScheduler(limits.modelRequests, limits.connectionRequests);
   }
   getSnapshot = () => this.snapshot;

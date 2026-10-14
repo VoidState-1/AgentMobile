@@ -37,14 +37,14 @@ export function useWorkbench() {
 
   const draft = useConversationDraft(runtimeRef, ui.conversationId, setError);
   const { composer, composerRef, draftSaved, draftSaving, installConversation, setPrompt, setAttachment, flushDraft } = draft;
-  const { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, refresh } =
+  const { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, runs, refresh } =
     useWorkbenchData({ ui, runtimeRef, editorRef, setEditor, installConversation, setError });
 
   const selectedProject = projects.find((project) => project.id === ui.projectId);
-  const projectActive = active?.projectId === ui.projectId ? active : undefined;
+  const projectActive = runs.find((run) => run.projectId === ui.projectId && run.state !== 'queued');
   const selectedConversation = conversationState.conversations.find((item) => item.id === ui.conversationId && item.projectId === ui.projectId && !item.archivedAt);
   const conversations = conversationState.conversations.filter((item) => item.projectId === ui.projectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
-  const conversationActive = projectActive?.conversationId === ui.conversationId ? projectActive : undefined;
+  const conversationActive = runs.find((run) => run.projectId === ui.projectId && run.conversationId === ui.conversationId);
   const prompt = composer.conversationId === ui.conversationId ? composer.text : '';
   const attachment = composer.conversationId === ui.conversationId ? composer.attachment : undefined;
   const modelId = selectedModelId(configuration, ui.projectId, ui.conversationId);
@@ -122,13 +122,13 @@ export function useWorkbench() {
       installConversation(conversation); ui.selectConversation(conversation.id); setSheet(undefined); setNotice('对话已恢复。');
     });
   }
-  function returnToActiveConversation() {
-    if (!active?.conversationId) return;
-    if (active.projectId === ui.projectId) { void selectConversation(active.conversationId); return; }
+  function returnToActiveConversation(target = active) {
+    if (!target?.conversationId) return;
+    if (target.projectId === ui.projectId) { void selectConversation(target.conversationId); return; }
     guard(() => { void action(async () => {
-      if (!runtime || !active.conversationId) return; await flushDraft(); await runtime.conversations.select(active.conversationId, active.projectId);
-      const conversation = runtime.conversations.getSnapshot().conversations.find((item) => item.id === active.conversationId)!;
-      installConversation(conversation); setEditor(undefined); editorRef.current = undefined; ui.selectProject(active.projectId, active.conversationId);
+      if (!runtime || !target.conversationId) return; await flushDraft(); await runtime.conversations.select(target.conversationId, target.projectId);
+      const conversation = runtime.conversations.getSnapshot().conversations.find((item) => item.id === target.conversationId)!;
+      installConversation(conversation); setEditor(undefined); editorRef.current = undefined; ui.selectProject(target.projectId, target.conversationId);
     }); });
   }
 
@@ -147,7 +147,7 @@ export function useWorkbench() {
   }
 
   async function beginTask() {
-    if (!runtime || !ui.projectId || !ui.conversationId || !prompt.trim() || active) return;
+    if (!runtime || !ui.projectId || !ui.conversationId || !prompt.trim() || conversationActive) return;
     ui.selectTab('agent');
     const submitted = composerRef.current;
     const saved = await flushDraft(submitted);
@@ -191,14 +191,14 @@ export function useWorkbench() {
   const changedPaths = (task: TaskRecord) => task.changedPaths ?? [...new Set(operations.filter((operation) => operation.runId === task.id)
     .flatMap((operation) => operation.changes.map((change) => change.path)))];
 
-  const editorActions = useEditorActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, ...editorSession, active, setSheet, setAttachment });
+  const editorActions = useEditorActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, ...editorSession, active: projectActive, setSheet, setAttachment });
   const { persistEditor, guard, closeEditor, openFile, newFile, importFile, deleteEditor, renameEditor } = editorActions;
   const { reviewTask, reviewVersion, confirmRestore, reviewGit, changeStage, commitGit, discardGit } = useGitActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, gitStatus, dirty, review, setReview, setEditor, guard });
 
   return {
     ...ui, runtime, projects, selectedProject, files, versions, gitStatus, reviewGit, changeStage, commitGit, discardGit,
     tasks: tasks.filter((task) => task.projectId === ui.projectId && task.conversationId === ui.conversationId),
-    active, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy,
+    active, runs, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy,
     error, notice, setError, settings, configuration, modelLabel, selectedModel, selectedConnection, editor, setEditor, dirty,
     sheet, setSheet, projectName, setProjectName, prompt, setPrompt, attachment, setAttachment, review, setReview,
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,

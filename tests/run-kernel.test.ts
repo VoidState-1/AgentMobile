@@ -145,3 +145,19 @@ it('同对话与队列上限在准备前校验，拒绝时保留草稿和原租�
   expect(f.conversations.getSnapshot().drafts[f.b.id].text).toBe('超限'); expect(f.prepared).toEqual(['第一个']);
   await kernel.cancel();
 });
+
+it('不同项目两根并行、同项目另一对话排队；定向取消不影响另一项目或放大预算', async () => {
+  const gates = new Map<string, ReturnType<typeof gate>>();
+  const f = await fixture(async (input) => { const held = gate(); gates.set(input.prompt, held); await held.promise; });
+  const other = await f.workspace.create('另一项目'); const conversation = await f.conversations.ensureProject(other.id);
+  await f.kernel.start(f.project.id, '甲运行', false, f.a.id); await f.kernel.start(other.id, '乙运行', false, conversation.id);
+  await vi.waitFor(() => expect(f.executions).toHaveLength(2)); expect(f.kernel.requests.getSnapshot().active).toBe(2);
+  await f.kernel.start(f.project.id, '甲排队', false, f.b.id); expect(f.kernel.getSnapshot().runs.find((run) => run.prompt === '甲排队')?.state).toBe('queued');
+  const cancel = f.kernel.getSnapshot().runs.find((run) => run.prompt === '乙运行')!;
+  await f.kernel.cancel(cancel.id); gates.get('乙运行')!.release(); await vi.waitFor(() => expect(f.kernel.getSnapshot().runs).toHaveLength(2));
+  expect((await f.repository.get(cancel.id))?.state).toBe('cancelled'); expect(new Set(f.executions)).toEqual(new Set(['甲运行', '乙运行']));
+  gates.get('甲运行')!.release(); await vi.waitFor(() => expect(f.executions).toHaveLength(3)); expect(f.executions.at(-1)).toBe('甲排队');
+  gates.get('甲排队')!.release(); await idle(f.kernel);
+  for (const run of [...(await f.repository.list(f.project.id)).runs, ...(await f.repository.list(other.id)).runs])
+    expect((await f.metadata.get<any>('run-groups', run.id)).requests).toBe(1);
+});

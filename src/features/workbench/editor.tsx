@@ -12,7 +12,7 @@ import { isImage } from '@/core/workspace/path';
 export function Editor({ controller, mobile }: { controller: Workbench; mobile: boolean }) {
   const theme = useWorkbenchTheme();
   const document = controller.editor!;
-  const readonly = !!controller.active && controller.active.projectId === document.projectId;
+  const readonly = !!controller.projectActive && controller.projectActive.projectId === document.projectId;
   const imageVersions = controller.files.filter((file) => isImage(file.path)).map((file) => file.path + ':' + file.revision).join('|');
   const loadImage = useCallback(async (target: string) => {
     const path = resolveImagePath(document.path, target);

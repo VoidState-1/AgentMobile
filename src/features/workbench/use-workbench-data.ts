@@ -27,6 +27,7 @@ export function useWorkbenchData(context: DataContext) {
   const [loading, setLoading] = useState(true);
   const [projectLoading, setProjectLoading] = useState(false);
   const [active, setActive] = useState<TaskRecord>();
+  const [runs, setRuns] = useState<readonly TaskRecord[]>([]);
   const refreshId = useRef(0);
 
   const refresh = useCallback(async (projectId?: string) => {
@@ -65,7 +66,7 @@ export function useWorkbenchData(context: DataContext) {
         value.preferences.getWorkbench(),
       ]);
       if (!mounted) return;
-      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setConversationState(value.conversations.getSnapshot()); setActive(value.agent.getSnapshot().active);
+      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setConversationState(value.conversations.getSnapshot()); setActive(value.agent.getSnapshot().active); setRuns(value.agent.getSnapshot().runs ?? []);
       if (preference?.appearance) useWorkbenchUi.getState().setAppearance(preference.appearance);
       const selected = preference?.projectId && list.some((item) => item.id === preference.projectId) ? preference.projectId : list[0]?.id;
       const conversation = selected ? await value.conversations.ensureProject(selected) : undefined;
@@ -96,11 +97,15 @@ export function useWorkbenchData(context: DataContext) {
     });
     const configSubscription = runtime.models.subscribe(() => setConfiguration(runtime.models.getSnapshot()));
     const conversationSubscription = runtime.conversations.subscribe(() => setConversationState(runtime.conversations.getSnapshot()));
+    let lastIds = runtime.agent.getSnapshot().runs?.map((run) => run.id).sort().join(',') ?? '';
+    let lastCompleted = runtime.agent.getSnapshot().completed?.id;
     const taskSubscription = runtime.agent.subscribe(() => {
-      const state = runtime.agent.getSnapshot(); setActive(state.active);
-      if (!state.active && !state.starting) {
+      const state = runtime.agent.getSnapshot(); setActive(state.active); setRuns(state.runs ?? []);
+      const nextIds = state.runs?.map((run) => run.id).sort().join(',') ?? '';
+      if (nextIds !== lastIds || state.completed?.id !== lastCompleted || (!state.active && !state.starting)) {
+        lastIds = nextIds; lastCompleted = state.completed?.id;
         requestRefresh();
-        if (state.error || state.completed?.error) setError(state.error ?? state.completed?.error ?? '');
+        if (state.error || (state.completed?.error && state.completed.projectId === useWorkbenchUi.getState().projectId)) setError(state.error ?? state.completed?.error ?? '');
       }
     });
     return () => { disposed = true; refreshId.current = refreshId.current + 1; workspaceSubscription(); configSubscription(); conversationSubscription(); taskSubscription(); };
@@ -120,5 +125,5 @@ export function useWorkbenchData(context: DataContext) {
     void runtime.preferences.saveWorkbench({ projectId: ui.projectId, appearance: ui.appearance }).catch(() => {});
   }, [runtime, ui.projectId, ui.appearance]);
 
-  return { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, refresh };
+  return { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, runs, refresh };
 }

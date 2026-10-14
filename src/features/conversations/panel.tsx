@@ -25,15 +25,15 @@ export function ConversationsPanel({ controller }: { controller: Workbench }) {
           <Pressable accessibilityRole="button" accessibilityLabel={(archived ? '恢复对话 ' : '切换对话 ') + item.title} disabled={controller.busy}
             onPress={() => { void (archived ? controller.restoreConversation(item) : controller.selectConversation(item.id)); }}
             style={{ flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10, paddingVertical: 12, paddingHorizontal: 6 }}>
-            {controller.active?.conversationId === item.id ? <ActivityIndicator size={16} color={theme.accent} /> : <MessageSquare size={17} color={theme.secondary} />}
+            {controller.runs.some((run) => run.conversationId === item.id) ? <ActivityIndicator size={16} color={theme.accent} /> : <MessageSquare size={17} color={theme.secondary} />}
             <View style={{ flex: 1 }}><T numberOfLines={1} style={{ fontWeight: '500', fontSize: 13 }}>{item.title}</T>
-              <T tone="muted" style={{ fontSize: 10 }}>{dateLabel(item.updatedAt)}{controller.active?.conversationId === item.id ? ' · 任务运行中' : ''}</T></View>
+              <T tone="muted" style={{ fontSize: 10 }}>{dateLabel(item.updatedAt)}{controller.runs.some((run) => run.conversationId === item.id) ? ' · 任务进行中' : ''}</T></View>
             {item.id === controller.conversationId && <Check size={15} color={theme.accent} />}
           </Pressable>
           {!archived && <IconButton icon={Pencil} label={'重命名对话 ' + item.title} disabled={controller.busy} onPress={() => controller.startRenameConversation(item)} />}
           {archived && <IconButton icon={RotateCcw} label={'恢复对话 ' + item.title} disabled={controller.busy} onPress={() => { void controller.restoreConversation(item); }} />}
         </View>
-        {!archived && <Button label={'归档对话 ' + item.title} compact variant="ghost" disabled={controller.busy || controller.active?.conversationId === item.id}
+        {!archived && <Button label={'归档对话 ' + item.title} compact variant="ghost" disabled={controller.busy || controller.runs.some((run) => run.conversationId === item.id)}
           style={{ alignSelf: 'flex-end' }} onPress={() => controller.archiveConversation(item)} />}
       </View>)}
       {!!controller.error && <T tone="danger" style={{ fontSize: 12 }}>{controller.error}</T>}

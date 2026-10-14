@@ -19,15 +19,19 @@ export async function createStorage(): Promise<{
     'CREATE TABLE IF NOT EXISTS records (bucket TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (bucket, id));' +
     'PRAGMA user_version = 1;',
   );
+  let metadataWrites: Promise<unknown> = Promise.resolve();
+  const serializeWrite = <T>(work: () => Promise<T>): Promise<T> => {
+    const next = metadataWrites.catch(() => {}).then(work); metadataWrites = next; return next;
+  };
   const metadata: MetadataStore = {
     async batch(entries) {
       const rows = entries.map((entry) => ({ ...entry, payload: JSON.stringify(entry.value) }));
-      await db.withExclusiveTransactionAsync(async (transaction) => {
+      await serializeWrite(() => db.withExclusiveTransactionAsync(async (transaction) => {
         for (const row of rows) await transaction.runAsync(
           'INSERT INTO records (bucket, id, payload) VALUES (?, ?, ?) ON CONFLICT(bucket, id) DO UPDATE SET payload = excluded.payload',
           row.bucket, row.id, row.payload,
         );
-      });
+      }));
     },
     async get<T>(bucket: string, id: string) {
       const row = await db.getFirstAsync<{ payload: string }>(
@@ -36,10 +40,10 @@ export async function createStorage(): Promise<{
       return row ? JSON.parse(row.payload) as T : undefined;
     },
     async put(bucket, id, value) {
-      await db.runAsync(
+      await serializeWrite(() => db.runAsync(
         'INSERT INTO records (bucket, id, payload) VALUES (?, ?, ?) ON CONFLICT(bucket, id) DO UPDATE SET payload = excluded.payload',
         bucket, id, JSON.stringify(value),
-      );
+      ));
     },
     async all<T>(bucket: string) {
       const rows = await db.getAllAsync<{ payload: string }>('SELECT payload FROM records WHERE bucket = ?', bucket);

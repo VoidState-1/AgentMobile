@@ -80,7 +80,7 @@ export function Conversation({ controller }: { controller: Workbench }) {
     return () => cancelAnimationFrame(frame);
   }, [controller.conversationId, latestTaskId]);
   const otherTask = !!controller.active && !controller.conversationActive;
-  const sendDisabled = !controller.selectedConversation || !controller.prompt.trim() || controller.busy || !!controller.active || controller.projectLoading;
+  const sendDisabled = !controller.selectedConversation || !controller.prompt.trim() || controller.busy || !!controller.conversationActive || controller.projectLoading;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface }}>
     <ScrollView ref={scroll} testID="conversation-scroll" style={{ flex: 1 }}
       contentContainerStyle={{ flexGrow: 1, width: '100%', maxWidth: 800, alignSelf: 'center', paddingHorizontal: mobile ? 18 : 30, paddingTop: 22, paddingBottom: 22 }}
@@ -119,8 +119,8 @@ export function Conversation({ controller }: { controller: Workbench }) {
     <View testID="composer" style={{ paddingHorizontal: mobile ? 14 : 25, paddingTop: 10, paddingBottom: mobile ? 9 : 16,
       width: '100%', maxWidth: 830, alignSelf: 'center', backgroundColor: theme.surface }}>
       {otherTask && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, paddingBottom: 6 }}>
-        <T tone="secondary" style={{ flex: 1, fontSize: 11 }}>{controller.active?.projectId === controller.projectId ? '另一个对话的任务仍在运行' : '另一个项目的任务仍在运行'}，可继续准备草稿。</T>
-        <Button label="返回运行中的对话" compact variant="ghost" disabled={controller.busy} onPress={controller.returnToActiveConversation} />
+        <T tone="secondary" style={{ flex: 1, fontSize: 11 }}>{controller.projectActive ? '另一个对话的任务仍在运行，发送后将排队。' : '另一个项目的任务仍在运行，可并行发送任务。'}</T>
+        <Button label="返回运行中的对话" compact variant="ghost" disabled={controller.busy} onPress={() => controller.returnToActiveConversation()} />
       </View>}
       <View style={{ borderWidth: 1, borderColor: theme.border, borderRadius: 13, paddingHorizontal: 13, paddingTop: 9, paddingBottom: 8,
         backgroundColor: theme.background }}>
@@ -147,7 +147,7 @@ export function Conversation({ controller }: { controller: Workbench }) {
             <T tone="secondary" numberOfLines={1} style={{ fontSize: 11 }}>{controller.modelLabel}</T>
             <ChevronDown size={12} color={theme.muted} />
           </Pressable>
-          <Pressable accessibilityRole="button" accessibilityLabel={controller.conversationActive ? '停止任务' : '发送任务'}
+          <Pressable accessibilityRole="button" accessibilityLabel={controller.conversationActive ? controller.conversationActive.state === 'queued' ? '取消排队' : '停止任务' : '发送任务'}
             hitSlop={4}
             disabled={!controller.conversationActive && sendDisabled}
             onPress={() => { if (controller.conversationActive) controller.stop(); else { stick.current = true; void controller.submit(); } }}

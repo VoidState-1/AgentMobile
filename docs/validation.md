@@ -385,3 +385,13 @@ Web 与 Android/iOS JS/Hermes 导出通过。本轮未改依赖/Expo 配置。iO
 Android API 36.1 x86_64 隔离模拟器运行本地 delegation-fixture，实际两个子 Pi 模型/只读工具闭环通过，服务测得并发模型请求最多 2。SQLite 核对同输入快照、独立 transcript、父轨迹子链接、组预算与公开汇总；另验证根任务递归取消及等待中强制终止后父/子均 interrupted。没有付费模型请求。复现：启动 `node scripts/delegation-fixture.mjs`、隔离开发客户端/Metro，并配置 ANDROID_HOME/AGENT_MOBILE_METRO_PORT，运行 `node scripts/android-delegation.mjs <serial>`；脚本只用于合成设备，会添加本地无认证模型配置。
 
 Web 与 Android/iOS JS/Hermes 导出通过。iOS 原生/arm64 真机仍待验证。R4 多根并发、共享 MCP 调度屏障和 R5 隔离写入提案尚未交付。
+
+## 2026-10-14：架构 v2 R4 不同项目并发
+
+159 项检查通过。新增双项目两根并发/同项目另一对话排队/定向取消与预算隔离、MCP 跨运行同参数在途与 unknown 屏障、同连接两凭证租约回收验证。Android SQLite batch 与普通写入共用串行写队列，读取保持 WAL 语义。
+
+40 条完整浏览器回归（4 workers）通过：多个活动任务展示与跳转、当前对话定向取消、另一组仍活动时完成历史立即更新、同项目发送入队并显示取消排队；既有 Git、协议、MCP、Skills 和子 Agent 通过。初次 8 workers 加原生/三平台导出并行时，出现浏览器导航超时与旧单元轮询的短超时；降低该轮验证负载后现源码全部通过。活动任务条使“等待子任务”出现两个位置，专项断言已限定会话区域。
+
+Android API 36.1 x86_64 隔离设备：两个项目先后保存 documents/parallel.md，各自等待下一模型响应，fixture 测得两请求并发；停止 B 后 A 继续完成。另两个项目同时等待时 force-stop，重开二者均 interrupted；SQLite 校验四个独立项目、文件回执归属、completed/cancelled/interrupted 终态与空活动索引。原生脚本在释放模型前先导航到任务，避免任务完成后活动按钮消失造成自动点击竞态。
+
+Web 与 Android/iOS JS/Hermes 导出通过。复现：沿用 android-delegation 的本地无认证模型设置、delegation-fixture 与隔离设备，运行 `node scripts/android-parallel.mjs <serial>`；勿用于用户设备。iOS 原生/arm64 真机待验证。R5 尚未交付。

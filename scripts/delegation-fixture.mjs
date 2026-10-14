@@ -14,7 +14,13 @@ const server = http.createServer(async (request, response) => {
   active++; maximum = Math.max(maximum, active); seen.push({ kind: child ? 'child' : 'root', stage: hasTools ? 'result' : 'start' });
   try {
     let events;
-    if (child) {
+    if (user.startsWith('Native R4')) {
+      if (!hasTools) events = toolEvents('chat-completions', 'write_text', { path: 'documents/parallel.md', text: user, expectedRevision: null });
+      else {
+        await new Promise((resolve) => { const done = () => { waiting.delete(done); resolve(); }; waiting.add(done); response.once('close', done); });
+        events = answerEvents('chat-completions', 'Parallel root complete: ' + user);
+      }
+    } else if (child) {
       if (!body.tools.every((tool) => ['list_files', 'read_text', 'search_text'].includes(tool.function.name))) throw new Error('Child grant leaked');
       if (!hasTools) events = toolEvents('chat-completions', 'read_text', { path: 'documents/notes.md' });
       else {
