@@ -12,10 +12,11 @@ import type { McpAttempt } from '@/core/mcp/types';
 import type { SkillService } from '@/application/skills/library';
 import type { SkillBundle, SkillRepository } from '@/core/skills/types';
 import type { PreferencesService } from './settings/preferences';
+import type { ProposalService } from './runs/proposals';
 
 export interface FilePreview { revision: string; content: string }
 export interface ReviewFile { path: string; kind: string; before: string; after: string }
-export type WorkspaceOperationSummary = Pick<Operation, 'id' | 'projectId' | 'runId' | 'phase'> & { changes: { path: string }[] };
+export type WorkspaceOperationSummary = Pick<Operation, 'id' | 'projectId' | 'runId' | 'ownerRootRunId' | 'actorRunId' | 'proposalId' | 'phase'> & { changes: { path: string }[] };
 export interface WorkspaceSnapshot {
   files: ProjectFile[]; versions: Version[]; gitStatus: GitStatus; operations: WorkspaceOperationSummary[];
   preview?: FilePreview & { path: string };
@@ -63,6 +64,7 @@ export interface AgentApi {
   cancel(runId?: string): void | Promise<void>;
 }
 export interface AppServices {
+  proposals?: Pick<ProposalService, 'preview'>;
   workspace: WorkspaceApi;
   models: ModelsApi;
   conversations: ConversationsApi;

@@ -170,6 +170,14 @@ export function useWorkbench() {
   }
 
   function openSettings() { setSheet('settings'); }
+  async function reviewProposal(rootId: string, proposalId: string) {
+    if (!runtime?.proposals) return;
+    await action(async () => {
+      const value = await runtime.proposals!.preview(rootId, proposalId);
+      const state = { draft: '编辑中', ready: '待合入', conflicted: '存在冲突', applying: '合入中', applied: '已合入', cancelled: '已停止', interrupted: '已中断' }[value.state];
+      setReview({ title: '隔离写作提案 · ' + state, files: value.files, description: '输入基线与候选内容 · 合入由主 Agent 执行' });
+    });
+  }
   function openModelConfig() {
     guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
       requestAnimationFrame(() => router.push('/models')); });
@@ -204,7 +212,7 @@ export function useWorkbench() {
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
     startRenameConversation, renameConversation, archiveConversation, restoreConversation, returnToActiveConversation,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
-    stop: () => { void Promise.resolve(runtime?.agent.cancel(conversationActive?.id ?? active?.id)).catch(() => setError('停止状态保存失败，请重新打开应用恢复。')); },
+    reviewProposal, stop: () => { void Promise.resolve(runtime?.agent.cancel(conversationActive?.id ?? active?.id)).catch(() => setError('停止状态保存失败，请重新打开应用恢复。')); },
     openSettings, openModelConfig, openAgentSettings, openMcpConfig, openSkills, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {

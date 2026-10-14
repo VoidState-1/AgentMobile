@@ -5,6 +5,7 @@ export const dateLabel = (value: string | number) => new Date(value).toLocaleStr
 });
 export const toolLabels: Record<string, string> = {
   spawn_agent: '委派子 Agent', wait_agents: '等待子 Agent', get_agent_result: '读取子 Agent 结果', cancel_agent: '取消子 Agent',
+  get_proposal: '查看写作提案', apply_proposal: '合入写作提案',
   list_files: '浏览项目文件', read_text: '读取文字资料', write_text: '保存文字内容', search_text: '搜索项目资料',
   inspect_image: '读取图片', move_file: '移动文件', delete_file: '删除文件',
   load_skill: '加载技能', read_skill_resource: '读取技能资源',

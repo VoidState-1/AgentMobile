@@ -28,10 +28,10 @@ export function ReviewSheet({ controller }: { controller: Workbench }) {
       });
     });
   }, [file]);
-  return <Sheet visible title={value.title} subtitle={value.files.length + ' 个文件 · ' + (value.task ? '任务开始前与结束后' : value.area === 'staged' ? 'HEAD 与暂存区' : value.area === 'unstaged' ? '暂存区与工作区' : '父提交与所选提交')}
+  return <Sheet visible title={value.title} subtitle={value.files.length + ' 个文件 · ' + (value.description ?? (value.task ? '任务开始前与结束后' : value.area === 'staged' ? 'HEAD 与暂存区' : value.area === 'unstaged' ? '暂存区与工作区' : '父提交与所选提交'))}
     onClose={() => controller.setReview(undefined)} wide busy={controller.busy}
     footer={<View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', gap: 12 }}>
-      <T tone="secondary" style={{ fontSize: 11, flex: 1 }}>{controller.dirty ? '编辑器中有未保存的修改，请先保存。' : value.restoreRef ? '恢复到工作区，已有提交历史保留' : value.area ? '保存、暂存与提交分别管理' : '当前没有可撤销的文件变化'}</T>
+      <T tone="secondary" style={{ fontSize: 11, flex: 1 }}>{value.description ?? (controller.dirty ? '编辑器中有未保存的修改，请先保存。' : value.restoreRef ? '恢复到工作区，已有提交历史保留' : value.area ? '保存、暂存与提交分别管理' : '当前没有可撤销的文件变化')}</T>
       {value.restoreRef && <Button label={value.task ? '撤销修改' : '恢复此版本'} icon={RotateCcw}
         disabled={!!controller.projectActive || controller.busy || controller.dirty} onPress={controller.confirmRestore} />}
     </View>}>

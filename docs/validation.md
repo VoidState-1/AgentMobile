@@ -395,3 +395,15 @@ Web 与 Android/iOS JS/Hermes 导出通过。iOS 原生/arm64 真机仍待验证
 Android API 36.1 x86_64 隔离设备：两个项目先后保存 documents/parallel.md，各自等待下一模型响应，fixture 测得两请求并发；停止 B 后 A 继续完成。另两个项目同时等待时 force-stop，重开二者均 interrupted；SQLite 校验四个独立项目、文件回执归属、completed/cancelled/interrupted 终态与空活动索引。原生脚本在释放模型前先导航到任务，避免任务完成后活动按钮消失造成自动点击竞态。
 
 Web 与 Android/iOS JS/Hermes 导出通过。复现：沿用 android-delegation 的本地无认证模型设置、delegation-fixture 与隔离设备，运行 `node scripts/android-parallel.mjs <serial>`；勿用于用户设备。iOS 原生/arm64 真机待验证。R5 尚未交付。
+
+## 2026-10-14：架构 v2 R5 隔离写作与原型验收
+
+166 项检查通过。新增候选隔离（真实文件/index/HEAD 不变）、授权/稳定回执/跨根拒绝、任务前脏文件/index 保留、内容贡献归属、整组撤销、不夹带用户改动、整批冲突/no-op、图片移动/删除、候选 Git 成功但 SQLite 回执中断恢复、合入第二文件中断恢复、文件已 recorded 但提案回执未保存时的组完成屏障、子终态取消竞态。Facade 对提案只开放 preview，禁止 UI 获取仓库或直接合入。
+
+41 条完整浏览器回归（4 workers）通过；新 Pi writer 协议模拟闭环验证隔离候选实时查看、父 get_proposal/apply_proposal、合入前真实资料不变、提交历史不增加、根撤销恢复用户原有未提交内容。三平台 Web/Android/iOS JS/Hermes 导出通过，未修改依赖/Expo 配置。
+
+Android API 36.1 x86_64 隔离模拟器分段验证：实际 writer Pi 在私有候选生成两份文稿，界面查看候选时真实原文/文件列表不变；父合入后 SQLite 验证 root/child 完成、proposal applied、ownerRootRunId/actorRunId/mergedByRunId，HEAD 保留、merge 不包含 indexChanges；根撤销通过。再在 merge recorded 的 SQL 写入点注入 trigger 异常，界面不发布 completed；移除 trigger 后重启，恢复文件日志与 proposal applied，root interrupted/child completed，根最终变化包含两条路径，没有模型重放。Base/final index 检查点引用不同是私有提交说明的差异，不能把引用 OID 不同当成真实 index 内容变化。
+
+复现：本地 delegation-fixture、已配置本地无认证模型的隔离开发客户端，运行 `node scripts/android-proposals.mjs <serial>`；`--fault` 仅执行回执故障段。模拟器输入含重复 R/r 的模态文本可能触发开发客户端重载，测试项目采用不含 Recovery 的名称。合成 SQLite/日志/截图保存在 work/，不提交。已停止本轮模拟器、Metro、fixture，保留用户 4180 预览服务。
+
+R0–R5 行为与迁移/失败路径验收完成。当前仅内置角色/父模型继承；IntelligentUI/WebView、后台服务、角色编辑/子模型选择、libgit2、token/费用硬预算、自动压缩、自动三方合并与 GC 尚未实现。iOS 原生/arm64 真机未验证；普通进程中断与失败注入不证明真实断电/fsync 保证。

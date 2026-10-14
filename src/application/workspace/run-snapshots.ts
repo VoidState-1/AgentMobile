@@ -5,11 +5,15 @@ import type { GitBaseline } from '@/core/git/contracts';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
 import type { GitService } from './git';
+import { AppError } from '@/core/errors';
 
 export class RunSnapshots {
   constructor(private readonly context: WorkspaceContext, private readonly reader: WorkspaceReader, private readonly mutations: MutationCoordinator, private readonly versions: GitService) {}
   inputSnapshot(projectId: string, owner: string, key: string): Promise<string> {
     return this.mutations.serial(projectId, owner, async () => this.context.git.checkpoint(projectId, await this.reader.workingTree(projectId), 'delegations/' + key, await this.context.git.head(projectId)));
+  }
+  candidateSnapshot(projectId: string, owner: string, files: Record<string, Uint8Array>, key: string, parent: string): Promise<string> {
+    return this.mutations.serial(projectId, owner, () => this.context.git.checkpoint(projectId, files, key, parent));
   }
   taskBaseline(projectId: string, taskId: string): Promise<GitBaseline> {
     return this.mutations.serial(projectId, taskId, async () => {
@@ -21,7 +25,7 @@ export class RunSnapshots {
 
   async taskFinal(task: TaskRecord, recovering = false): Promise<TaskRecord> {
     if (!task.baseSnapshot || !task.baseIndexSnapshot) return { ...task, finalCommit: await this.context.git.head(task.projectId) };
-    const own = (await this.context.metadata.all<Operation>('operations')).filter((op) => op.projectId === task.projectId && op.runId === task.id && op.phase === 'recorded')
+    const own = (await this.context.metadata.all<Operation>('operations')).filter((op) => op.projectId === task.projectId && (op.ownerRootRunId ?? op.runId) === task.id && op.phase === 'recorded')
       .sort((a, b) => a.sequence !== undefined && b.sequence !== undefined ? a.sequence - b.sequence : a.createdAt.localeCompare(b.createdAt));
     const head = recovering ? [...own].reverse().find((op) => op.kind === 'commit')?.commit ?? task.baseCommit ?? await this.context.git.head(task.projectId) : await this.context.git.head(task.projectId);
     const lastFiles = [...own].reverse().find((op) => op.kind === 'files'); const lastIndex = [...own].reverse().find((op) => op.indexAfter);
@@ -51,7 +55,8 @@ export class RunSnapshots {
     return task.changedPaths ? changes.filter((file) => task.changedPaths!.includes(file.path)) : changes;
   }
 
-  undoTask(task: TaskRecord) {
+  async undoTask(task: TaskRecord) {
+    if (task.kind === 'child') throw new AppError('VALIDATION', '子任务提案合入后，请撤销所属根任务。');
     return this.mutations.serial(task.projectId, undefined, async () => {
       const beforeRef = task.baseSnapshot ?? task.baseCommit; const afterRef = task.finalSnapshot ?? task.finalCommit;
       if (!afterRef || !beforeRef) throw new Error('工作区任务尚无可撤销结果');

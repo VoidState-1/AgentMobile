@@ -7,12 +7,14 @@ import { publicError } from '@/core/errors';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import type { McpRuntime } from '@/adapters/mcp/runtime';
 import type { PreferencesService } from '@/application/settings/preferences';
+import type { ProposalService } from '@/application/runs/proposals';
 
 export interface AppDependencies {
   workspace: WorkspaceService; models: ModelConfigurationService; conversations: ConversationService;
   agentSettings: AgentSettingsService; skills: SkillService; mcp: McpRuntime; agent: AppServices['agent'];
   preferences: PreferencesService; tasks: AppServices['tasks']; io: AppServices['io'];
   diagnose: AppServices['models']['diagnose']; skillPackage: Pick<AppServices['skills'], 'decodeText' | 'validateBundle' | 'importPackage'>;
+  proposals?: ProposalService;
 }
 
 /** A real object projection, not a type cast: private methods/fields are absent at runtime. */
@@ -47,11 +49,12 @@ export function createAppServices(value: AppDependencies): AppServices {
     snapshot: async (id: string, path?: string) => {
       const snapshot = await expose(value.workspace, ['snapshot']).snapshot(id, path);
       return { files: snapshot.files, versions: snapshot.versions, gitStatus: snapshot.gitStatus, preview: snapshot.preview,
-        operations: snapshot.operations.map(({ id, projectId, runId, phase, changes }) => ({ id, projectId, runId, phase, changes: changes.map(({ path }) => ({ path })) })) };
+        operations: snapshot.operations.map(({ id, projectId, runId, ownerRootRunId, actorRunId, proposalId, phase, changes }) => ({ id, projectId, runId, ownerRootRunId, actorRunId, proposalId, phase, changes: changes.map(({ path }) => ({ path })) })) };
     },
     get recoveryIssues() { return [...value.workspace.recoveryIssues]; },
   };
   const services: AppServices = {
+    proposals: value.proposals ? Object.freeze(expose(value.proposals, ['preview'])) : undefined,
     workspace: Object.freeze(workspace),
     models: Object.freeze({ ...expose(value.models, ['getSnapshot', 'subscribe', 'saveConnection', 'copyConnection', 'removeConnection', 'keyReady', 'saveModel', 'removeModel', 'setSelection', 'setMode', 'affectedDefaults']),
       ...expose({ diagnose: value.diagnose }, ['diagnose']), get recoveryIssues() { return [...value.models.recoveryIssues]; } }),

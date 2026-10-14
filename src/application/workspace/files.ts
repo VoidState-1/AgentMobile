@@ -1,6 +1,7 @@
 import type { WorkspaceContext } from './context';
 import type { Project } from '@/core/projects/types';
 import type { Operation } from '@/core/workspace/types';
+import type { CandidateMergeInput, CandidateMergeResult } from '@/core/runs/proposals';
 import { safePath, isImage } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';
 import { contentLimits } from '@/core/agent/settings';
@@ -10,6 +11,39 @@ import type { MutationCoordinator } from './mutations';
 const MAX_FILE_BYTES = contentLimits.fileBytes;
 export class FileCommands {
   constructor(private readonly context: WorkspaceContext, private readonly reader: WorkspaceReader, private readonly mutations: MutationCoordinator) {}
+  mergeCandidate(projectId: string, input: CandidateMergeInput, beforeApply?: () => Promise<void>): Promise<CandidateMergeResult> {
+    for (const path of input.paths) if (safePath(path).toLowerCase() === 'project.json') throw new Error('项目配置由宿主管理');
+    if (new Set(input.paths.map((path) => path.toLowerCase())).size !== input.paths.length) throw new Error('目标文件路径重复');
+    return this.mutations.serial(projectId, input.rootRunId, async () => {
+      const receipt = await this.context.metadata.get<Operation>('operations', input.operationId);
+      if (receipt) {
+        if (receipt.projectId !== projectId || receipt.ownerRootRunId !== input.rootRunId || receipt.proposalId !== input.proposalId || receipt.actorRunId !== input.actorRunId) throw new Error('操作 ID 与原始提案不匹配');
+        return { conflicts: [], changedPaths: receipt.changes.map((change) => change.path), checkpoint: await this.mutations.apply(receipt) };
+      }
+      const base = await this.context.git.tree(projectId, input.baseSnapshot); const candidate = await this.context.git.tree(projectId, input.candidateSnapshot);
+      const value = (bytes?: Uint8Array | null) => bytes ? this.context.codec.encodeBase64(bytes) : null;
+      const paths = new Set(input.paths);
+      if (Object.keys({ ...base, ...candidate }).some((path) => value(base[path]) !== value(candidate[path]) && !paths.has(path))) throw new Error('提案包含未授权路径');
+      const conflicts: string[] = []; const changes: Operation['changes'] = [];
+      for (const path of paths) {
+        const before = value(base[path]); const after = value(candidate[path]); const current = value(await this.reader.bytesOrNull(projectId, path));
+        if (before === after || current === after) continue;
+        if (current !== before) { conflicts.push(path); continue; }
+        const bytes = candidate[path];
+        if (bytes && bytes.length > MAX_FILE_BYTES) throw new Error('文件超过 20 MB 限制');
+        if (bytes && !isImage(path) && bytes.length > contentLimits.textFileBytes) throw new Error('文本超过 1 MB 限制');
+        if (bytes && isImage(path)) validateImage(path, bytes);
+        changes.push({ path, before: current, after });
+      }
+      // Entire batch is preflighted inside the sole project queue, before journaling.
+      if (conflicts.length) return { conflicts, changedPaths: [] };
+      if (!changes.length) return { conflicts: [], changedPaths: [] };
+      await beforeApply?.();
+      const checkpoint = await this.mutations.prepare(projectId, changes, '合入子 Agent 提案', input.operationId, input.rootRunId,
+        { actorRunId: input.actorRunId, proposalId: input.proposalId, mergedByRunId: input.rootRunId });
+      return { conflicts: [], changedPaths: changes.map((change) => change.path), checkpoint };
+    });
+  }
   async create(name: string, requestedId?: string): Promise<Project> {
     if (requestedId && !/^[a-zA-Z0-9-]{1,80}$/.test(requestedId)) throw new Error('工作区标识无效');
     const project: Project = {

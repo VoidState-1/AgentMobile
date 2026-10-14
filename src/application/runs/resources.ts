@@ -9,6 +9,6 @@ export interface PreparedRun {
   engine: AgentEnginePort;
   resources: Omit<RunResources, 'execution'>;
   release(): Promise<void>;
-  createChild?(prompt: string): Promise<{ engine: AgentEnginePort; resources: Omit<RunResources, 'execution' | 'mcp'> }>;
+  createChild?(prompt: string, workspace?: 'snapshot' | 'proposal'): Promise<{ engine: AgentEnginePort; resources: Omit<RunResources, 'execution' | 'mcp'> }>;
 }
 export interface RunResourceFactory { prepare(request: RunRequest): Promise<PreparedRun> }

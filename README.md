@@ -22,7 +22,7 @@
 
 使用说明：[docs/prototype.md](docs/prototype.md)。技术设计：[docs/design.md](docs/design.md)。验证与限制：[docs/validation.md](docs/validation.md)。
 
-重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)。R0–R4 已完成：版本化运行内核、两个不同项目根任务并行、共享预算/请求池、只读子 Agent、固定快照、委派/取消/汇总与嵌套轨迹。隔离写入提案继续开发。
+重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)。R0–R5 原型已完成：版本化运行内核、跨项目并发、共享预算/请求池、固定快照、只读子 Agent、writer 隔离提案/冲突预检/可恢复合入、取消/汇总/嵌套轨迹与整组撤销。后台服务、角色编辑器、IntelligentUI 与网页沙箱是后续能力。
 
 ## 开发
 

@@ -13,6 +13,9 @@ import { GitSkillRepository } from '../src/adapters/skills/repository';
 import { TaskManager } from '../src/adapters/agent/task-manager';
 import { decodeSkillText, importSkillPackage, validateBundle } from '../src/adapters/skills/package';
 import { testStorage } from './storage';
+import { ProposalService } from '../src/application/runs/proposals';
+import { RunRepository } from '../src/application/runs/repository';
+import { contentCodec } from '../src/adapters/storage/codec';
 
 const cleanup: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const close of cleanup.splice(0)) await close(); });
@@ -28,7 +31,7 @@ async function fixture() {
   const skills = new SkillService(storage.metadata, new GitSkillRepository(storage.files, storage.metadata, randomUUID)); await skills.initialize();
   const io = { pickFile: async () => undefined, pickSkillPackage: async () => undefined, exportFile: vi.fn(async () => {}), exportSkill: vi.fn(async () => {}) };
   const api = createAppServices({ workspace, models, conversations, agentSettings, mcp, skills, preferences: new PreferencesService(storage.metadata),
-    agent: new TaskManager(workspace, models, randomUUID), tasks: async () => [], io,
+    agent: new TaskManager(workspace, models, randomUUID), tasks: async () => [], io, proposals: new ProposalService(workspace, new RunRepository(storage.metadata), contentCodec),
     diagnose: async () => { throw new Error('native HTTP failure /private/path'); },
     skillPackage: { decodeText: decodeSkillText, validateBundle, importPackage: importSkillPackage } });
   return { ...storage, workspace, project, api, io };
@@ -38,6 +41,7 @@ it('界面入口在运行时也没有原始存储、Git、凭证租约或内部�
   const { api } = await fixture();
   for (const name of ['fs', 'metadata', 'credentials', 'git']) expect(name in api).toBe(false);
   for (const name of ['fs', 'metadata', 'git', 'claim', 'recover', 'replaceFiles', 'taskBaseline']) expect(name in api.workspace).toBe(false);
+  expect(Object.keys(api.proposals!)).toEqual(['preview']);
   for (const name of ['credentials', 'acquireSelection', 'acquireConnection', 'acquireModel']) expect(name in api.models).toBe(false);
   expect('createRun' in api.mcp).toBe(false); expect('acquireProject' in api.mcp.configuration).toBe(false); expect('repository' in api.skills).toBe(false);
   expect(Object.isFrozen(api)).toBe(true); expect(Object.isFrozen(api.workspace)).toBe(true);

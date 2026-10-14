@@ -120,7 +120,7 @@ export class GitService {
       if (!selected.some((path) => status.files.some((file) => file.path === path && file.staged))) throw new Error('暂存区没有可提交的更改');
       const tree = await this.context.git.tree(projectId, status.head); const index = await this.mutations.indexTree(projectId);
       for (const path of selected) { if (index[path]) tree[path] = index[path]; else delete tree[path]; }
-      const id = this.context.id(); const operation: Operation = { id, projectId, runId: owner, kind: 'commit', changes: [], expectedHead: status.head,
+      const id = this.context.id(); const operation: Operation = { id, projectId, runId: owner, ownerRootRunId: owner, actorRunId: owner, kind: 'commit', changes: [], expectedHead: status.head,
         checkpoint: await this.context.git.checkpoint(projectId, tree, 'commits/' + id, status.head), message: message.trim(), phase: 'prepared', createdAt: new Date().toISOString(), sequence: await this.mutations.nextSequence(projectId) };
       await this.context.metadata.put('operations', id, operation); return this.mutations.apply(operation);
     });

@@ -52,10 +52,10 @@ export class MutationCoordinator {
     return next;
   }
 
-  async prepare(projectId: string, changes: Operation['changes'], message: string, id: string, runId?: string) {
+  async prepare(projectId: string, changes: Operation['changes'], message: string, id: string, runId?: string, attribution?: Pick<Operation, 'actorRunId' | 'proposalId' | 'mergedByRunId'>) {
     const operation: Operation = {
       kind: this.context.automaticCommits ? undefined : 'files',
-      id, projectId, runId, expectedHead: await this.context.git.head(projectId), changes, message,
+      id, projectId, runId, ownerRootRunId: runId, actorRunId: runId, ...attribution, expectedHead: await this.context.git.head(projectId), changes, message,
       phase: 'prepared', createdAt: new Date().toISOString(),
       sequence: await this.nextSequence(projectId),
     };
@@ -157,7 +157,7 @@ export class MutationCoordinator {
   async journalIndex(projectId: string, changes: NonNullable<Operation['indexChanges']>, message: string, owner?: string, files: Operation['changes'] = []) {
     const id = this.context.id(); const head = await this.context.git.head(projectId); const before = await this.indexTree(projectId); const after = { ...before };
     for (const change of changes) { if (change.after) after[change.path] = await this.context.git.blob(projectId, change.after); else delete after[change.path]; }
-    const operation: Operation = { id, projectId, runId: owner, kind: files.length ? 'files' : 'index', expectedHead: head, changes: files, indexChanges: changes,
+    const operation: Operation = { id, projectId, runId: owner, ownerRootRunId: owner, actorRunId: owner, kind: files.length ? 'files' : 'index', expectedHead: head, changes: files, indexChanges: changes,
       indexBefore: await this.context.git.checkpoint(projectId, before, 'index/' + id + '/before', head),
       indexAfter: await this.context.git.checkpoint(projectId, after, 'index/' + id + '/after', head),
       message, phase: 'prepared', createdAt: new Date().toISOString(), sequence: await this.nextSequence(projectId) };

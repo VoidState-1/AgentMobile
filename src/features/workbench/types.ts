@@ -8,7 +8,7 @@ export interface EditorDocument {
   name: string; savedName: string; image: boolean; reading: boolean; fresh: boolean; externalChanged?: boolean;
 }
 export interface ReviewFile { path: string; kind: string; before: string; after: string }
-export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord; area?: 'staged' | 'unstaged' }
+export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord; area?: 'staged' | 'unstaged'; description?: string }
 export type Confirmation = { title: string; description: string; label: string; danger?: boolean; perform: () => Promise<void>; afterPerform?: () => void; saveFirst?: boolean };
 export type WorkbenchSheet = 'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name' | 'skills';
 export type WorkbenchUi = ReturnType<typeof useWorkbenchUi.getState>;

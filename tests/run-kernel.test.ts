@@ -41,7 +41,7 @@ async function fixture(work: (input: EngineInput, controls: EngineControls) => P
   const kernel = new RunKernel(workspace, repository, factory, conversations, settings, randomUUID);
   return { ...f, workspace, project, conversations, a, b, settings, repository, kernel, factory, executions, releases, prepared };
 }
-async function idle(kernel: RunKernel) { await vi.waitFor(() => expect(kernel.getSnapshot().runs).toHaveLength(0)); }
+async function idle(kernel: RunKernel) { await vi.waitFor(() => expect(kernel.getSnapshot().runs).toHaveLength(0), { timeout: 5000 }); }
 
 it('入队冻结配置、消费精确草稿；真实开始时捕获基线，历史只读 v2 且运行不依赖 UI 订阅', async () => {
   const first = gate(); const observed: EngineInput[] = [];

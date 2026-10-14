@@ -36,4 +36,6 @@ export interface TaskRecord {
   createdAt: string;
   /** Public child views; persisted separately, never part of parent transcript. */
   children?: TaskRecord[];
+  kind?: 'root' | 'child';
+  proposalId?: string;
 }

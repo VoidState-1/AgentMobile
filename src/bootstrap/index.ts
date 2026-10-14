@@ -20,6 +20,8 @@ import { RunKernel } from '@/application/runs/kernel';
 import { RunRepository } from '@/application/runs/repository';
 import { recoverRuns } from '@/application/runs/recovery';
 import { bindRunLifecycle } from '@/adapters/lifecycle/runs';
+import { ProposalService } from '@/application/runs/proposals';
+import { contentCodec } from '@/adapters/storage/codec';
 import { createStorage } from '@/adapters/storage/platform';
 import { WorkspaceService } from '@/adapters/workspace/service';
 
@@ -42,7 +44,8 @@ async function initialize() {
   const skills = new SkillService(storage.metadata, new GitSkillRepository(storage.fs, storage.metadata, Crypto.randomUUID));
   await skills.initialize();
   const runs = new RunRepository(storage.metadata); await runs.initialize();
-  await recoverRuns(runs, workspace, unknownMcp);
+  const proposals = new ProposalService(workspace, runs, contentCodec); await proposals.recover();
+  await recoverRuns(runs, workspace, unknownMcp, async (id) => (await proposals.repository.get(id))?.candidateSnapshot);
   const conversations = new ConversationService(storage.metadata, Crypto.randomUUID);
   const projects = await workspace.projects();
   const history = (await Promise.all(projects.map((project) => runs.views(project.id)))).flat();
@@ -50,7 +53,7 @@ async function initialize() {
   const agent = new RunKernel(workspace, runs, runResourceFactory(models, mcp, skills, Platform.OS === 'web'), conversations, agentSettings, Crypto.randomUUID);
   bindRunLifecycle(agent);
   return createAppServices({
-    workspace, models, conversations, agentSettings, mcp, skills, agent,
+    workspace, models, conversations, agentSettings, mcp, skills, agent, proposals,
     preferences: new PreferencesService(storage.metadata),
     diagnose: (connectionId, modelId, kind, signal) => runDiagnostic(models, connectionId, modelId, kind, Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', signal),
     skillPackage: { decodeText: decodeSkillText, validateBundle, importPackage: importSkillPackage },

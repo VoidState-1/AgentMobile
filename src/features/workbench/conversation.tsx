@@ -36,7 +36,8 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
         </View>
         <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?
           task.modelSnapshot.connectionName + ' · ' + task.modelSnapshot.modelName : '历史模型未知'}</T>
-        <TaskTrace task={task} cancelChild={(id) => { void Promise.resolve(controller.runtime?.agent.cancel(id)).catch(() => controller.setError('子任务取消状态保存失败，请重新打开应用恢复。')); }} />
+        <TaskTrace task={task} inspectProposal={(id) => { void controller.reviewProposal(task.id, id); }}
+          cancelChild={(id) => { void Promise.resolve(controller.runtime?.agent.cancel(id)).catch(() => controller.setError('子任务取消状态保存失败，请重新打开应用恢复。')); }} />
         {!!task.error && <View style={{ backgroundColor: theme.dangerSoft, borderRadius: 8, padding: 12, marginTop: 8 }}>
           <T tone="danger" style={{ fontSize: 12 }}>{task.error}</T></View>}
         {terminalRun(task.state) && <Pressable accessibilityRole="button" accessibilityLabel="查看变化" disabled={controller.busy}

@@ -82,6 +82,18 @@ it('子创建/回执/额度事务中断不会留下部分预算或运行，重�
   expect((await f.repository.group('root')).map((run) => run.kind)).toEqual(['root', 'child']);
 });
 
+it('writer 生成结束但终态尚未落库时取消，持久化 cancelled 优先，提案与公开子状态一致', async () => {
+  const f = await fixture(); const entered = Promise.withResolvers<void>(); const held = Promise.withResolvers<void>(); const put = f.metadata.put;
+  f.metadata.put = async (bucket, id, value) => {
+    await put(bucket, id, value);
+    if (bucket === 'change-proposals' && (value as { state: string }).state === 'ready') { entered.resolve(); await held.promise; }
+  };
+  const id = await f.delegation.spawn('writer', { ...request('W'), role: 'writer' }); await vi.waitFor(() => expect(f.inputs).toHaveLength(1));
+  f.gates.get('W')!.release(); await entered.promise; await f.delegation.cancel(id); held.resolve();
+  const results = await f.delegation.settle(false); expect(results[0].state).toBe('cancelled'); expect(results[0].proposal?.state).toBe('cancelled');
+  expect((await f.repository.get(id))?.state).toBe('cancelled'); expect(f.budget.snapshot().allocations).toEqual({});
+});
+
 it('最多两个并行/四个总数，定向取消与根递归取消都先保存结果再收束，不占额外会话写锁', async () => {
   const f = await fixture(); const ids = [];
   for (const goal of ['A', 'B', 'C', 'D']) ids.push(await f.delegation.spawn('call:' + goal, request(goal)));

@@ -15,6 +15,10 @@ export interface Operation {
   id: string;
   projectId: string;
   runId?: string;
+  ownerRootRunId?: string;
+  actorRunId?: string;
+  proposalId?: string;
+  mergedByRunId?: string;
   expectedHead: string;
   message: string;
   changes: FileChange[];

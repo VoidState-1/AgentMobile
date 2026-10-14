@@ -10,11 +10,28 @@ const server = http.createServer(async (request, response) => {
   const chunks = []; for await (const chunk of request) chunks.push(chunk); const body = JSON.parse(Buffer.concat(chunks).toString());
   const content = body.messages.find((message) => message.role === 'user').content;
   const user = Array.isArray(content) ? content.map((part) => part.text ?? '').join('') : String(content);
-  const child = user.startsWith('Child'); const hasTools = body.messages.some((message) => message.role === 'tool');
+  const child = user.startsWith('Child') || user.startsWith('DraftWriter:'); const hasTools = body.messages.some((message) => message.role === 'tool');
   active++; maximum = Math.max(maximum, active); seen.push({ kind: child ? 'child' : 'root', stage: hasTools ? 'result' : 'start' });
   try {
     let events;
-    if (user.startsWith('Native R4')) {
+    if (user.startsWith('DraftWriter:')) {
+      const results = body.messages.filter((message) => message.role === 'tool').map((message) => {
+        const content = Array.isArray(message.content) ? message.content.map((part) => part.text ?? '').join('') : message.content; try { return JSON.parse(content); } catch { return {}; }
+      });
+      if (!body.tools.every((tool) => ['list_files', 'read_text', 'write_text', 'move_file', 'delete_file'].includes(tool.function.name))) throw new Error('Writer grant leaked');
+      if (results.length === 0) events = toolEvents('chat-completions', 'read_text', { path: 'documents/notes.md' });
+      else if (results.length === 1) events = toolEvents('chat-completions', 'write_text', { path: 'documents/notes.md', text: 'Native isolated notes.', expectedRevision: results[0].revision });
+      else if (results.length === 2) events = toolEvents('chat-completions', 'write_text', { path: 'documents/proposal.md', text: 'Native isolated draft.', expectedRevision: null });
+      else { await new Promise((resolve) => { const done = () => { waiting.delete(done); resolve(); }; waiting.add(done); response.once('close', done); }); events = answerEvents('chat-completions', 'Native isolated proposal ready.'); }
+    } else if (user.startsWith('Native R5')) {
+      if (!hasTools) events = toolEvents('chat-completions', 'spawn_agent', { role: 'writer', prompt: 'DraftWriter: ' + user, paths: ['documents/notes.md', 'documents/proposal.md'], budget: { requests: 6, tools: 6 } });
+      else if (body.messages.filter((message) => message.role === 'user').length === 1) events = answerEvents('chat-completions', 'Waiting for proposal.');
+      else if (!body.messages.some((message) => message.tool_calls?.some((call) => call.function.name === 'apply_proposal'))) {
+        const content = body.messages.filter((message) => message.role === 'user').at(-1).content;
+        const summary = Array.isArray(content) ? content.map((part) => part.text ?? '').join('') : content;
+        const children = JSON.parse(summary.slice(summary.indexOf('\n') + 1)); events = toolEvents('chat-completions', 'apply_proposal', { proposalId: children[0].proposal.id });
+      } else events = answerEvents('chat-completions', 'Native proposal merge processed.');
+    } else if (user.startsWith('Native R4')) {
       if (!hasTools) events = toolEvents('chat-completions', 'write_text', { path: 'documents/parallel.md', text: user, expectedRevision: null });
       else {
         await new Promise((resolve) => { const done = () => { waiting.delete(done); resolve(); }; waiting.add(done); response.once('close', done); });

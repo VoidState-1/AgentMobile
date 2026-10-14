@@ -36,6 +36,7 @@ export class WorkspaceApplication {
   remove = (...args: Parameters<FileCommands['remove']>) => this.commands.remove(...args);
   move = (...args: Parameters<FileCommands['move']>) => this.commands.move(...args);
   replaceFiles = (...args: Parameters<FileCommands['replaceFiles']>) => this.commands.replaceFiles(...args);
+  mergeCandidate = (...args: Parameters<FileCommands['mergeCandidate']>) => this.commands.mergeCandidate(...args);
   restore = (...args: Parameters<GitService['restore']>) => this.versions.restore(...args);
   changes = (...args: Parameters<GitService['changes']>) => this.versions.changes(...args);
   status = (...args: Parameters<GitService['status']>) => this.versions.status(...args);
@@ -46,6 +47,7 @@ export class WorkspaceApplication {
   discard = (...args: Parameters<GitService['discard']>) => this.versions.discard(...args);
   taskBaseline = (...args: Parameters<RunSnapshots['taskBaseline']>) => this.runs.taskBaseline(...args);
   inputSnapshot = (...args: Parameters<RunSnapshots['inputSnapshot']>) => this.runs.inputSnapshot(...args);
+  candidateSnapshot = (...args: Parameters<RunSnapshots['candidateSnapshot']>) => this.runs.candidateSnapshot(...args);
   taskFinal = (...args: Parameters<RunSnapshots['taskFinal']>) => this.runs.taskFinal(...args);
   taskChanges = (...args: Parameters<RunSnapshots['taskChanges']>) => this.runs.taskChanges(...args);
   undoTask = (...args: Parameters<RunSnapshots['undoTask']>) => this.runs.undoTask(...args);
