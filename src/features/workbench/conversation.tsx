@@ -45,7 +45,8 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
           })}>
           <View style={{ padding: 8, borderRadius: 7, backgroundColor: theme.accentSoft }}><FileText size={16} color={theme.accent} /></View>
           <View style={{ flex: 1 }}><T style={{ fontSize: 12, fontWeight: '500' }}>{paths.length ? paths.length + ' 个文件已更新' : '查看任务结果'}</T>
-            <T tone="muted" style={{ fontSize: 11 }} numberOfLines={1}>{paths.length ? paths.slice(0, 2).map(fileName).join(' · ') : '文件变化与恢复选项'}</T></View>
+            <T tone="muted" style={{ fontSize: 11 }} numberOfLines={1}>{paths.length ? paths.slice(0, 2).map(fileName).join(' · ') : '文件变化与恢复选项'}</T>
+            {!!task.uncommittedPaths?.length && <T tone="warning" style={{ fontSize: 10 }}>任务结束时 {task.uncommittedPaths.length} 个文件待提交</T>}</View>
           <ChevronRight size={16} color={theme.muted} />
         </Pressable>}
       </View>

@@ -21,7 +21,7 @@ export async function verifyMcpRecords(serial) {
     for (const endpoint of ['mcp-modern', 'mcp-legacy']) {
       const attempt = attempts.find((item) => item.url.endsWith('/' + endpoint) && item.state === 'completed');
       const task = tasks.find((item) => item.id === attempt?.taskId);
-      if (!task || task.state !== 'completed' || task.finalCommit === task.baseCommit || !task.trace.some((item) => item.id === attempt.traceId && item.state === 'completed')) throw new Error(endpoint + ' 缺少完整远端回执、轨迹或 Git 修改。');
+      if (!task || task.state !== 'completed' || task.finalSnapshot === task.baseSnapshot || !task.uncommittedPaths?.length || !task.trace.some((item) => item.id === attempt.traceId && item.state === 'completed')) throw new Error(endpoint + ' 缺少完整远端回执、轨迹或工作区修改。');
     }
     const unknown = attempts.find((item) => item.url.endsWith('/mcp-hold') && item.state === 'unknown' && item.retryAllowedAt);
     if (!unknown || !tasks.some((task) => task.id === unknown.taskId && task.state === 'interrupted' && task.trace.some((item) => item.id === unknown.traceId && item.state === 'unknown'))) throw new Error('强制中断的 MCP 记录未正确恢复或解除。');

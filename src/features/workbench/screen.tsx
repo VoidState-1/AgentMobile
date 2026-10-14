@@ -156,7 +156,7 @@ export function WorkbenchScreen() {
             <T style={{ fontSize: 22, fontWeight: '600', marginTop: 4 }}>创建你的第一个项目</T>
             <T tone="secondary" style={{ fontSize: 13, textAlign: 'center', lineHeight: 23 }}>把文字和图片放在一起，{'\n'}让 Agent 帮你整理与修改。</T>
             <Button label="新建项目" icon={Plus} onPress={controller.newProject} />
-            <T tone="muted" style={{ fontSize: 11 }}>资料本地保存 · 每次修改都有版本</T>
+            <T tone="muted" style={{ fontSize: 11 }}>资料本地保存 · 按需暂存与提交</T>
           </View> : <>
             {wide && <Navigation controller={controller} mobile={false} />}
             {controller.tab === 'agent' && <ConversationBar controller={controller} wide={wide} />}

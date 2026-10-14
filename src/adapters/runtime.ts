@@ -37,7 +37,7 @@ async function initialize() {
   const tasks = await storage.metadata.all<TaskRecord>('tasks');
   for (const task of tasks) {
     if (task.state === 'running') await storage.metadata.put('tasks', task.id, {
-      ...task, state: 'interrupted', finalCommit: await workspace.git.head(task.projectId).catch(() => undefined),
+      ...await workspace.taskFinal(task, true).catch(() => task), state: 'interrupted',
       trace: settleTrace(task.trace?.map((item) => item.kind === 'tool' && unknownMcp.some((attempt) => attempt.traceId === item.id) ?
         { ...item, state: 'unknown', output: '远端结果未知，可能已执行。请在 MCP 设置中核对后解除重试限制。', endedAt: new Date().toISOString() } : item), 'interrupted', new Date().toISOString()),
       error: workspace.needsRecovery(task.projectId) ? '部分修改尚未完成恢复，请保留本地数据。' :

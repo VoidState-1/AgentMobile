@@ -50,7 +50,10 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
   holds[0].release(); await expect.poll(() => requests).toBe(3);
   await expect(page.getByText('实时内容第二版。', { exact: true })).toBeVisible(); await expect(page.getByText('实时内容第一版。', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'work/workspace-live-reading.png' });
-  await page.getByRole('tab', { name: '版本', exact: true }).click(); await expect(page.getByRole('button', { name: /^查看版本 / })).toHaveCount(3);
+  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await expect(page.getByRole('button', { name: '查看未暂存差异 documents/live.md', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '全部暂存', exact: true })).toBeDisabled();
+  await page.getByRole('button', { name: '提交历史 · 1', exact: true }).click(); await expect(page.getByRole('button', { name: /^查看版本 / })).toHaveCount(1);
   await page.getByRole('tab', { name: '资料', exact: true }).click(); holds[1].release(); await expect.poll(() => requests).toBe(4);
   await expect(page.getByRole('button', { name: '打开 documents/live.md', exact: true })).toHaveCount(0);
   await expect(page.getByRole('button', { name: '打开 documents/moved.md', exact: true })).toBeVisible();

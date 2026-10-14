@@ -1,6 +1,6 @@
 # Agent Mobile
 
-手机端本地 Agent harness 原型：文字和图片保存在本地工作区，Pi Agent Core 通过受控工具执行任务，Git 保存每一步文件修改。
+手机端本地 Agent harness 原型：文字和图片保存在本地工作区，Pi Agent Core 通过受控工具执行任务，Git 管理明确提交，内部检查点负责修改恢复。
 
 ## 当前可体验
 
@@ -10,7 +10,7 @@
 - 默认演示模式无需密钥；支持 Chat Completions、Anthropic Messages、Gemini 原生协议。
 - 多连接与独立密钥、模型发现/手工配置、收藏、参数、分层默认和文本/工具/图片检测。
 - 任务启动时冻结模型配置；进入配置页面、修改密钥或参数不影响当前任务。DeepSeek 前版已实测，Anthropic/Gemini 本轮采用模拟验证。
-- 查看真实 Git 提交、任务文件变化，撤销最新任务或恢复历史。
+- 保存与提交分离；查看未暂存/已暂存差异，按文件暂存、取消暂存和明确提交；任务变化预览、冲突检测撤销和历史恢复。
 - 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
 - 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
 - 独立编辑器、Markdown 阅读、未保存保护、逐行差异和恢复预览。
@@ -70,6 +70,8 @@ check 包含 TypeScript、ESLint 和 Vitest。端到端测试需要本机 Chrome
 配置器原生模拟验证：在一个终端运行 npm run test:mock-model，再在已连接开发客户端的模拟器上运行 npm run test:android:config -- <serial>。脚本使用 adb reverse 连接本机 4181 的三协议模拟服务，不调用付费供应商。测试会创建本地测试项目与连接；使用独立模拟器。Mock 脚本使用 Node.js 的 TypeScript 类型剥离，当前验证环境为 Node 24。
 
 多对话原生验证：`node scripts/android-conversations.mjs <serial>`，检查 A/B 消息、草稿、附件隔离、强制停止恢复、归档恢复与主题。使用演示传输，不调用真实模型。
+
+Git 工作流：[docs/git-workflow.md](docs/git-workflow.md)。原生验证运行 `node scripts/android-git.mjs <serial>`，检查真实 index、提交、未提交内容、重启与回执恢复；会对合成测试数据库注入中断，仅在隔离模拟器使用。
 
 ## 模块
 

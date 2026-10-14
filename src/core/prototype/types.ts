@@ -20,6 +20,7 @@ export interface ProjectFile {
 
 export interface Version {
   oid: string;
+  parentOid?: string;
   message: string;
   timestamp: number;
 }
@@ -37,8 +38,16 @@ export interface Operation {
   expectedHead: string;
   message: string;
   changes: FileChange[];
-  phase: 'prepared' | 'applied' | 'committed' | 'recorded';
+  /** Missing kind denotes the original auto-commit journal, retained for recovery. */
+  kind?: 'files' | 'index' | 'commit';
+  phase: 'prepared' | 'applied' | 'checkpointed' | 'committed' | 'recorded';
   commit?: string;
+  checkpoint?: string;
+  indexChanges?: { path: string; before: string | null; after: string | null }[];
+  indexBefore?: string;
+  indexAfter?: string;
+  /** Project queue order; SQLite queries do not guarantee insertion order. */
+  sequence?: number;
   createdAt: string;
 }
 
@@ -57,6 +66,12 @@ export interface TaskRecord {
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   baseCommit: string;
   finalCommit?: string;
+  baseSnapshot?: string;
+  finalSnapshot?: string;
+  baseIndexSnapshot?: string;
+  finalIndexSnapshot?: string;
+  changedPaths?: string[];
+  uncommittedPaths?: string[];
   response: string;
   /** Absent on legacy tasks, whose original ordering cannot be reconstructed. */
   trace?: TraceItem[];

@@ -11,7 +11,7 @@ export class GitSkillRepository implements SkillRepository {
   constructor(fs: HostFileSystem, metadata: MetadataStore, id: () => string) {
     const scoped: MetadataStore = { get: (bucket, key) => metadata.get('skill-library:' + bucket, key),
       put: (bucket, key, value) => metadata.put('skill-library:' + bucket, key, value), all: (bucket) => metadata.all('skill-library:' + bucket) };
-    this.workspace = new WorkspaceService(fs, scoped, id);
+    this.workspace = new WorkspaceService(fs, scoped, id, undefined, undefined, true);
   }
   async initialize() {
     if (!(await this.workspace.projects()).length) await this.workspace.create('Agent Skills', libraryId);

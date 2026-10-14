@@ -31,14 +31,14 @@ describe('受控路径', () => {
 });
 
 describe('真实 Git 和工作区一致性', () => {
-  it('创建标准 Git 提交，检查版本冲突，重复操作不重复提交', async () => {
+  it('保存只创建内部检查点，检查版本冲突，重复操作不重复记录', async () => {
     const { service, project, resolve } = await fixture();
     const file = await service.readText(project.id, 'documents/notes.md');
     const id = randomUUID();
     const next = await service.write(project.id, 'documents/notes.md', Buffer.from('更新后的内容'), file.revision, { operationId: id });
     expect(execFileSync('git', ['-C', resolve(service.git.dir(project.id)), 'show', next + ':documents/notes.md'], { encoding: 'utf8' })).toBe('更新后的内容');
     expect(await service.write(project.id, 'documents/notes.md', Buffer.from('更新后的内容'), file.revision, { operationId: id })).toBe(next);
-    expect(await service.git.log(project.id)).toHaveLength(2);
+    expect(await service.git.log(project.id)).toHaveLength(1);
     await expect(service.write(project.id, 'documents/notes.md', Buffer.from('陈旧内容'), file.revision)).rejects.toThrow('VERSION_CONFLICT');
     await expect(service.write(project.id, 'documents/notes.md', Buffer.from('另一个内容'), file.revision, { operationId: id })).rejects.toThrow('不匹配');
   });
@@ -53,17 +53,22 @@ describe('真实 Git 和工作区一致性', () => {
     service.claim(project.id, 'run-1');
     await expect(service.write(project.id, 'new.md', Buffer.from('x'), null)).rejects.toThrow('等待或取消');
     service.release(project.id, 'run-1');
+    let status = await service.status(project.id);
+    await expect(service.restore(project.id, original, status.head)).rejects.toThrow('未提交');
+    await service.stage(project.id, ['documents/notes.md'], { ...status, revisions: { 'documents/notes.md': null } });
+    status = await service.status(project.id); await service.commitStaged(project.id, '删除笔记', status);
     await service.restore(project.id, original, await service.git.head(project.id));
     expect((await service.readText(project.id, 'documents/notes.md')).revision).toBe(file.revision);
-    expect(await service.git.log(project.id)).toHaveLength(4);
+    expect(await service.git.log(project.id)).toHaveLength(2);
+    expect((await service.status(project.id)).files[0].unstaged).toBe('added');
   });
 
-  it('Git 已提交而数据库未记录时，重启补记且不重复提交', async () => {
+  it('内部检查点已写入而数据库未记录时，重启补记且不产生提交', async () => {
     const { service, project, files, metadata } = await fixture();
     let failed = false;
     const originalPut = metadata.put.bind(metadata);
     metadata.put = async (bucket, id, value) => {
-      if (bucket === 'operations' && (value as Operation).phase === 'committed' && !failed) {
+      if (bucket === 'operations' && (value as Operation).phase === 'checkpointed' && !failed) {
         failed = true; throw new Error('模拟数据库中断');
       }
       await originalPut(bucket, id, value);
@@ -73,7 +78,7 @@ describe('真实 Git 和工作区一致性', () => {
     await reopened.recover();
     expect(reopened.recoveryIssues).toEqual([]);
     expect((await reopened.readText(project.id, 'documents/new.md')).text).toBe('恢复后保留');
-    expect(await reopened.git.log(project.id)).toHaveLength(2);
+    expect(await reopened.git.log(project.id)).toHaveLength(1);
     expect((await metadata.all<Operation>('operations'))[0].phase).toBe('recorded');
   });
 
@@ -91,7 +96,7 @@ describe('真实 Git 和工作区一致性', () => {
     await reopened.recover();
     expect(reopened.recoveryIssues).toEqual([]);
     expect((await reopened.readText(project.id, 'documents/moved.md')).revision).toBe(file.revision);
-    expect(await reopened.git.log(project.id)).toHaveLength(2);
+    expect(await reopened.git.log(project.id)).toHaveLength(1);
   });
 
   it('不明的部分写入不会被盲目覆盖，并保留恢复记录', async () => {

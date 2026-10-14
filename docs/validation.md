@@ -1,6 +1,6 @@
 # 验证记录
 
-最近更新：2026-10-13。下方保留初始化结果，原型结果见新增章节。
+最近更新：2026-10-14。下方保留各阶段结果，最新 Git 工作流验证见末尾章节。
 
 ## 环境和基线
 
@@ -326,3 +326,26 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 截图：work/skills-mobile-light.png、work/skills-mobile-dark.png、work/skills-android-library.png、work/skills-android-trace.png、work/skills-android-dark.png、work/skills-android-history.png。深浅界面与原生历史截图经过视觉检查，技能加载与资源读取沿用有序轨迹。
 
 边界：脚本只读不执行、其他二进制资源只保留供导出，allowed-tools 不增加工具权限。远程市场/自动下载、原生目录扫描、改名/分叉、已删除技能恢复、签名与容量清理尚未实现；演示模式不会理解技能语义。当前未做自动上下文压缩，未来必须保护已激活技能内容。
+
+## 2026-10-14：传统 Git 工作流
+
+项目文件从逐动作自动提交升级为工作区/index/HEAD 分离，实施说明见 [git-workflow.md](git-workflow.md)。本轮使用演示与模拟模型，没有调用付费供应商。
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript strict、ESLint、130 项 Vitest 通过；新增 12 项 Git 工作流回归 |
+| 标准 Git CLI | 连续保存不移动 HEAD，私有引用不进入普通 log；暂存 v1 后编辑 v2，提交与 index 仍为 v1，工作区 v2 为未暂存；选择性提交保留其他已暂存内容；重命名/删除/取消暂存与 CLI 状态一致 |
+| 冲突与恢复 | 陈旧 HEAD/index/文件指纹、空提交、非法提交说明拒绝；index 批次部分写入、提交成功但数据库回执失败、内部检查点回执失败可恢复；旧无 kind 自动提交日志仍恢复，旧历史保持 |
+| 任务与 Agent | 普通 Pi 任务不提交；明确 Git 工具循环生成一个提交；任务前已有脏文件可编辑，但 Agent 暂存/取消暂存/提交被拒绝；任务撤销恢复原工作区/index，保留无关文件与公开历史；后续冲突阻止撤销 |
+| SQLite 查询顺序 | 打乱 ID/写入顺序后，任务恢复仍按 sequence 采用最后文件/index 检查点；纯暂存区变化也有预览、待提交提示与撤销 |
+| 浏览器 | 35 条全量 Playwright 回归通过；Git 覆盖暂存后再编辑、刷新保留 index、明确提交、两类差异、取消暂存、脏工作区拒绝历史恢复、恢复不增加提交、未跟踪文件丢弃、手机深浅主题与短视口 |
+| Android | API 36.1 x86_64、隔离 emulator-5556：暂存 v1 后强制停止重开、编辑 v2、预览差异并提交 v1、演示任务只生成未跟踪资料、再次重启与深浅主题通过 |
+| 原生仓库与 SQLite | 导出本轮合成项目的原生仓库，用系统 Git 验证公开历史仅 2 个提交、HEAD/index 为 v1、磁盘为 v2、summary 未跟踪、检查点有独立引用；SQLite 任务快照与 recorded 文件/index/commit 回执一致 |
+| 原生提交恢复 | 在停止的隔离应用数据库中把已完成 commit 回执改回 prepared 并移除 commit 字段，重新启动后补记为 recorded；再次导出仓库仍仅 2 个提交，v2/summary 保留；分段验证通过 |
+| 构建 | Web、Android/iOS JavaScript/Hermes 导出通过；本轮未修改依赖/Expo 配置，沿用上一轮 Expo Doctor 21/21。iOS 原生与 arm64 真机待验证 |
+
+复现：配置 ANDROID_HOME、AGENT_MOBILE_METRO_PORT，启动隔离开发客户端/Metro 并 adb reverse，运行 `node scripts/android-git.mjs <serial>`。仅对合成测试应用执行回执注入，勿指向用户模拟器。`node scripts/android-git-records.mjs <serial>` 在应用停止后核对；`--inject-recovery` 写回合成回执后可用 UI 脚本 `--recover` 单独核对恢复。首次启动本地 Metro 使用 LAN 监听并将发布主机设为 loopback，避免只监听 IPv6 localhost 而 adb reverse 无法连接；恢复脚本使用 run-as cp 写回 fixture 数据库，避免 adb shell 重定向引用问题。
+
+截图经过视觉检查：work/git-mobile-light.png、work/git-mobile-dark.png、work/git-android-staged.png、work/git-android-diff.png、work/git-android-light.png、work/git-android-dark.png。原生验证数据库与仓库包保留在 work/，不提交。
+
+尚未实现：逐块暂存、分支/合并、远程 Git、libgit2、完整仓库导入导出、检查点保留期/GC、大仓库增量优化。真实断电/fsync 与原生原子替换保证仍需专项验证；普通进程终止和模拟跨存储失败不能替代这些保证。

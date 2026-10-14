@@ -43,7 +43,7 @@ export function demoTransport(prompt: string): { model: Model<string>; streamFn:
         const failed = context.messages.some((item) => item.role === 'toolResult' && item.isError);
         message.content.push({ type: 'text', text: failed ?
           '演示遇到工具错误，请检查任务记录。已完成的修改仍保留在项目中。' :
-          '已完成演示任务：读取资料，并创建或更新 documents/summary.md。你可以查看文件变化和历史版本。\n\n演示模式使用预设步骤，不进行语义理解。' });
+          '已完成演示任务：读取资料，并创建或更新 documents/summary.md。文件已保存，可在版本面板暂存并提交。\n\n演示模式使用预设步骤，不进行语义理解。' });
       }
     }
     if (message.stopReason === 'toolUse') message.content.unshift({ type: 'text', text: [

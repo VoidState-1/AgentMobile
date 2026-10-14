@@ -18,7 +18,7 @@ export async function verifySkillsRecords(serial) {
     const tasks = db.prepare("SELECT payload FROM records WHERE bucket='tasks'").all().map((row) => JSON.parse(row.payload));
     const automatic = tasks.find((task) => task.skillActivations?.some((activation) => activation.name === 'note-workflow' && activation.source === 'agent'));
     const explicit = tasks.find((task) => task.skillActivations?.some((activation) => activation.name === 'note-workflow' && activation.source === 'explicit'));
-    for (const task of [automatic, explicit]) if (!task || task.state !== 'completed' || task.baseCommit === task.finalCommit || !task.trace.some((item) => item.tool === 'read_skill_resource' && item.state === 'completed')) throw new Error('缺少已完成技能调用、资源轨迹或 Git 修改。');
+    for (const task of [automatic, explicit]) if (!task || task.state !== 'completed' || task.baseSnapshot === task.finalSnapshot || !task.uncommittedPaths?.length || !task.trace.some((item) => item.tool === 'read_skill_resource' && item.state === 'completed')) throw new Error('缺少已完成技能调用、资源轨迹或工作区修改。');
     if (automatic.skillsSnapshot[0].revision === explicit.skillsSnapshot[0].revision) throw new Error('更新资源后任务仍采用旧技能版本。');
     const configuration = JSON.parse(db.prepare("SELECT payload FROM records WHERE bucket='skills' AND id='configuration'").get().payload);
     if (!Object.values(configuration.grants).some((grants) => grants['note-workflow'] === configuration.skills[0].revision)) throw new Error('技能重新启用未持久化。');

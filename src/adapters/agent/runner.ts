@@ -29,7 +29,7 @@ const defineTool = <T extends TSchema>(tool: AgentTool<T>): AgentTool<T> => ({
       const text = error instanceof Error ? error.message : '';
       // Native storage failures can include private absolute paths. Only host
       // validation messages are allowed to cross the model-facing boundary.
-      const allowed = /^(INVALID_PATH|VERSION_CONFLICT|操作 ID|目标文件|项目配置|文件超过|文本超过|只允许|图片请|当前模式|模型图片|文件不是|任务已取消|工作区|恢复未|请等待)/.test(text);
+      const allowed = /^(INVALID_PATH|VERSION_CONFLICT|操作 ID|目标文件|项目配置|文件超过|文本超过|只允许|图片请|当前模式|模型图片|文件不是|任务已取消|工作区|恢复未|请等待|暂存区|提交说明)/.test(text);
       return { isError: true, content: [{ type: 'text', text: error instanceof SkillError || allowed ? text : '工具执行失败，宿主已保留可恢复的操作记录。' }], details: {} };
     }
   },
@@ -79,9 +79,10 @@ export async function startAgent(
           cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 } },
       },
     ]);
+    const baseline = await workspace.taskBaseline(projectId, runId);
     const task: TaskRecord = {
       id: runId, projectId, conversationId, draftRevision, prompt, mode: settings.mode, modelSnapshot: snapshot, agentSettingsSnapshot: agentSettings, mcpSnapshot: mcpRun?.snapshots, state: 'running',
-      baseCommit: await workspace.git.head(projectId), response: '', events: [], trace: [], createdAt: new Date().toISOString(),
+      baseCommit: baseline.head, baseSnapshot: baseline.working, baseIndexSnapshot: baseline.index, response: '', events: [], trace: [], createdAt: new Date().toISOString(),
       skillsSnapshot: skillRun?.snapshots, skillActivations: (skillRun?.explicit ?? []).map((name) => ({ name, revision: skillRun!.snapshots.find((skill) => skill.name === name)!.revision, source: 'explicit', at: new Date().toISOString() })),
     };
     for (const activation of task.skillActivations ?? []) task.trace!.push({ id: runId + ':explicit:' + activation.name, round: 0, kind: 'tool', callId: 'explicit-' + activation.name,
@@ -141,20 +142,21 @@ export async function startAgent(
           assertRunning(signal);
           const path = String(args.path);
           if (isImage(path) || !/\.(md|txt)$/i.test(path)) throw new Error('只允许写入 .md 或 .txt');
-          const commit = await workspace.write(projectId, path, Buffer.from(String(args.text)),
+          await workspace.write(projectId, path, Buffer.from(String(args.text)),
             args.expectedRevision as string | null, {
               owner: runId, operationId: runId + '-' + round + '-' + callId, message: 'Agent 修改 ' + path,
             });
-          return result({ path, commit, revision: (await workspace.readText(projectId, path)).revision });
+          return result({ path, saved: true, revision: (await workspace.readText(projectId, path)).revision });
         },
       }),
       defineTool({
-        name: 'delete_file', label: '删除文件', description: '删除指定文件；必须使用当前修订号。修改保留在 Git 历史中。',
+        name: 'delete_file', label: '删除文件', description: '删除指定文件；必须使用当前修订号。只修改工作区，不自动提交。',
         parameters: Type.Object({ path: Type.String({ maxLength: 220 }), expectedRevision: Type.String() }, { additionalProperties: false }),
         executionMode: 'sequential',
         execute: async (_, args, signal) => {
           assertRunning(signal);
-          return result({ commit: await workspace.remove(projectId, String(args.path), String(args.expectedRevision), runId) });
+          await workspace.remove(projectId, String(args.path), String(args.expectedRevision), runId);
+          return result({ path: args.path, saved: true });
         },
       }),
       defineTool({
@@ -163,9 +165,32 @@ export async function startAgent(
         executionMode: 'sequential',
         execute: async (_, args, signal) => {
           assertRunning(signal);
-          return result({ commit: await workspace.move(projectId, String(args.from), String(args.to), String(args.expectedRevision), runId) });
+          await workspace.move(projectId, String(args.from), String(args.to), String(args.expectedRevision), runId);
+          return result({ from: args.from, to: args.to, saved: true });
         },
       }),
+      defineTool({ name: 'git_status', label: '查看 Git 状态', description: '查看 HEAD、暂存区指纹及文件的已暂存/未暂存状态和修订号。保存文件不等于提交。',
+        parameters: Type.Object({}, { additionalProperties: false }),
+        execute: async (_, __, signal) => { assertRunning(signal); return result(await workspace.status(projectId)); } }),
+      defineTool({ name: 'git_diff', label: '查看 Git 差异', description: '查看 staged（HEAD 对比暂存区）或 unstaged（暂存区对比工作区）差异。图片仅返回变化类型，使用 inspect_image 查看图片。',
+        parameters: Type.Object({ area: Type.Union([Type.Literal('staged'), Type.Literal('unstaged')]), paths: Type.Optional(Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 })) }, { additionalProperties: false }),
+        execute: async (_, args, signal) => {
+          assertRunning(signal); const changes = await workspace.diff(projectId, args.area, args.paths); let remaining = textLimit;
+          return result({ files: changes.slice(0, 200).map((file) => { const limit = Math.max(0, Math.min(12000, Math.floor(remaining / 2))); remaining -= limit * 2;
+            return isImage(file.path) ? { path: file.path, kind: file.kind, image: true } : { ...file, before: file.before.slice(0, limit), after: file.after.slice(0, limit), truncated: file.before.length > limit || file.after.length > limit }; }), truncated: changes.length > 200 });
+        } }),
+      defineTool({ name: 'git_stage', label: '暂存文件', description: '暂存本任务修改、且任务开始前干净的文件。使用 git_status 的 HEAD、indexRevision 和每个文件的 workingRevision（删除为 null）。不提交已有用户改动。',
+        parameters: Type.Object({ paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }), expectedHead: Type.String({ maxLength: 80 }), indexRevision: Type.String({ maxLength: 80 }), revisions: Type.Record(Type.String(), revision) }, { additionalProperties: false }),
+        executionMode: 'sequential', execute: async (_, args, signal) => { assertRunning(signal);
+          await workspace.stage(projectId, args.paths, { head: args.expectedHead, indexRevision: args.indexRevision, revisions: args.revisions }, runId, baseline); return result(await workspace.status(projectId)); } }),
+      defineTool({ name: 'git_unstage', label: '取消暂存', description: '取消本任务文件的暂存，工作区内容不变。使用最新 git_status 指纹。',
+        parameters: Type.Object({ paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }), expectedHead: Type.String({ maxLength: 80 }), indexRevision: Type.String({ maxLength: 80 }) }, { additionalProperties: false }),
+        executionMode: 'sequential', execute: async (_, args, signal) => { assertRunning(signal);
+          await workspace.unstage(projectId, args.paths, { head: args.expectedHead, indexRevision: args.indexRevision }, runId, baseline); return result(await workspace.status(projectId)); } }),
+      defineTool({ name: 'git_commit', label: '提交更改', description: '用户要求提交时，明确提交本任务已暂存文件。必须提供说明、选定 paths 和最新 git_status 指纹。提交暂存版本，不包括之后的编辑；保留其他已暂存文件。',
+        parameters: Type.Object({ message: Type.String({ minLength: 1, maxLength: 4000 }), paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }), expectedHead: Type.String({ maxLength: 80 }), indexRevision: Type.String({ maxLength: 80 }) }, { additionalProperties: false }),
+        executionMode: 'sequential', execute: async (_, args, signal) => { assertRunning(signal);
+          return result({ commit: await workspace.commitStaged(projectId, args.message, { head: args.expectedHead, indexRevision: args.indexRevision }, args.paths, runId, baseline) }); } }),
       defineTool({
         name: 'inspect_image', label: '查看图片', description: '读取本项目图片供模型理解。只在用户开启图片输入时可用。',
         parameters: Type.Object({ path: Type.String({ maxLength: 220 }) }, { additionalProperties: false }),
@@ -335,7 +360,7 @@ export async function startAgent(
       } finally {
         clearTimeout(timeout);
         task.trace = settleTrace(task.trace, task.state === 'failed' ? 'error' : task.state === 'running' ? 'interrupted' : task.state, new Date().toISOString());
-        try { task.finalCommit = await workspace.git.head(projectId); publish(); await persist(); }
+        try { Object.assign(task, await workspace.taskFinal(task)); publish(); await persist(); }
         finally { await mcpRun?.close(); workspace.release(projectId, runId); }
       }
       return task;

@@ -172,7 +172,7 @@ describe('官方 MCP SDK 协议与持久化边界', () => {
     const updates: string[] = [];
     const started = await startAgent(workspace, project.id, '查询并保存资料', { mode: 'remote', baseUrl: 'https://model.example/v1', model: 'fixture', imageInput: false }, 'model-secret', randomUUID,
       (task) => updates.push(JSON.stringify(task.trace)), undefined, false, undefined, undefined, defaultAgentSettings(), run);
-    const task = await started.done; expect(task.state).toBe('completed'); expect(task.finalCommit).not.toBe(task.baseCommit);
+    const task = await started.done; expect(task.state).toBe('completed'); expect(task.finalCommit).toBe(task.baseCommit); expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
     expect((await workspace.readText(project.id, 'documents/mcp.md')).text).toContain('MCP 查询成功');
     expect(modelRequests[0].tools.filter((tool: any) => tool.function.name.startsWith('mcp_'))).toHaveLength(1);
     expect(JSON.stringify(modelRequests)).not.toContain('side_effect'); expect(JSON.stringify(modelRequests)).not.toContain('mcp-fixture-secret');

@@ -131,7 +131,7 @@ describe('真实 Pi 任务中的技能', () => {
     const task = await started.done; expect(task.state).toBe('completed'); expect(task.skillActivations).toMatchObject([{ name: skill.name, source: 'agent' }]);
     expect(JSON.stringify(requests[0])).toContain('note-workflow'); expect(JSON.stringify(requests[0])).not.toContain('VERSION_ONE');
     expect(JSON.stringify(requests[1])).toContain('VERSION_ONE'); expect(JSON.stringify(requests[1])).not.toContain('RESOURCE_ONE'); expect(JSON.stringify(requests[2])).toContain('RESOURCE_ONE');
-    expect(JSON.stringify(requests)).not.toContain('DO_NOT_SEND'); expect(JSON.stringify(requests)).not.toContain('/workspaces/'); expect(task.finalCommit).not.toBe(task.baseCommit);
+    expect(JSON.stringify(requests)).not.toContain('DO_NOT_SEND'); expect(JSON.stringify(requests)).not.toContain('/workspaces/'); expect(task.finalCommit).toBe(task.baseCommit); expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
   });
   it('用户 $技能明确调用在首个请求注入并保存轨迹，下一任务不携带旧技能正文', async () => {
     const f = await setup(); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('明确调用');

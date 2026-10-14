@@ -3,6 +3,7 @@ import { Platform } from 'react-native';
 import { Buffer } from 'buffer';
 import { useRouter } from 'expo-router';
 import type { Operation, Project, ProjectFile, TaskRecord, Version } from '@/core/prototype/types';
+import type { GitStatus } from '@/core/git/contracts';
 import { emptyModelConfiguration } from '@/core/models/types';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
 import { emptyConversationState, type Conversation } from '@/core/conversations/types';
@@ -18,7 +19,7 @@ export interface EditorDocument {
   externalChanged?: boolean;
 }
 export interface ReviewFile { path: string; kind: string; before: string; after: string }
-export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord }
+export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord; area?: 'staged' | 'unstaged' }
 type Confirmation = { title: string; description: string; label: string; danger?: boolean; perform: () => Promise<void>; saveFirst?: boolean };
 type ComposerDraft = { conversationId?: string; text: string; attachment?: string };
 
@@ -30,6 +31,7 @@ export function useWorkbench() {
   const [projects, setProjects] = useState<Project[]>([]);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
+  const [gitStatus, setGitStatus] = useState<GitStatus>();
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
   const [operations, setOperations] = useState<Operation[]>([]);
   const [configuration, setConfiguration] = useState(emptyModelConfiguration());
@@ -117,7 +119,7 @@ export function useWorkbench() {
     ]);
     if (request !== refreshId.current || useWorkbenchUi.getState().projectId !== projectId) return;
     setProjects(nextProjects); setFiles(snapshot.files.filter((file) => file.path !== 'project.json'));
-    setVersions(snapshot.versions); setTasks(nextTasks); setOperations(snapshot.operations);
+    setVersions(snapshot.versions); setGitStatus(snapshot.gitStatus); setTasks(nextTasks); setOperations(snapshot.operations);
     const document = editorRef.current;
     if (document && document.projectId === projectId && !document.fresh && open?.path === document.path && open.revision === document.revision) {
       const current = snapshot.files.find((file) => file.path === document.path);
@@ -242,7 +244,7 @@ export function useWorkbench() {
     const saved = { ...document, path: target, revision: current.revision, fresh: false,
       savedText: document.text, name: fileName(target), savedName: fileName(target) };
     editorRef.current = saved; setEditor(close ? undefined : saved);
-    setNotice('文件已保存，历史版本已记录。');
+    setNotice('文件已保存，可在 Git 面板暂存并提交。');
     await refresh(ui.projectId);
   }
 
@@ -406,9 +408,9 @@ export function useWorkbench() {
     if (!runtime) return;
     await action(async () => {
       const head = await runtime.workspace.git.head(task.projectId);
-      const value = await runtime.workspace.changes(task.projectId, task.baseCommit, task.finalCommit ?? head);
-      setReview({ title: '任务的文件变化', files: value, task,
-        restoreRef: task.finalCommit === head && task.finalCommit !== task.baseCommit ? task.baseCommit : undefined, expectedHead: head });
+      const scoped = await runtime.workspace.taskChanges(task);
+      setReview({ title: '任务的文件变化', files: scoped, task,
+        restoreRef: scoped.length ? task.baseSnapshot ?? task.baseCommit : undefined, expectedHead: head });
     });
   }
 
@@ -416,7 +418,7 @@ export function useWorkbench() {
     if (!runtime || !ui.projectId) return;
     guard(() => { void action(async () => {
       const head = await runtime.workspace.git.head(ui.projectId!);
-      const value = await runtime.workspace.changes(ui.projectId!, head, version.oid);
+      const value = await runtime.workspace.changes(ui.projectId!, version.parentOid, version.oid);
       setReview({ title: '版本 · ' + version.message.split('\n')[0], files: value,
         restoreRef: version.oid !== head ? version.oid : undefined, expectedHead: head });
     }); });
@@ -428,18 +430,50 @@ export function useWorkbench() {
     const value = review;
     setConfirmation({
       title: value.task ? '撤销这次任务的修改？' : '恢复这个版本？',
-      description: '将恢复相关项目内容，并保存一个新版本。已有历史和会话会保留。', label: '确认恢复',
+      description: value.task ? '将恢复本任务涉及文件及其暂存状态。已有提交历史保留；后续冲突会阻止撤销。' : '将这个提交的完整内容恢复到工作区。请先处理未提交更改，恢复后可自行暂存并提交。', label: '确认恢复',
       perform: async () => {
-        await runtime.workspace.restore(ui.projectId!, value.restoreRef!, value.expectedHead!);
+        if (value.task) await runtime.workspace.undoTask(value.task);
+        else await runtime.workspace.restore(ui.projectId!, value.restoreRef!, value.expectedHead!);
         setReview(undefined); setEditor(undefined); await refresh(ui.projectId); setNotice('内容已恢复，历史记录已保留。');
       },
     });
   }
 
+  async function reviewGit(area: 'staged' | 'unstaged', paths?: string[]) {
+    if (!runtime || !ui.projectId) return;
+    await action(async () => setReview({ title: area === 'staged' ? '已暂存的更改' : '未暂存的更改', area, files: await runtime.workspace.diff(ui.projectId!, area, paths) }));
+  }
+
+  async function changeStage(paths: string[], stage: boolean) {
+    if (!runtime || !ui.projectId || !gitStatus) return;
+    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
+    const expected = gitStatus;
+    await action(async () => {
+      if (stage) await runtime.workspace.stage(ui.projectId!, paths, { ...expected, revisions: Object.fromEntries(expected.files.filter((file) => paths.includes(file.path)).map((file) => [file.path, file.workingRevision])) });
+      else await runtime.workspace.unstage(ui.projectId!, paths, expected);
+      await refresh(ui.projectId);
+    });
+  }
+
+  async function commitGit(message: string) {
+    if (!runtime || !ui.projectId || !gitStatus) return;
+    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
+    const projectId = ui.projectId; const expected = gitStatus;
+    await action(async () => { await runtime.workspace.commitStaged(projectId, message, expected); ui.setCommitDraft(projectId, ''); await refresh(projectId); setNotice('已提交暂存更改。'); });
+  }
+
+  function discardGit(path: string) {
+    if (!runtime || !ui.projectId || !gitStatus) return;
+    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
+    const projectId = ui.projectId; const expected = gitStatus;
+    setConfirmation({ title: '丢弃 ' + fileName(path) + ' 的未暂存更改？', description: '将恢复为暂存区内容。未跟踪文件会被移除。', label: '丢弃更改', danger: true,
+      perform: async () => { await runtime.workspace.discard(projectId, [path], expected); await refresh(projectId); setNotice('已丢弃未暂存更改。'); } });
+  }
+
   function deleteEditor() {
     if (!runtime || !editor || editor.fresh) return;
     const document = editor;
-    setConfirmation({ title: '删除 ' + document.name + '？', description: '文件会从当前项目移除，仍可从历史版本恢复。',
+    setConfirmation({ title: '删除 ' + document.name + '？', description: '文件会从工作区移除，删除作为未暂存更改保留。',
       label: '删除文件', danger: true,
       perform: async () => {
         await runtime.workspace.remove(document.projectId, document.path, document.revision!);
@@ -464,11 +498,11 @@ export function useWorkbench() {
     });
   }
 
-  const changedPaths = (task: TaskRecord) => [...new Set(operations.filter((operation) => operation.runId === task.id)
+  const changedPaths = (task: TaskRecord) => task.changedPaths ?? [...new Set(operations.filter((operation) => operation.runId === task.id)
     .flatMap((operation) => operation.changes.map((change) => change.path)))];
 
   return {
-    ...ui, runtime, projects, selectedProject, files, versions,
+    ...ui, runtime, projects, selectedProject, files, versions, gitStatus, reviewGit, changeStage, commitGit, discardGit,
     tasks: tasks.filter((task) => task.projectId === ui.projectId && task.conversationId === ui.conversationId),
     active, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy,
     error, notice, setError, settings, configuration, modelLabel, selectedModel, selectedConnection, editor, setEditor, dirty,

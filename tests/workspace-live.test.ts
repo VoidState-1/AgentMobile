@@ -7,18 +7,18 @@ import { testStorage } from './storage';
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
 
-it('每次提交都通知订阅者，观察者异常不破坏写入，重试不重复通知', async () => {
+it('每次工作区保存都通知订阅者，观察者异常不破坏写入，重试不重复通知', async () => {
   const f = await testStorage(); cleanups.push(f.cleanup);
   const workspace = new WorkspaceService(f.files, f.metadata, randomUUID, () => { throw new Error('视图异常'); });
   const changes: WorkspaceChange[] = []; const observedPhases: string[] = []; workspace.subscribe(() => { throw new Error('观察者异常'); });
   const unsubscribe = workspace.subscribe((change) => {
     changes.push(change);
-    const operations = [...f.records.values()].filter((value) => (value as Operation).commit === change.commit) as Operation[];
+    const operations = [...f.records.values()].filter((value) => (value as Operation).changes?.some((file) => change.paths.includes(file.path))) as Operation[];
     if (operations.length) observedPhases.push(operations[0].phase);
   });
   const project = await workspace.create('实时资料'); const operationId = randomUUID();
   const commit = await workspace.write(project.id, 'documents/live.md', Buffer.from('第一版'), null, { operationId });
-  expect(changes).toHaveLength(2); expect(changes[1]).toEqual({ projectId: project.id, paths: ['documents/live.md'], commit });
+  expect(changes).toHaveLength(2); expect(changes[1]).toEqual({ projectId: project.id, paths: ['documents/live.md'], commit: await workspace.git.head(project.id) });
   expect(observedPhases).toEqual(['recorded']);
   expect(Object.isFrozen(changes[1].paths)).toBe(true);
   expect(await workspace.write(project.id, 'documents/live.md', Buffer.from('第一版'), null, { operationId })).toBe(commit);
@@ -37,7 +37,7 @@ it('快照等到移动提交完成，文件、预览、Git 和操作记录对应
   expect((await workspace.files(project.id)).some((file) => file.path === 'documents/notes.md')).toBe(false); expect(read).toBe(false);
   release(); const commit = await moving; const view = await snapshot;
   expect(view.files.map((file) => file.path)).toContain('documents/moved.md'); expect(view.files.map((file) => file.path)).not.toContain('documents/notes.md');
-  expect(view.versions[0].oid).toBe(commit); expect(view.operations[0].commit).toBe(commit);
+  expect(view.versions).toHaveLength(1); expect(view.operations[0].checkpoint).toBe(commit); expect(view.gitStatus.files).toHaveLength(2);
   expect(view.preview).toMatchObject({ path: 'documents/moved.md', revision: original.revision, content: original.text });
 });
 
@@ -49,5 +49,5 @@ it('失败修改不发布成功通知，恢复补记后才发布可读取版本'
   await expect(workspace.write(project.id, 'documents/live.md', Buffer.from('待恢复内容'), null)).rejects.toThrow('数据库中断'); expect(changes).toHaveLength(0);
   const reopened = new WorkspaceService(f.files, f.metadata, randomUUID); reopened.subscribe((change) => changes.push(change)); await reopened.recover();
   expect(changes).toHaveLength(1); const view = await reopened.snapshot(project.id, 'documents/live.md');
-  expect(view.preview?.content).toBe('待恢复内容'); expect(view.versions).toHaveLength(2);
+  expect(view.preview?.content).toBe('待恢复内容'); expect(view.versions).toHaveLength(1); expect(view.gitStatus.files[0].unstaged).toBe('added');
 });

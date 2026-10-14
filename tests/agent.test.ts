@@ -23,9 +23,11 @@ describe('Pi Agent 真实执行循环', () => {
       ['list_files', 'done'], ['read_text', 'done'], ['write_text', 'done'],
     ]);
     expect((await workspace.readText(project.id, 'documents/summary.md')).text).toContain('整理我的资料');
-    expect(task.finalCommit).not.toBe(task.baseCommit);
-    expect(await workspace.git.log(project.id)).toHaveLength(2);
-    await workspace.restore(project.id, task.baseCommit, task.finalCommit!);
+    expect(task.finalCommit).toBe(task.baseCommit);
+    expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
+    expect(task.uncommittedPaths).toEqual(['documents/summary.md']);
+    expect(await workspace.git.log(project.id)).toHaveLength(1);
+    await workspace.undoTask(task);
     await expect(workspace.readText(project.id, 'documents/summary.md')).rejects.toThrow();
   });
 
