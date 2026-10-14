@@ -1,14 +1,13 @@
 import { useEffect, useRef, useState } from 'react';
 import { FlatList, Platform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { ModelConfigurationService } from '@/core/models/service';
+import type { ModelsApi as ModelConfigurationService } from '@/application/services';
 import type { ProviderConnection, ProviderPresetId } from '@/core/models/types';
 import { providerPresets, protocolNames } from '@/core/models/presets';
 import { serviceOrigin } from '@/core/models/rules';
-import { runDiagnostic } from '@/adapters/model/diagnostics';
-import { Button, Field, Sheet, T } from '@/features/workbench/ui';
-import { ChevronRight, Plus } from '@/features/workbench/icons';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { ChevronRight, Plus } from '@/shared/ui/icons';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { CheckResult, Choices, ConfigPage, Loading, Section, Toggle, useConfiguration, useDraftGuard, type ConfigurationController } from './common';
 
 type Draft = Parameters<ModelConfigurationService['saveConnection']>[0];
@@ -49,7 +48,7 @@ function ConnectionEditor({ controller, connection, preset }: { controller: Conf
   }); };
   const test = () => { void action(async () => {
     const controller = new AbortController(); probe.current = controller; setProbing(true);
-    try { await runDiagnostic(runtime!.models, connection!.id, undefined, 'connection', Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', controller.signal); }
+    try { await runtime!.models.diagnose(connection!.id, undefined, 'connection', controller.signal); }
     finally { setProbing(false); probe.current = undefined; }
   }); };
   return <ConfigPage title={connection ? connection.name : '添加服务连接'} subtitle={protocolNames[draft.protocol]}

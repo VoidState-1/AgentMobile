@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
 import type { Workbench } from '@/features/workbench/use-workbench';
-import { Button, Field, IconButton, Sheet, T } from '@/features/workbench/ui';
-import { Check, MessageSquare, Pencil, Plus, RotateCcw } from '@/features/workbench/icons';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
-import { dateLabel } from '@/features/workbench/format';
+import { Button, Field, IconButton, Sheet, T } from '@/shared/ui/primitives';
+import { Check, MessageSquare, Pencil, Plus, RotateCcw } from '@/shared/ui/icons';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { dateLabel } from '@/shared/format';
 
 export function ConversationsPanel({ controller }: { controller: Workbench }) {
   const theme = useWorkbenchTheme(); const [search, setSearch] = useState(''); const [archived, setArchived] = useState(false);

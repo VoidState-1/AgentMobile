@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
-import { Check, FileText, Folder, Image as ImageIcon, Laptop, Moon, Plus, Search, Sun, Upload } from './icons';
+import { Check, FileText, Folder, Image as ImageIcon, Laptop, Moon, Plus, Search, Sun, Upload } from '@/shared/ui/icons';
 import type { Workbench } from './use-workbench';
-import type { AppearanceMode } from './ui-store';
-import { Button, Field, Sheet, T } from './ui';
-import { useWorkbenchTheme } from './theme';
-import { dateLabel, fileName } from './format';
+import type { AppearanceMode } from '@/shared/state/workbench';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { dateLabel, fileName } from '@/shared/format';
 import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
 import { ConversationsPanel } from '@/features/conversations/panel';

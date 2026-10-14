@@ -1,17 +1,20 @@
+import type { AppServices, WorkspaceOperationSummary } from '@/application/services';
 import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 import { Platform } from 'react-native';
 import { Buffer } from 'buffer';
 import { useRouter } from 'expo-router';
-import type { Operation, Project, ProjectFile, TaskRecord, Version } from '@/core/prototype/types';
+import type { ProjectFile } from '@/core/workspace/types';
+import type { Project } from '@/core/projects/types';
+import type { TaskRecord } from '@/core/runs/types';
+import type { Version } from '@/core/git/types';
 import type { GitStatus } from '@/core/git/contracts';
 import { emptyModelConfiguration } from '@/core/models/types';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
 import { emptyConversationState, type Conversation } from '@/core/conversations/types';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
-import { getRuntime, type Runtime } from '@/adapters/runtime';
-import { pickFile, exportFile } from '@/adapters/io/files';
-import { useWorkbenchUi, type AppearanceMode } from './ui-store';
-import { fileName } from './format';
+import { getAppServices } from '@/bootstrap';
+import { useWorkbenchUi } from '@/shared/state/workbench';
+import { fileName } from '@/shared/format';
 
 export interface EditorDocument {
   projectId: string; path: string; revision: string | null; text: string; savedText: string;
@@ -26,14 +29,14 @@ type ComposerDraft = { conversationId?: string; text: string; attachment?: strin
 export function useWorkbench() {
   const ui = useWorkbenchUi();
   const router = useRouter();
-  const [runtime, setRuntime] = useState<Runtime>();
-  const runtimeRef = useRef<Runtime | undefined>(undefined);
+  const [runtime, setRuntime] = useState<AppServices>();
+  const runtimeRef = useRef<AppServices | undefined>(undefined);
   const [projects, setProjects] = useState<Project[]>([]);
   const [files, setFiles] = useState<ProjectFile[]>([]);
   const [versions, setVersions] = useState<Version[]>([]);
   const [gitStatus, setGitStatus] = useState<GitStatus>();
   const [tasks, setTasks] = useState<TaskRecord[]>([]);
-  const [operations, setOperations] = useState<Operation[]>([]);
+  const [operations, setOperations] = useState<WorkspaceOperationSummary[]>([]);
   const [configuration, setConfiguration] = useState(emptyModelConfiguration());
   const [conversationState, setConversationState] = useState(emptyConversationState());
   const [loading, setLoading] = useState(true);
@@ -138,10 +141,10 @@ export function useWorkbench() {
 
   useEffect(() => {
     let mounted = true;
-    getRuntime().then(async (value) => {
+    getAppServices().then(async (value) => {
       const [list, preference] = await Promise.all([
         value.workspace.projects(),
-        value.metadata.get<{ projectId?: string; appearance?: AppearanceMode }>('preferences', 'workbench'),
+        value.preferences.getWorkbench(),
       ]);
       if (!mounted) return;
       runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setConversationState(value.conversations.getSnapshot()); setActive(value.agent.getSnapshot().active);
@@ -196,7 +199,7 @@ export function useWorkbench() {
 
   useEffect(() => {
     if (!runtime) return;
-    void runtime.metadata.put('preferences', 'workbench', { projectId: ui.projectId, appearance: ui.appearance }).catch(() => {});
+    void runtime.preferences.saveWorkbench({ projectId: ui.projectId, appearance: ui.appearance }).catch(() => {});
   }, [runtime, ui.projectId, ui.appearance]);
 
   useEffect(() => {
@@ -353,7 +356,7 @@ export function useWorkbench() {
   async function importFile(attach = false) {
     if (!runtime || !ui.projectId) return;
     await action(async () => {
-      const selection = await pickFile();
+      const selection = await runtime.io.pickFile();
       if (!selection) return;
       if (!/\.(md|txt|png|jpg|jpeg|webp)$/i.test(selection.name)) throw new Error('支持 Markdown、文本和 PNG/JPEG/WebP 图片。');
       const path = (isImage(selection.name) ? 'assets/' : 'documents/') + safePath(selection.name);
@@ -407,7 +410,7 @@ export function useWorkbench() {
   async function reviewTask(task: TaskRecord) {
     if (!runtime) return;
     await action(async () => {
-      const head = await runtime.workspace.git.head(task.projectId);
+      const head = await runtime.workspace.head(task.projectId);
       const scoped = await runtime.workspace.taskChanges(task);
       setReview({ title: '任务的文件变化', files: scoped, task,
         restoreRef: scoped.length ? task.baseSnapshot ?? task.baseCommit : undefined, expectedHead: head });
@@ -417,7 +420,7 @@ export function useWorkbench() {
   async function reviewVersion(version: Version) {
     if (!runtime || !ui.projectId) return;
     guard(() => { void action(async () => {
-      const head = await runtime.workspace.git.head(ui.projectId!);
+      const head = await runtime.workspace.head(ui.projectId!);
       const value = await runtime.workspace.changes(ui.projectId!, version.parentOid, version.oid);
       setReview({ title: '版本 · ' + version.message.split('\n')[0], files: value,
         restoreRef: version.oid !== head ? version.oid : undefined, expectedHead: head });
@@ -518,7 +521,7 @@ export function useWorkbench() {
       return saved;
     },
     confirm: async () => { await action(async () => { await confirmation?.perform(); setConfirmation(undefined); }); },
-    exportEditor: () => action(async () => { if (runtime && editor) await exportFile(runtime.workspace, editor.projectId, editor.path); }),
+    exportEditor: () => action(async () => { if (runtime && editor) await runtime.io.exportFile(editor.projectId, editor.path); }),
     changedPaths,
   };
 }

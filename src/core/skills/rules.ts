@@ -1,7 +1,8 @@
 import { safePath } from '../workspace/path';
 import type { SkillMetadata, SkillSummary } from './types';
+import { AppError } from '../errors';
 
-export class SkillError extends Error {}
+export class SkillError extends AppError { constructor(message: string) { super('VALIDATION', message); } }
 export const skillLimits = { installed: 128, enabled: 64, archiveBytes: 20 * 1024 * 1024, packageFiles: 512,
   libraryFiles: 4096, instructionBytes: 64 * 1024, textBytes: 1024 * 1024, imageBytes: 4 * 1024 * 1024, activationCharacters: 120_000 } as const;
 export function validateSkillMetadata(value: SkillMetadata) {

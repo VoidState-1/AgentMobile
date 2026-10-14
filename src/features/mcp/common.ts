@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getRuntime, type Runtime } from '@/adapters/runtime';
-import { McpError } from '@/adapters/mcp/client';
+import { getAppServices as getRuntime } from '@/bootstrap';
+import type { AppServices as Runtime } from '@/application/services';
+import { McpError } from '@/core/mcp/errors';
 import { emptyMcpConfiguration } from '@/core/mcp/types';
 
 export function useMcpConfiguration() {

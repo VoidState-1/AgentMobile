@@ -1,21 +1,28 @@
+import type { AppServices } from '@/application/services';
+import { PreferencesService } from '@/application/settings/preferences';
+import { createAppServices } from './facade';
+import { runDiagnostic } from '@/adapters/model/diagnostics';
+import { pickFile, exportFile } from '@/adapters/io/files';
+import { pickSkillPackage, shareSkillPackage } from '@/adapters/skills/io';
+import { decodeSkillText, validateBundle, importSkillPackage, exportSkillPackage } from '@/adapters/skills/package';
 import '@/adapters/polyfills';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
-import type { TaskRecord } from '@/core/prototype/types';
-import { settleTrace } from '@/core/prototype/trace';
+import type { TaskRecord } from '@/core/runs/types';
+import { settleTrace } from '@/core/trace';
 import { AgentSettingsService } from '@/core/agent/settings';
 import { ModelConfigurationService } from '@/core/models/service';
 import { ConversationService } from '@/core/conversations/service';
 import { McpConfigurationService } from '@/core/mcp/service';
-import { McpRuntime } from './mcp/runtime';
+import { McpRuntime } from '@/adapters/mcp/runtime';
 import { SkillService } from '@/core/skills/service';
-import { GitSkillRepository } from './skills/repository';
-import { TaskManager } from './agent/task-manager';
-import { createStorage } from './storage/platform';
-import { WorkspaceService } from './workspace/service';
+import { GitSkillRepository } from '@/adapters/skills/repository';
+import { TaskManager } from '@/adapters/agent/task-manager';
+import { createStorage } from '@/adapters/storage/platform';
+import { WorkspaceService } from '@/adapters/workspace/service';
 
-let instance: Promise<Runtime> | undefined;
-export type Runtime = Awaited<ReturnType<typeof initialize>>;
+let instance: Promise<AppServices> | undefined;
+
 
 async function initialize() {
   const storage = await createStorage();
@@ -45,14 +52,19 @@ async function initialize() {
         '应用运行被中断，文件修改已恢复。可查看已完成结果后发起新任务。',
     });
   }
-  return {
-    workspace, ...storage, models, conversations, agentSettings, mcp, skills, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp, skills),
+  return createAppServices({
+    workspace, models, conversations, agentSettings, mcp, skills, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp, skills),
+    preferences: new PreferencesService(storage.metadata),
+    diagnose: (connectionId, modelId, kind, signal) => runDiagnostic(models, connectionId, modelId, kind, Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', signal),
+    skillPackage: { decodeText: decodeSkillText, validateBundle, importPackage: importSkillPackage },
+    io: { pickFile, pickSkillPackage, exportFile: (projectId, path) => exportFile(workspace, projectId, path),
+      exportSkill: async (name, commit) => shareSkillPackage(name, exportSkillPackage([await skills.repository.bundle(commit, name)])) },
     tasks: async (projectId: string, conversationId?: string) => (await storage.metadata.all<TaskRecord>('tasks'))
       .filter((task) => task.projectId === projectId && (!conversationId || task.conversationId === conversationId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
-  };
+  });
 }
 
-export function getRuntime(): Promise<Runtime> {
+export function getAppServices(): Promise<AppServices> {
   instance ??= initialize().catch((error) => { instance = undefined; throw error; });
   return instance;
 }

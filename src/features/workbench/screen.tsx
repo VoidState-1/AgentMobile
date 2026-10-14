@@ -1,19 +1,19 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, BackHandler, Keyboard, KeyboardAvoidingView, Platform, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Check, ChevronDown, Folder, FolderOpen, HardDrive, History, MessageSquare, Pencil, Plus, Settings2, X } from './icons';
+import { Check, ChevronDown, Folder, FolderOpen, HardDrive, History, MessageSquare, Pencil, Plus, Settings2, X } from '@/shared/ui/icons';
 import { useWorkbench } from './use-workbench';
 import type { Workbench } from './use-workbench';
-import { useWorkbenchTheme } from './theme';
-import { Brand, Button, IconButton, T } from './ui';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
 import { Conversation } from './conversation';
 import { FilesPane } from './files';
 import { HistoryPane } from './history';
 import { Editor } from './editor';
 import { ReviewSheet } from './review';
 import { WorkbenchSheets } from './sheets';
-import type { WorkbenchTab } from './ui-store';
-import { dateLabel } from './format';
+import type { WorkbenchTab } from '@/shared/state/workbench';
+import { dateLabel } from '@/shared/format';
 
 const tabs = [
   { id: 'agent', name: '会话', icon: MessageSquare }, { id: 'files', name: '资料', icon: FolderOpen }, { id: 'history', name: '版本', icon: History },

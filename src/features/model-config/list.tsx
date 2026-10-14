@@ -2,9 +2,9 @@ import { useEffect, useState } from 'react';
 import { FlatList, Platform, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { providerPresets, protocolNames } from '@/core/models/presets';
-import { Button, Field, T } from '@/features/workbench/ui';
-import { ChevronRight, Plus, ShieldCheck } from '@/features/workbench/icons';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { ChevronRight, Plus, ShieldCheck } from '@/shared/ui/icons';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { Choices, ConfigPage, Loading, Section, useConfiguration } from './common';
 
 export function ConnectionList() {

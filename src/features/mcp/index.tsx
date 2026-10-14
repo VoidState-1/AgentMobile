@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ConfigPage, FormScroll, Loading, Section } from '@/features/model-config/common';
-import { Button, T } from '@/features/workbench/ui';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
-import { useWorkbenchUi } from '@/features/workbench/ui-store';
+import { ConfigPage, FormScroll, Loading, Section } from '@/shared/ui/forms';
+import { Button, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchUi } from '@/shared/state/workbench';
 import { useMcpConfiguration } from './common';
 import { UnknownCalls } from './unknown';
 
@@ -13,7 +13,7 @@ export function McpPage() {
   const selectedProject = useWorkbenchUi((state) => state.projectId); const [storedProject, setStoredProject] = useState<string>();
   const projectId = selectedProject ?? storedProject;
   useEffect(() => { let current = true;
-    if (!selectedProject && runtime) void runtime.metadata.get<{ projectId?: string }>('preferences', 'workbench').then((value) => { if (current) setStoredProject(value?.projectId); }).catch(() => {});
+    if (!selectedProject && runtime) void runtime.preferences.getWorkbench().then((value) => { if (current) setStoredProject(value?.projectId); }).catch(() => {});
     return () => { current = false; };
   }, [runtime, selectedProject]);
   return <ConfigPage title="远程 MCP" subtitle="连接服务，为当前项目选择工具" action={<Button label="添加连接" variant="secondary" onPress={() => router.push('/mcp/server')} />}>

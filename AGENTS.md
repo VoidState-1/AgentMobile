@@ -5,6 +5,7 @@
 - 如有生图需求，请优先使用 niko_image 生图 MCP。
 - src/core 仅包含平台无关的领域逻辑和接口，不导入 React、Expo、Node.js 或原生库。
 - 平台实现放在 src/adapters；路由放在 src/app，业务界面后续放在 src/features。
+- src/application 编排平台无关用例；src/bootstrap 组装依赖。界面通过 AppServices 调用业务，禁止直接引用 adapters、数据库、Git 或凭证存储；分层限制由 ESLint 验证。
 - Agent 和动态 UI 通过受控工作区接口操作文件。禁止直接暴露绝对路径、.git、数据库、密钥和任意原生调用。
 - Git 是项目文件历史的来源；SQLite 是任务、会话和业务元数据的来源；Zustand 仅保存界面状态。
 - 文件修改必须考虑基础版本、操作日志、重试和进程中断。Git 与 SQLite 不具有跨存储事务。

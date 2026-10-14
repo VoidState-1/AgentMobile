@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { getRuntime, type Runtime } from '@/adapters/runtime';
+import { getAppServices as getRuntime } from '@/bootstrap';
+import type { AppServices as Runtime } from '@/application/services';
 import { emptySkillConfiguration } from '@/core/skills/types';
 import { SkillError } from '@/core/skills/rules';
-import type { Project } from '@/core/prototype/types';
-import { useWorkbenchUi } from '@/features/workbench/ui-store';
+import type { Project } from '@/core/projects/types';
+import { useWorkbenchUi } from '@/shared/state/workbench';
 
 export function useSkills() {
   const [runtime, setRuntime] = useState<Runtime>(); const [config, setConfig] = useState(emptySkillConfiguration());
@@ -13,7 +14,7 @@ export function useSkills() {
     let current = true; let unsubscribe: (() => void) | undefined;
     void getRuntime().then(async (value) => {
       if (!current) return; setRuntime(value); setConfig(value.skills.getSnapshot()); unsubscribe = value.skills.subscribe(() => setConfig(value.skills.getSnapshot()));
-      const [list, preference] = await Promise.all([value.workspace.projects(), value.metadata.get<{ projectId?: string }>('preferences', 'workbench')]);
+      const [list, preference] = await Promise.all([value.workspace.projects(), value.preferences.getWorkbench()]);
       if (current) { setProjects(list); if (!selected) setChoice(preference?.projectId ?? list[0]?.id ?? ''); }
     }).catch(() => { if (current) setError('技能库读取失败，请保留数据并重新打开应用。'); });
     return () => { current = false; unsubscribe?.(); };

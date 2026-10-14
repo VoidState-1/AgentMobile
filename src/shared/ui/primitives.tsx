@@ -4,8 +4,8 @@ import {
   Text, TextInput, useWindowDimensions, View, type TextProps, type TextInputProps, type StyleProp, type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Command, type LucideProps } from './icons';
-import { useWorkbenchTheme } from './theme';
+import { X, Command, type LucideProps } from '@/shared/ui/icons';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 
 export type IconComponent = ComponentType<LucideProps>;
 

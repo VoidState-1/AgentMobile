@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
 import { View } from 'react-native';
-import type { Runtime } from '@/adapters/runtime';
+import type { AppServices as Runtime } from '@/application/services';
 import type { McpAttempt } from '@/core/mcp/types';
-import { Section } from '@/features/model-config/common';
-import { Button, Sheet, T } from '@/features/workbench/ui';
+import { Section } from '@/shared/ui/forms';
+import { Button, Sheet, T } from '@/shared/ui/primitives';
 
 /** Global receipts remain reachable even after a connection has been deleted. */
 export function UnknownCalls({ runtime }: { runtime: Runtime }) {

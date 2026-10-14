@@ -1,4 +1,4 @@
-import type { ModelSettings } from '@/core/prototype/types';
+import type { ModelSettings } from '@/core/legacy/model-settings';
 import type { ModelRunSnapshot } from '@/core/models/types';
 import { isDeepseek, validateConnection } from './settings';
 import { protocolModel, protocolTransport } from './protocols';

@@ -1,11 +1,11 @@
 import { useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, ChevronRight, GitCommitHorizontal, Plus, RotateCcw, X } from './icons';
+import { Check, ChevronRight, GitCommitHorizontal, Plus, RotateCcw, X } from '@/shared/ui/icons';
 import type { Workbench } from './use-workbench';
 import type { GitFileStatus } from '@/core/git/contracts';
-import { Button, Field, IconButton, T } from './ui';
-import { useWorkbenchTheme } from './theme';
-import { dateLabel } from './format';
+import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { dateLabel } from '@/shared/format';
 
 const statusLabel = { added: '新增', modified: '修改', deleted: '删除' };
 

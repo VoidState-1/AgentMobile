@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
-import { ChevronRight, FileText, Folder, Image as ImageIcon, Plus, Search, Upload, X } from './icons';
-import type { ProjectFile } from '@/core/prototype/types';
+import { ChevronRight, FileText, Folder, Image as ImageIcon, Plus, Search, Upload, X } from '@/shared/ui/icons';
+import type { ProjectFile } from '@/core/workspace/types';
 import type { Workbench } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
-import { Button, IconButton, T } from './ui';
-import { useWorkbenchTheme } from './theme';
-import { fileName, sizeLabel } from './format';
+import { Button, IconButton, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { fileName, sizeLabel } from '@/shared/format';
 
 function Thumbnail({ file, controller }: { file: ProjectFile; controller: Workbench }) {
   const theme = useWorkbenchTheme();

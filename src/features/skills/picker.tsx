@@ -1,7 +1,7 @@
 import { Pressable, View } from 'react-native';
 import type { Workbench } from '@/features/workbench/use-workbench';
-import { Button, Sheet, T } from '@/features/workbench/ui';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Button, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { contentLimits } from '@/core/agent/settings';
 import { explicitSkills } from '@/core/skills/rules';
 import { useSkills } from './common';

@@ -1,10 +1,10 @@
 import { useEffect, useState } from 'react';
 import { Platform, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
-import { ImageOff } from './icons';
+import { ImageOff } from '@/shared/ui/icons';
 import { safePath } from '@/core/workspace/path';
-import { T } from './ui';
-import { useWorkbenchTheme } from './theme';
+import { T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 
 function Inline({ text }: { text: string }) {
   const theme = useWorkbenchTheme();

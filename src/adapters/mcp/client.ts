@@ -4,7 +4,8 @@ import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/client/valida
 import type { McpLease, McpTool } from '@/core/mcp/types';
 import { canonical, schemaIssue, scrub, toolFingerprint } from '@/core/mcp/rules';
 
-export class McpError extends Error { constructor(message: string, readonly uncertain = false) { super(message); } }
+import { McpError } from '@/core/mcp/errors';
+export { McpError };
 export function safeMcpError(error: unknown, aborted = false): string {
   if (error instanceof McpError) return error.message;
   return aborted ? 'MCP 调用已停止。' : 'MCP 连接失败，请检查端点、Token、服务状态或浏览器跨域设置。';

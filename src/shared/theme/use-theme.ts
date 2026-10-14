@@ -1,5 +1,5 @@
 import { useColorScheme } from 'react-native';
-import { useWorkbenchUi } from './ui-store';
+import { useWorkbenchUi } from '@/shared/state/workbench';
 
 const light = {
   dark: false, background: '#F5F6F8', surface: '#FFFFFF', sidebar: '#F9FAFC', inset: '#F1F3F7',

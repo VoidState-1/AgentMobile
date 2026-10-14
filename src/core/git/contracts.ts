@@ -1,5 +1,5 @@
 import type { WorkspaceId, WorkspacePath } from '../workspace/contracts';
-import type { Version } from '../prototype/types';
+import type { Version } from '@/core/git/types';
 
 export type CommitOid = string;
 export interface GitFileStatus { path: string; headRevision: string | null; indexRevision: string | null; workingRevision: string | null;

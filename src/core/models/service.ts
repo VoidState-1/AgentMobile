@@ -1,5 +1,5 @@
 import type { CredentialStore, MetadataStore } from '../storage/contracts';
-import type { ModelSettings } from '../prototype/types';
+import type { ModelSettings } from '@/core/legacy/model-settings';
 import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity, validateReasoningParameters } from './rules';
 import { presetModelEvidence } from './presets';
 import { defaultModelParameters, emptyModelConfiguration, unknownCapabilities } from './types';

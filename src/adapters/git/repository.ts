@@ -1,6 +1,6 @@
 import * as git from 'isomorphic-git';
 import type { HostFileSystem } from '@/core/storage/contracts';
-import type { Version } from '@/core/prototype/types';
+import type { Version } from '@/core/git/types';
 import type { GitPort } from '@/core/git/contracts';
 import { safePath } from '@/core/workspace/path';
 import { gitFileSystem } from './filesystem';

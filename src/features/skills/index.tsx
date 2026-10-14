@@ -2,11 +2,9 @@ import { useState } from 'react';
 import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import type { SkillBundle } from '@/core/skills/types';
-import { importSkillPackage } from '@/adapters/skills/package';
-import { pickSkillPackage } from '@/adapters/skills/io';
-import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle } from '@/features/model-config/common';
-import { Button, Field, Sheet, T } from '@/features/workbench/ui';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { useSkills } from './common';
 
 export function SkillsPage() {
@@ -17,7 +15,7 @@ export function SkillsPage() {
     {!runtime ? <Loading /> : <FormScroll>
       <Section title="技能库" hint="支持通用 SKILL.md 与含 references/assets 的 ZIP。导入后按项目启用。">
         <Button label="导入 SKILL.md / ZIP" variant="secondary" busy={busy} onPress={() => { void action(async () => {
-          const file = await pickSkillPackage(); if (!file) return; setPreview({ bundles: importSkillPackage(file.name, file.bytes), commit: runtime.skills.getSnapshot().commit }); setNotice('');
+          const file = await runtime.io.pickSkillPackage(); if (!file) return; setPreview({ bundles: runtime.skills.importPackage(file.name, file.bytes), commit: runtime.skills.getSnapshot().commit }); setNotice('');
         }); }} />
         <Field label="搜索技能" value={search} onChangeText={setSearch} placeholder="名称或描述" />
         {projects.length ? <Choices label="启用项目" value={projectId} options={projects.map((project) => ({ value: project.id, label: project.name }))} onChange={setProjectId} disabled={busy} /> : <T tone="muted" style={{ fontSize: 12 }}>先创建项目，再启用技能。技能库可独立管理。</T>}

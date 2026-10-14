@@ -3,13 +3,14 @@ import { Agent, type AgentTool, type AgentEvent } from '@earendil-works/pi-agent
 import { Type } from 'typebox';
 import type { TSchema } from 'typebox';
 import type { Message, AssistantMessage } from '@earendil-works/pi-ai';
-import type { ModelSettings, TaskRecord } from '@/core/prototype/types';
+import type { ModelSettings } from '@/core/legacy/model-settings';
+import type { TaskRecord } from '@/core/runs/types';
 import { isImage, mimeFor } from '@/core/workspace/path';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import { compatibleTransport, modelFor } from '@/adapters/model/compatible';
 import { protocolModel, protocolTransport } from '@/adapters/model/protocols';
 import type { PublicThinking } from '@/adapters/model/protocols';
-import { finishTool, recordContent, settleTrace } from '@/core/prototype/trace';
+import { finishTool, recordContent, settleTrace } from '@/core/trace';
 import type { ModelRunSnapshot } from '@/core/models/types';
 import { mainSessionId } from '@/core/models/rules';
 import { demoTransport } from './demo';

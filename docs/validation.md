@@ -349,3 +349,11 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 截图经过视觉检查：work/git-mobile-light.png、work/git-mobile-dark.png、work/git-android-staged.png、work/git-android-diff.png、work/git-android-light.png、work/git-android-dark.png。原生验证数据库与仓库包保留在 work/，不提交。
 
 尚未实现：逐块暂存、分支/合并、远程 Git、libgit2、完整仓库导入导出、检查点保留期/GC、大仓库增量优化。真实断电/fsync 与原生原子替换保证仍需专项验证；普通进程终止和模拟跨存储失败不能替代这些保证。
+
+## 2026-10-14：架构 v2 R0
+
+领域类型、共享界面、bootstrap 与 AppServices 已整理。AppServices 在运行时只导出明确方法，剔除 fs/metadata/git/credentials、内部租约、claim/recover、技能库原始仓库；界面操作不能传入 owner 绕过活动项目锁。工作区查询只返回操作路径摘要，不返回恢复日志的完整前后字节。旧偏好、任务/轨迹、模型/MCP/技能配置及文件布局不变。
+
+npm run check：TypeScript、ESLint、134 项测试通过；新增 3 项真实 facade 与旧数据测试、1 项实际 ESLint 导入边界验证。35 条全量浏览器回归通过，覆盖三协议、MCP unknown、Skills 固定版本、Git、刷新与主题。Web 与 Android/iOS JS/Hermes 导出通过；未改依赖/Expo 配置。本阶段不宣称多 Agent 或原生设备新流程已验证。
+
+首轮浏览器回归发现通用错误清理隐藏了“此连接需要填写 API Key”的有效提示，已保留该领域消息后全量重跑通过。平台原始错误仍映射为不含私有路径的 AppError。

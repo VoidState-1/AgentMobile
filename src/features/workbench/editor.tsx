@@ -2,10 +2,10 @@ import { useCallback, useEffect } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
-import { ArrowLeft, Download, FileText, Image as ImageIcon, Pencil, Save, Trash2, X } from './icons';
-import { Button, IconButton, T } from './ui';
+import { ArrowLeft, Download, FileText, Image as ImageIcon, Pencil, Save, Trash2, X } from '@/shared/ui/icons';
+import { Button, IconButton, T } from '@/shared/ui/primitives';
 import { Markdown, resolveImagePath } from './markdown';
-import { useWorkbenchTheme } from './theme';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import type { Workbench } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
 

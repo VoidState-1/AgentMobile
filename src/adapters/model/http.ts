@@ -5,7 +5,9 @@ import { ModelServiceError } from './settings';
 import { SseDecoder } from './sse';
 import { contentLimits, defaultAgentLimits } from '@/core/agent/settings';
 
-export class ProtocolError extends Error {}
+import { ProtocolError } from '@/core/models/errors';
+import { geminiResource } from '@/core/models/model-id';
+export { ProtocolError, geminiResource };
 export function safeModelError(error: unknown, aborted = false): string {
   if (aborted) return '请求已取消';
   if (error instanceof ModelServiceError || error instanceof ProtocolError) return error.message;
@@ -15,11 +17,7 @@ export function safeModelError(error: unknown, aborted = false): string {
 export function modelEndpoint(config: Pick<ModelRunSnapshot, 'baseUrl' | 'protocol'>, suffix: string): string {
   return normalizedServiceAddress(config.baseUrl) + '/' + suffix;
 }
-export function geminiResource(id: string): string {
-  const name = id.replace(/^models\//, '');
-  if (!/^[a-zA-Z0-9._-]{1,180}$/.test(name)) throw new ProtocolError('Gemini 模型 ID 应为 models/名称或模型名称。');
-  return 'models/' + encodeURIComponent(name);
-}
+
 export function modelHeaders(config: Pick<ProviderConnection, 'protocol' | 'auth' | 'apiVersion'>, secret: string, web = false): Record<string, string> {
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
   if (config.auth === 'none') return headers;

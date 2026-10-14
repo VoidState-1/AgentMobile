@@ -1,5 +1,6 @@
 import type { MetadataStore } from '../storage/contracts';
-import type { Project, TaskRecord } from '../prototype/types';
+import type { Project } from '@/core/projects/types';
+import type { TaskRecord } from '@/core/runs/types';
 import { mainSessionId } from '../models/rules';
 import { safePath } from '../workspace/path';
 import { contentLimits } from '../agent/settings';

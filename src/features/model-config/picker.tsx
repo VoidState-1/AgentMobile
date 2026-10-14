@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import type { ModelConfigurationService } from '@/core/models/service';
+import type { ModelsApi as ModelConfigurationService } from '@/application/services';
 import type { ModelConfiguration } from '@/core/models/types';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
-import { Button, Field, IconButton, T } from '@/features/workbench/ui';
-import { Check, X } from '@/features/workbench/icons';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
+import { Check, X } from '@/shared/ui/icons';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { Choices } from './common';
 
 export function ModelPicker({ service, configuration, projectId, conversationId, onClose, onManage }: { service: ModelConfigurationService; configuration: ModelConfiguration; projectId?: string; conversationId?: string;

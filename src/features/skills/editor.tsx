@@ -5,12 +5,10 @@ import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { SkillBundle, SkillVersion } from '@/core/skills/types';
 import { SkillError, resourceKind, skillPath } from '@/core/skills/rules';
-import { decodeSkillText, exportSkillPackage, validateBundle } from '@/adapters/skills/package';
-import { shareSkillPackage } from '@/adapters/skills/io';
 import { mimeFor } from '@/core/workspace/path';
-import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/features/model-config/common';
-import { Button, Field, Sheet, T } from '@/features/workbench/ui';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/shared/ui/forms';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { useSkills } from './common';
 
 const template = '---\nname: my-skill\ndescription: 整理文字资料，适用于需要提炼重点并形成结构化笔记的任务。\n---\n\n# 工作流程\n\n1. 读取相关项目资料，核对目标。\n2. 提炼重点、待确认信息和下一步。\n3. 保存为 Markdown，保留来源说明。\n';
@@ -35,18 +33,18 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
   const dirty = source !== savedSource || changed || resourceDirty; const guard = useDraftGuard(dirty);
   useEffect(() => {
     if (!name) return; let current = true; const commit = runtime!.skills.getSnapshot().commit;
-    void runtime!.skills.repository.bundle(commit, name).then((bundle) => {
-      if (!current) return; const text = decodeSkillText(bundle.files.find((file) => file.path === 'SKILL.md')!.bytes);
+    void runtime!.skills.bundle(commit, name).then((bundle) => {
+      if (!current) return; const text = runtime!.skills.decodeText(bundle.files.find((file) => file.path === 'SKILL.md')!.bytes);
       setFiles(bundle.files); setSource(text); setSavedSource(text); setBaseCommit(commit); setLoaded(true);
     }).catch(() => { if (current) setNotice('技能正文读取失败，请重新打开此页。'); });
     return () => { current = false; };
   }, [runtime, name]);
   const adopt = (bundle: SkillBundle) => {
-    const text = decodeSkillText(bundle.files.find((file) => file.path === 'SKILL.md')!.bytes); setFiles(bundle.files); setSource(text); setSavedSource(text);
+    const text = runtime!.skills.decodeText(bundle.files.find((file) => file.path === 'SKILL.md')!.bytes); setFiles(bundle.files); setSource(text); setSavedSource(text);
     setBaseCommit(runtime!.skills.getSnapshot().commit); setChanged(false); setResource(undefined);
   };
   const draftBundle = () => {
-    const bundle = validateBundle([{ path: 'SKILL.md', bytes: Buffer.from(source) }, ...files.filter((file) => file.path !== 'SKILL.md')]);
+    const bundle = runtime!.skills.validateBundle([{ path: 'SKILL.md', bytes: Buffer.from(source) }, ...files.filter((file) => file.path !== 'SKILL.md')]);
     if (name && bundle.name !== name) throw new SkillError('已有技能名称不能直接改名；请保持 name 字段，或新建另一个技能。');
     return bundle;
   };
@@ -66,7 +64,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
       </Section>
       <Section title="配套资源" hint="相对路径以技能目录为根。文本和图片可按需读取，脚本仅可阅读。">
         {files.filter((file) => file.path !== 'SKILL.md').map((file) => <Pressable key={file.path} accessibilityRole="button" accessibilityLabel={'编辑技能资源 ' + file.path}
-          disabled={busy} onPress={() => setResource({ path: file.path, text: resourceKind(file.path) === 'text' ? decodeSkillText(file.bytes) : '', savedText: resourceKind(file.path) === 'text' ? decodeSkillText(file.bytes) : '', bytes: file.bytes })}
+          disabled={busy} onPress={() => setResource({ path: file.path, text: resourceKind(file.path) === 'text' ? runtime!.skills.decodeText(file.bytes) : '', savedText: resourceKind(file.path) === 'text' ? runtime!.skills.decodeText(file.bytes) : '', bytes: file.bytes })}
           style={{ paddingVertical: 8, borderBottomWidth: 1, borderColor: theme.border, gap: 3 }}>
           <T tone="accent" style={{ fontSize: 12 }}>{file.path}</T><T tone="muted" style={{ fontSize: 10 }}>{(file.bytes.length / 1024).toFixed(1)} KB · {resourceKind(file.path) === 'text' ? '文字' : resourceKind(file.path) === 'image' ? '图片' : '保留供导出'}</T>
         </Pressable>)}
@@ -81,12 +79,12 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
         {skill.warnings.map((warning) => <T key={warning} tone="warning" style={{ fontSize: 11 }}>{warning}</T>)}
       </Section>}
       {!!name && <Section title="版本与导出">
-        <Button label="导出技能 ZIP" variant="secondary" disabled={busy || dirty} onPress={() => { void action(async () => { await shareSkillPackage(name, exportSkillPackage([await runtime!.skills.repository.bundle(baseCommit, name)])); }); }} />
-        <Button label="查看技能版本" variant="secondary" busy={busy} onPress={() => { void action(async () => { setVersions(await runtime!.skills.repository.versions(name)); }); }} />
+        <Button label="导出技能 ZIP" variant="secondary" disabled={busy || dirty} onPress={() => { void action(async () => { await runtime!.io.exportSkill(name, baseCommit); }); }} />
+        <Button label="查看技能版本" variant="secondary" busy={busy} onPress={() => { void action(async () => { setVersions(await runtime!.skills.versions(name)); }); }} />
         {versions?.map((version, index) => <View key={version.commit} style={{ gap: 5 }}>
           <T tone="secondary" style={{ fontSize: 11 }}>{version.message} · {new Date(version.timestamp).toLocaleString()}</T>
           <T tone="muted" style={{ fontSize: 10 }}>{version.revision.slice(0, 7)}{index === 0 ? ' · 当前版本' : ''}</T>
-          {index > 0 && <Button label={'预览技能版本 ' + version.revision.slice(0, 7)} variant="ghost" disabled={busy || dirty} onPress={() => { void action(async () => { setRestoring({ bundle: await runtime!.skills.repository.bundle(version.commit, name), commit: version.commit, expectedCommit: config.commit }); }); }} />}
+          {index > 0 && <Button label={'预览技能版本 ' + version.revision.slice(0, 7)} variant="ghost" disabled={busy || dirty} onPress={() => { void action(async () => { setRestoring({ bundle: await runtime!.skills.bundle(version.commit, name), commit: version.commit, expectedCommit: config.commit }); }); }} />}
         </View>)}
         {dirty && <T tone="muted" style={{ fontSize: 11 }}>先保存草稿，再导出或恢复版本。</T>}
         <Button label="删除技能" variant="danger" disabled={busy} onPress={() => setDeleting(true)} />
@@ -118,8 +116,8 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
       <T tone="secondary">将移除此技能并撤销项目启用。运行任务继续使用原版本，已保存内容保留在 Git 历史中。</T>
     </Sheet>
     <Sheet visible={!!restoring} title="预览历史技能" busy={busy} onClose={() => setRestoring(undefined)} footer={<Button label="恢复此技能版本" busy={busy}
-      onPress={() => { void action(async () => { const bundle = restoring!.bundle; await runtime!.skills.install([bundle], restoring!.expectedCommit); adopt(bundle); setRestoring(undefined); setVersions(await runtime!.skills.repository.versions(name!)); setNotice('技能版本已恢复，请重新启用。'); }); }} />}>
-      <T selectable style={{ fontSize: 12 }}>{restoring && decodeSkillText(restoring.bundle.files.find((file) => file.path === 'SKILL.md')!.bytes)}</T>
+      onPress={() => { void action(async () => { const bundle = restoring!.bundle; await runtime!.skills.install([bundle], restoring!.expectedCommit); adopt(bundle); setRestoring(undefined); setVersions(await runtime!.skills.versions(name!)); setNotice('技能版本已恢复，请重新启用。'); }); }} />}>
+      <T selectable style={{ fontSize: 12 }}>{restoring && runtime!.skills.decodeText(restoring.bundle.files.find((file) => file.path === 'SKILL.md')!.bytes)}</T>
       {!!restoring && <T tone="muted" style={{ fontSize: 11 }}>{restoring.bundle.files.length} 个文件 · {restoring.commit.slice(0, 7)}</T>}
     </Sheet>
   </ConfigPage>;

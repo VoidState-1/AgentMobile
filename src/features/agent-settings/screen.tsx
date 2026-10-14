@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { View } from 'react-native';
 import { useRouter } from 'expo-router';
-import type { Runtime } from '@/adapters/runtime';
+import type { AppServices as Runtime } from '@/application/services';
 import { defaultAgentLimits, defaultSystemPrompt, contentLimits, type AgentLimits } from '@/core/agent/settings';
-import { Button, Field, T } from '@/features/workbench/ui';
-import { ConfigPage, FormScroll, Loading, Section, useConfiguration, useDraftGuard } from '@/features/model-config/common';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { ConfigPage, FormScroll, Loading, Section, useDraftGuard } from '@/shared/ui/forms';
+import { useAppServices } from '@/shared/hooks/use-app-services';
 
 const fields: { key: keyof AgentLimits; label: string; hint: string; unit: number }[] = [
   { key: 'maxModelRounds', label: '模型请求轮数', hint: '1–200 轮', unit: 1 },
@@ -15,7 +16,7 @@ const fields: { key: keyof AgentLimits; label: string; hint: string; unit: numbe
 ];
 const limitsDraft = (limits: Readonly<AgentLimits>) => Object.fromEntries(fields.map((field) => [field.key, String(limits[field.key] / field.unit)])) as Record<keyof AgentLimits, string>;
 export function AgentSettingsScreen() {
-  const controller = useConfiguration();
+  const controller = useAppServices();
   if (!controller.runtime) return <ConfigPage title="Agent 设置"><Loading />{!!controller.error && <T tone="danger">{controller.error}</T>}</ConfigPage>;
   return <Editor runtime={controller.runtime} />;
 }

@@ -1,12 +1,12 @@
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, View } from 'react-native';
-import type { TaskRecord } from '@/core/prototype/types';
-import type { ContentTrace, ToolTrace } from '@/core/prototype/trace';
-import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileText, Image, Search } from './icons';
-import { T } from './ui';
-import { useWorkbenchTheme } from './theme';
+import type { TaskRecord } from '@/core/runs/types';
+import type { ContentTrace, ToolTrace } from '@/core/trace';
+import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileText, Image, Search } from '@/shared/ui/icons';
+import { T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { Markdown } from './markdown';
-import { toolLabels } from './format';
+import { toolLabels } from '@/shared/format';
 
 const duration = (ms: number) => ms < 1000 ? '<1 秒' : ms < 60000 ? Math.floor(ms / 1000) + ' 秒' : Math.floor(ms / 60000) + ' 分 ' + Math.floor(ms % 60000 / 1000) + ' 秒';
 function Reasoning({ item }: { item: ContentTrace }) {

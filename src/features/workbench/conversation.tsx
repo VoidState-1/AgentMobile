@@ -3,14 +3,14 @@ import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View, us
 import {
   ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, Image as ImageIcon,
   Layers, Paperclip, PenLine, Sparkles, Square, X,
-} from './icons';
-import type { TaskRecord } from '@/core/prototype/types';
+} from '@/shared/ui/icons';
+import type { TaskRecord } from '@/core/runs/types';
 import { contentLimits } from '@/core/agent/settings';
 import type { Workbench } from './use-workbench';
-import { Brand, Button, IconButton, T } from './ui';
-import { useWorkbenchTheme } from './theme';
+import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 import { TaskTrace } from './trace';
-import { dateLabel, fileName } from './format';
+import { dateLabel, fileName } from '@/shared/format';
 
 function Exchange({ task, controller }: { task: TaskRecord; controller: Workbench }) {
   const theme = useWorkbenchTheme();

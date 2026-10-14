@@ -1,6 +1,8 @@
 import { Buffer } from 'buffer';
 import type { HostFileSystem, MetadataStore } from '@/core/storage/contracts';
-import type { Operation, Project, ProjectFile, TaskRecord } from '@/core/prototype/types';
+import type { Operation, ProjectFile } from '@/core/workspace/types';
+import type { Project } from '@/core/projects/types';
+import type { TaskRecord } from '@/core/runs/types';
 import type { GitBaseline, GitPort, GitStatus } from '@/core/git/contracts';
 import { isImage, mimeFor, safePath } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';

@@ -1,13 +1,12 @@
+import { geminiResource } from '@/core/models/model-id';
 import { useEffect, useRef, useState } from 'react';
-import { Platform, View } from 'react-native';
+import { View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ModelInput } from '@/core/models/service';
 import { defaultModelParameters, unknownCapabilities, type CapabilityName, type CheckKind, type ModelEntry } from '@/core/models/types';
 import { presetModelEvidence, protocolNames } from '@/core/models/presets';
-import { geminiResource } from '@/adapters/model/http';
-import { runDiagnostic } from '@/adapters/model/diagnostics';
-import { Button, Field, Sheet, T } from '@/features/workbench/ui';
-import { useWorkbenchUi } from '@/features/workbench/ui-store';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchUi } from '@/shared/state/workbench';
 import { CheckResult, Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useConfiguration, useDraftGuard, type ConfigurationController } from './common';
 
 const names: Record<CapabilityName, string> = { tools: '工具调用', images: '图片理解', reasoning: '思考能力' };
@@ -49,7 +48,7 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
   const test = (kind: CheckKind) => { void action(async () => {
     const abort = new AbortController(); probe.current = abort; setProbing(kind);
     try {
-      await runDiagnostic(runtime!.models, connectionId, model!.id, kind, Platform.OS === 'web' ? 'web' : Platform.OS === 'ios' ? 'ios' : 'android', abort.signal);
+      await runtime!.models.diagnose(connectionId, model!.id, kind, abort.signal);
       const current = runtime!.models.getSnapshot().models.find((item) => item.id === model!.id);
       if (current) { const next = edit(current); setDraft(next); setSaved(signature(next, output, temperature)); }
     }

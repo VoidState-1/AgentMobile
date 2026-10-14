@@ -1,5 +1,5 @@
 import { fetch } from 'expo/fetch';
-import type { ModelSettings } from '@/core/prototype/types';
+import type { ModelSettings } from '@/core/legacy/model-settings';
 
 export const deepseekSettings: ModelSettings = {
   mode: 'remote', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', imageInput: true,

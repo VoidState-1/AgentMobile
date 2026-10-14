@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { McpAttempt, McpServer, McpServerInput } from '@/core/mcp/types';
-import type { Project } from '@/core/prototype/types';
-import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/features/model-config/common';
-import { Button, Field, Sheet, T } from '@/features/workbench/ui';
-import { useWorkbenchTheme } from '@/features/workbench/theme';
-import { useWorkbenchUi } from '@/features/workbench/ui-store';
+import type { Project } from '@/core/projects/types';
+import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/shared/ui/forms';
+import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchUi } from '@/shared/state/workbench';
 import { useMcpConfiguration } from './common';
 
 const edit = (server: McpServer): McpServerInput => ({ id: server.id, name: server.name, url: server.url, auth: server.auth, enabled: server.enabled, timeoutMs: server.timeoutMs });
@@ -31,7 +31,7 @@ function ServerEditor({ controller, server }: { controller: ReturnType<typeof us
   useEffect(() => {
     let current = true;
     void runtime!.workspace.projects().then((values) => { if (current) setProjects(values); });
-    if (!selectedProject) void runtime!.metadata.get<{ projectId?: string }>('preferences', 'workbench').then((value) => { if (current) setProjectId(value?.projectId ?? ''); });
+    if (!selectedProject) void runtime!.preferences.getWorkbench().then((value) => { if (current) setProjectId(value?.projectId ?? ''); });
     return () => { current = false; };
   }, [runtime, selectedProject]);
   useEffect(() => {

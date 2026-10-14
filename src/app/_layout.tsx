@@ -2,7 +2,7 @@ import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 
-import { useWorkbenchTheme } from '@/features/workbench/theme';
+import { useWorkbenchTheme } from '@/shared/theme/use-theme';
 
 export default function RootLayout() {
   const theme = useWorkbenchTheme();
