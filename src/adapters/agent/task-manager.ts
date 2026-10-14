@@ -1,25 +1,27 @@
-import type { ModelConfigurationService } from '@/core/models/service';
+import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { ModelRunLease } from '@/core/models/types';
 import { mainSessionId, selectedModelMode } from '@/core/models/rules';
-import type { ConversationService } from '@/core/conversations/service';
+import type { ConversationService } from '@/application/conversations/service';
 import type { TaskRecord } from '@/core/runs/types';
 import { defaultSettings } from '@/core/legacy/model-settings';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import { startAgent } from './runner';
-import { defaultAgentSettings, type AgentSettingsService } from '@/core/agent/settings';
+import { defaultAgentSettings } from '@/core/agent/settings';
+import { type AgentSettingsService } from '@/application/settings/agent';
 import type { McpRuntime, McpRun } from '@/adapters/mcp/runtime';
-import type { SkillService } from '@/core/skills/service';
+import type { SkillService } from '@/application/skills/library';
 import { createSkillRun } from '@/adapters/skills/run';
+import { Signal } from '@/core/events/signal';
 
 /** Runtime owns execution; view subscriptions never own cancellation. */
 export class TaskManager {
   private state: { active?: TaskRecord; completed?: TaskRecord; error?: string; starting: boolean } = { starting: false };
-  private listeners = new Set<() => void>();
+  private readonly signal = new Signal();
   private cancellation?: () => void;
   constructor(private workspace: WorkspaceService, private models: ModelConfigurationService, private id: () => string, private web = false, private conversations?: ConversationService, private settings?: AgentSettingsService, private mcp?: McpRuntime, private skills?: SkillService) {}
   getSnapshot = () => this.state;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
-  private publish(value: typeof this.state) { this.state = value; this.listeners.forEach((listener) => listener()); }
+  subscribe = (listener: () => void) => this.signal.subscribe(listener);
+  private publish(value: typeof this.state) { this.state = value; this.signal.publish(); }
   cancel = () => this.cancellation?.();
   async start(projectId: string, prompt: string, imageAttached = false, conversationId = mainSessionId(projectId), draftRevision?: number): Promise<void> {
     if (this.state.starting || this.state.active) throw new Error('请等待当前任务完成。');

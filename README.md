@@ -22,7 +22,7 @@
 
 使用说明：[docs/prototype.md](docs/prototype.md)。技术设计：[docs/design.md](docs/design.md)。验证与限制：[docs/validation.md](docs/validation.md)。
 
-重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)。R0 分层入口、类型与共享界面已实现；父子任务、共享预算、并发和隔离提案尚待后续阶段。
+重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)。R0/R1 分层和职责拆分完成；R2 运行仓库与请求资源池进行中；子 Agent、共享预算、并发和隔离提案尚未交付。
 
 ## 开发
 

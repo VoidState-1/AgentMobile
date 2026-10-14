@@ -2,7 +2,11 @@ export interface MetadataStore {
   get<T>(bucket: string, id: string): Promise<T | undefined>;
   put<T>(bucket: string, id: string, value: T): Promise<void>;
   all<T>(bucket: string): Promise<T[]>;
+  /** Atomic metadata only; never combines Git, files or credentials. */
+  batch?(entries: readonly MetadataEntry[]): Promise<void>;
 }
+
+export interface MetadataEntry { bucket: string; id: string; value: unknown }
 
 export interface StorageStat {
   kind: 'file' | 'directory';

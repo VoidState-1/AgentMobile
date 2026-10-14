@@ -1,71 +1,46 @@
-import type { AppServices, WorkspaceOperationSummary } from '@/application/services';
-import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
+import { useConversationDraft } from '@/features/conversations/use-draft';
+import { useWorkbenchData } from './use-workbench-data';
+import { useGitActions } from '@/features/git/actions';
+import { useEditorActions } from './editor-actions';
+import { useEditorSession } from './use-editor-session';
+import type { Confirmation, Review, WorkbenchSheet } from './types';
+import type { AppServices } from '@/application/services';
+import { useEffect, useRef, useState } from 'react';
 import { Platform } from 'react-native';
-import { Buffer } from 'buffer';
 import { useRouter } from 'expo-router';
-import type { ProjectFile } from '@/core/workspace/types';
-import type { Project } from '@/core/projects/types';
 import type { TaskRecord } from '@/core/runs/types';
-import type { Version } from '@/core/git/types';
-import type { GitStatus } from '@/core/git/contracts';
-import { emptyModelConfiguration } from '@/core/models/types';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
-import { emptyConversationState, type Conversation } from '@/core/conversations/types';
-import { safePath, isImage, mimeFor } from '@/core/workspace/path';
-import { getAppServices } from '@/bootstrap';
+import type { Conversation } from '@/core/conversations/types';
+import { isImage } from '@/core/workspace/path';
 import { useWorkbenchUi } from '@/shared/state/workbench';
-import { fileName } from '@/shared/format';
-
-export interface EditorDocument {
-  projectId: string; path: string; revision: string | null; text: string; savedText: string;
-  name: string; savedName: string; image: boolean; reading: boolean; fresh: boolean;
-  externalChanged?: boolean;
-}
-export interface ReviewFile { path: string; kind: string; before: string; after: string }
-export interface Review { title: string; files: ReviewFile[]; restoreRef?: string; expectedHead?: string; task?: TaskRecord; area?: 'staged' | 'unstaged' }
-type Confirmation = { title: string; description: string; label: string; danger?: boolean; perform: () => Promise<void>; saveFirst?: boolean };
-type ComposerDraft = { conversationId?: string; text: string; attachment?: string };
 
 export function useWorkbench() {
   const ui = useWorkbenchUi();
   const router = useRouter();
-  const [runtime, setRuntime] = useState<AppServices>();
+
   const runtimeRef = useRef<AppServices | undefined>(undefined);
-  const [projects, setProjects] = useState<Project[]>([]);
-  const [files, setFiles] = useState<ProjectFile[]>([]);
-  const [versions, setVersions] = useState<Version[]>([]);
-  const [gitStatus, setGitStatus] = useState<GitStatus>();
-  const [tasks, setTasks] = useState<TaskRecord[]>([]);
-  const [operations, setOperations] = useState<WorkspaceOperationSummary[]>([]);
-  const [configuration, setConfiguration] = useState(emptyModelConfiguration());
-  const [conversationState, setConversationState] = useState(emptyConversationState());
-  const [loading, setLoading] = useState(true);
-  const [projectLoading, setProjectLoading] = useState(false);
+
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
-  const [active, setActive] = useState<TaskRecord>();
-  const [editor, setEditorState] = useState<EditorDocument>();
-  const editorRef = useRef<EditorDocument | undefined>(undefined);
-  const setEditor = useCallback((value: SetStateAction<EditorDocument | undefined>) => {
-    const next = typeof value === 'function' ? value(editorRef.current) : value;
-    editorRef.current = next; setEditorState(next);
-  }, []);
-  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name' | 'skills'>();
+
+  const editorSession = useEditorSession();
+  const { editor, editorRef, setEditor, dirty } = editorSession;
+  const [sheet, setSheet] = useState<WorkbenchSheet>();
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
   const [conversationToRename, setConversationToRename] = useState<string>();
-  const [composer, setComposer] = useState<ComposerDraft>({ text: '' });
-  const composerRef = useRef<ComposerDraft>({ text: '' });
-  const draftWrites = useRef(new Map<string, Promise<unknown>>());
-  const [draftSaved, setDraftSaved] = useState(true);
-  const [draftSaving, setDraftSaving] = useState(false);
+
   const [review, setReview] = useState<Review>();
   const [confirmation, setConfirmation] = useState<Confirmation>();
-  const refreshId = useRef(0);
+
+  const draft = useConversationDraft(runtimeRef, ui.conversationId, setError);
+  const { composer, composerRef, draftSaved, draftSaving, installConversation, setPrompt, setAttachment, flushDraft } = draft;
+  const { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, refresh } =
+    useWorkbenchData({ ui, runtimeRef, editorRef, setEditor, installConversation, setError });
+
   const selectedProject = projects.find((project) => project.id === ui.projectId);
-  const dirty = !!editor && (editor.fresh || editor.text !== editor.savedText || editor.name !== editor.savedName);
   const projectActive = active?.projectId === ui.projectId ? active : undefined;
   const selectedConversation = conversationState.conversations.find((item) => item.id === ui.conversationId && item.projectId === ui.projectId && !item.archivedAt);
   const conversations = conversationState.conversations.filter((item) => item.projectId === ui.projectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
@@ -77,130 +52,6 @@ export function useWorkbench() {
   const selectedConnection = configuration.connections.find((connection) => connection.id === selectedModel?.connectionId);
   const settings = { mode: selectedModelMode(configuration, ui.conversationId), model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false };
   const modelLabel = settings.mode === 'demo' ? '演示模式' : selectedModel ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name : '选择模型';
-
-  function installConversation(conversation: Conversation) {
-    const draft = runtimeRef.current?.conversations.getSnapshot().drafts[conversation.id];
-    const next = { conversationId: conversation.id, text: draft?.text ?? '', attachment: draft?.attachment };
-    composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
-  }
-  function writeComposer(next: ComposerDraft) {
-    composerRef.current = next; setComposer(next); const value = runtimeRef.current;
-    if (!value || !next.conversationId) return;
-    setDraftSaved(false); setDraftSaving(true);
-    const pending = value.conversations.saveDraft(next.conversationId, { text: next.text, attachment: next.attachment });
-    draftWrites.current.set(next.conversationId, pending);
-    void pending.then(() => { if (composerRef.current === next) { setDraftSaved(true); setDraftSaving(false); } }).catch(() => {
-      if (composerRef.current === next) { setDraftSaved(false); setDraftSaving(false); }
-      setError('草稿保存失败，请重试或复制输入内容后保留。');
-    });
-  }
-  function setPrompt(text: string) {
-    if (composerRef.current.conversationId !== ui.conversationId) return;
-    writeComposer({ ...composerRef.current, text });
-  }
-  function setAttachment(path?: string) {
-    if (composerRef.current.conversationId !== ui.conversationId) return;
-    writeComposer({ ...composerRef.current, attachment: path });
-  }
-  async function flushDraft(draft = composerRef.current) {
-    const value = runtimeRef.current;
-    if (!value || !draft.conversationId) return;
-    await draftWrites.current.get(draft.conversationId)?.catch(() => {});
-    const saved = await value.conversations.saveDraft(draft.conversationId, { text: draft.text, attachment: draft.attachment });
-    if (composerRef.current === draft) { setDraftSaved(true); setDraftSaving(false); }
-    return saved;
-  }
-
-  const refresh = useCallback(async (projectId?: string) => {
-    const value = runtimeRef.current;
-    if (!value) return;
-    const request = ++refreshId.current;
-    if (!projectId) { const nextProjects = await value.workspace.projects(); if (request === refreshId.current) setProjects(nextProjects); return; }
-    const open = editorRef.current;
-    const [snapshot, nextTasks, nextProjects] = await Promise.all([
-      value.workspace.snapshot(projectId, open?.projectId === projectId && !open.fresh ? open.path : undefined), value.tasks(projectId), value.workspace.projects(),
-    ]);
-    if (request !== refreshId.current || useWorkbenchUi.getState().projectId !== projectId) return;
-    setProjects(nextProjects); setFiles(snapshot.files.filter((file) => file.path !== 'project.json'));
-    setVersions(snapshot.versions); setGitStatus(snapshot.gitStatus); setTasks(nextTasks); setOperations(snapshot.operations);
-    const document = editorRef.current;
-    if (document && document.projectId === projectId && !document.fresh && open?.path === document.path && open.revision === document.revision) {
-      const current = snapshot.files.find((file) => file.path === document.path);
-      if (current?.revision !== document.revision) {
-        const modified = document.text !== document.savedText || document.name !== document.savedName;
-        if (modified) { const next = { ...document, externalChanged: true }; editorRef.current = next; setEditor(next); }
-        else if (!current) { editorRef.current = undefined; setEditor(undefined); }
-        else if (snapshot.preview?.path === document.path) {
-          const latest = snapshot.preview;
-          const next = { ...document, text: latest.content, savedText: latest.content, revision: latest.revision, externalChanged: false };
-          editorRef.current = next; setEditor(next);
-        }
-      }
-    }
-  }, [setEditor]);
-
-  useEffect(() => {
-    let mounted = true;
-    getAppServices().then(async (value) => {
-      const [list, preference] = await Promise.all([
-        value.workspace.projects(),
-        value.preferences.getWorkbench(),
-      ]);
-      if (!mounted) return;
-      runtimeRef.current = value; setRuntime(value); setProjects(list); setConfiguration(value.models.getSnapshot()); setConversationState(value.conversations.getSnapshot()); setActive(value.agent.getSnapshot().active);
-      if (preference?.appearance) useWorkbenchUi.getState().setAppearance(preference.appearance);
-      const selected = preference?.projectId && list.some((item) => item.id === preference.projectId) ? preference.projectId : list[0]?.id;
-      const conversation = selected ? await value.conversations.ensureProject(selected) : undefined;
-      if (!mounted) return;
-      if (conversation) installConversation(conversation);
-      useWorkbenchUi.getState().selectProject(selected, conversation?.id);
-      if (value.workspace.recoveryIssues.length) setError(value.workspace.recoveryIssues.join('\n'));
-    }).catch(() => { if (mounted) setError('暂时无法打开本地资料。请保留本地数据后重新打开应用。'); })
-      .finally(() => { if (mounted) setLoading(false); });
-    return () => { mounted = false; };
-  }, []);
-
-  useEffect(() => {
-    if (!runtime) return;
-    let disposed = false; let needed = false; let refreshing = false;
-    const requestRefresh = () => {
-      needed = true; if (refreshing) return; refreshing = true;
-      void (async () => {
-        while (needed && !disposed) {
-          needed = false;
-          try { await refresh(useWorkbenchUi.getState().projectId); }
-          catch { if (!disposed) setError('读取最新资料失败，请重新打开项目。'); }
-        }
-      })().finally(() => { refreshing = false; });
-    };
-    const workspaceSubscription = runtime.workspace.subscribe((change) => {
-      if (change.projectId === useWorkbenchUi.getState().projectId) requestRefresh();
-    });
-    const configSubscription = runtime.models.subscribe(() => setConfiguration(runtime.models.getSnapshot()));
-    const conversationSubscription = runtime.conversations.subscribe(() => setConversationState(runtime.conversations.getSnapshot()));
-    const taskSubscription = runtime.agent.subscribe(() => {
-      const state = runtime.agent.getSnapshot(); setActive(state.active);
-      if (!state.active && !state.starting) {
-        requestRefresh();
-        if (state.error || state.completed?.error) setError(state.error ?? state.completed?.error ?? '');
-      }
-    });
-    return () => { disposed = true; refreshId.current = refreshId.current + 1; workspaceSubscription(); configSubscription(); conversationSubscription(); taskSubscription(); };
-  }, [runtime, refresh]);
-
-  useEffect(() => {
-    if (!runtime || !ui.projectId) return;
-    let current = true;
-    Promise.resolve().then(() => { if (current) setProjectLoading(true); });
-    refresh(ui.projectId).catch(() => { if (current) setError('读取项目失败，请重新打开项目。'); })
-      .finally(() => { if (current) setProjectLoading(false); });
-    return () => { current = false; };
-  }, [runtime, ui.projectId, refresh]);
-
-  useEffect(() => {
-    if (!runtime) return;
-    void runtime.preferences.saveWorkbench({ projectId: ui.projectId, appearance: ui.appearance }).catch(() => {});
-  }, [runtime, ui.projectId, ui.appearance]);
 
   useEffect(() => {
     if (!notice) return;
@@ -221,45 +72,6 @@ export function useWorkbench() {
     try { await work(); return true; }
     catch (reason) { setError(reason instanceof Error ? reason.message : '操作失败，请重试。'); return false; }
     finally { busyRef.current = false; setBusy(false); }
-  }
-
-  async function persistEditor(close = false) {
-    const document = editorRef.current;
-    if (!runtime || !document) return;
-    if (active?.projectId === document.projectId) throw new Error('任务仍在运行，请停止或等待完成后保存。');
-    const name = document.name.trim();
-    if (!/^[^/\\]+\.(md|txt)$/i.test(name) && !document.image) throw new Error('文件名称请以 .md 或 .txt 结尾。');
-    let target = document.path;
-    if (document.fresh) {
-      target = 'documents/' + safePath(name);
-      await runtime.workspace.write(document.projectId, target, Buffer.from(document.text), null);
-    } else {
-      if (document.text !== document.savedText && !document.image) {
-        await runtime.workspace.write(document.projectId, document.path, Buffer.from(document.text), document.revision);
-      }
-      if (name !== document.savedName) {
-        target = document.path.slice(0, document.path.lastIndexOf('/') + 1) + safePath(name);
-        const current = await runtime.workspace.read(document.projectId, document.path);
-        await runtime.workspace.move(document.projectId, document.path, target, current.revision);
-      }
-    }
-    const current = await runtime.workspace.preview(document.projectId, target);
-    const saved = { ...document, path: target, revision: current.revision, fresh: false,
-      savedText: document.text, name: fileName(target), savedName: fileName(target) };
-    editorRef.current = saved; setEditor(close ? undefined : saved);
-    setNotice('文件已保存，可在 Git 面板暂存并提交。');
-    await refresh(ui.projectId);
-  }
-
-  function guard(next: () => void) {
-    const document = editorRef.current;
-    if (document && (document.fresh || document.text !== document.savedText || document.name !== document.savedName)) {
-      setConfirmation({
-        title: '有尚未保存的修改', description: '离开前保存文件，或放弃这次编辑。', label: '放弃修改',
-        danger: true, saveFirst: true,
-        perform: async () => { setEditor(undefined); editorRef.current = undefined; next(); },
-      });
-    } else next();
   }
 
   function selectProject(id: string) {
@@ -320,8 +132,6 @@ export function useWorkbench() {
     }); });
   }
 
-  function closeEditor() { guard(() => { setEditor(undefined); }); }
-
   async function createProject() {
     if (!runtime || !projectName.trim()) return;
     await action(async () => {
@@ -332,38 +142,8 @@ export function useWorkbench() {
     });
   }
 
-  async function openFile(file: ProjectFile) {
-    guard(() => {
-      void action(async () => {
-        if (!runtime || !ui.projectId) return;
-        const value = await runtime.workspace.preview(ui.projectId, file.path);
-        setEditor({ projectId: ui.projectId, path: file.path, name: fileName(file.path), savedName: fileName(file.path),
-          text: value.content, savedText: value.content, revision: value.revision, image: isImage(file.path), reading: true, fresh: false });
-      });
-    });
-  }
-
-  function newFile() {
-    if (!ui.projectId) return;
-    guard(() => setEditor({ projectId: ui.projectId!, path: 'documents/untitled.md', name: 'untitled.md', savedName: '',
-      text: '', savedText: '', revision: null, image: false, reading: false, fresh: true }));
-  }
-
   function newProject() {
     guard(() => { setEditor(undefined); setProjectName(''); setSheet('create'); });
-  }
-
-  async function importFile(attach = false) {
-    if (!runtime || !ui.projectId) return;
-    await action(async () => {
-      const selection = await runtime.io.pickFile();
-      if (!selection) return;
-      if (!/\.(md|txt|png|jpg|jpeg|webp)$/i.test(selection.name)) throw new Error('支持 Markdown、文本和 PNG/JPEG/WebP 图片。');
-      const path = (isImage(selection.name) ? 'assets/' : 'documents/') + safePath(selection.name);
-      await runtime.workspace.write(ui.projectId!, path, selection.bytes, null, { message: '导入 ' + selection.name });
-      setNotice('已导入 ' + selection.name); await refresh(ui.projectId);
-      if (attach) { setAttachment(path); setSheet(undefined); }
-    });
   }
 
   async function beginTask() {
@@ -376,7 +156,7 @@ export function useWorkbench() {
     const text = submitted.text.trim() + (submitted.attachment ? '\n\n参考文件：' + submitted.attachment : '');
     await runtime.agent.start(projectId, text, !!submitted.attachment && isImage(submitted.attachment), ui.conversationId, saved?.revision);
     if (composerRef.current === submitted) {
-      const next = { conversationId: ui.conversationId, text: '' }; composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
+      draft.clear();
     }
   }
 
@@ -407,102 +187,13 @@ export function useWorkbench() {
     guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
       requestAnimationFrame(() => router.push('/settings/agent')); });
   }
-  async function reviewTask(task: TaskRecord) {
-    if (!runtime) return;
-    await action(async () => {
-      const head = await runtime.workspace.head(task.projectId);
-      const scoped = await runtime.workspace.taskChanges(task);
-      setReview({ title: '任务的文件变化', files: scoped, task,
-        restoreRef: scoped.length ? task.baseSnapshot ?? task.baseCommit : undefined, expectedHead: head });
-    });
-  }
-
-  async function reviewVersion(version: Version) {
-    if (!runtime || !ui.projectId) return;
-    guard(() => { void action(async () => {
-      const head = await runtime.workspace.head(ui.projectId!);
-      const value = await runtime.workspace.changes(ui.projectId!, version.parentOid, version.oid);
-      setReview({ title: '版本 · ' + version.message.split('\n')[0], files: value,
-        restoreRef: version.oid !== head ? version.oid : undefined, expectedHead: head });
-    }); });
-  }
-
-  function confirmRestore() {
-    if (!runtime || !ui.projectId || !review?.restoreRef || !review.expectedHead) return;
-    if (dirty) { setError('请先保存或关闭正在编辑的文件，再恢复版本。'); return; }
-    const value = review;
-    setConfirmation({
-      title: value.task ? '撤销这次任务的修改？' : '恢复这个版本？',
-      description: value.task ? '将恢复本任务涉及文件及其暂存状态。已有提交历史保留；后续冲突会阻止撤销。' : '将这个提交的完整内容恢复到工作区。请先处理未提交更改，恢复后可自行暂存并提交。', label: '确认恢复',
-      perform: async () => {
-        if (value.task) await runtime.workspace.undoTask(value.task);
-        else await runtime.workspace.restore(ui.projectId!, value.restoreRef!, value.expectedHead!);
-        setReview(undefined); setEditor(undefined); await refresh(ui.projectId); setNotice('内容已恢复，历史记录已保留。');
-      },
-    });
-  }
-
-  async function reviewGit(area: 'staged' | 'unstaged', paths?: string[]) {
-    if (!runtime || !ui.projectId) return;
-    await action(async () => setReview({ title: area === 'staged' ? '已暂存的更改' : '未暂存的更改', area, files: await runtime.workspace.diff(ui.projectId!, area, paths) }));
-  }
-
-  async function changeStage(paths: string[], stage: boolean) {
-    if (!runtime || !ui.projectId || !gitStatus) return;
-    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
-    const expected = gitStatus;
-    await action(async () => {
-      if (stage) await runtime.workspace.stage(ui.projectId!, paths, { ...expected, revisions: Object.fromEntries(expected.files.filter((file) => paths.includes(file.path)).map((file) => [file.path, file.workingRevision])) });
-      else await runtime.workspace.unstage(ui.projectId!, paths, expected);
-      await refresh(ui.projectId);
-    });
-  }
-
-  async function commitGit(message: string) {
-    if (!runtime || !ui.projectId || !gitStatus) return;
-    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
-    const projectId = ui.projectId; const expected = gitStatus;
-    await action(async () => { await runtime.workspace.commitStaged(projectId, message, expected); ui.setCommitDraft(projectId, ''); await refresh(projectId); setNotice('已提交暂存更改。'); });
-  }
-
-  function discardGit(path: string) {
-    if (!runtime || !ui.projectId || !gitStatus) return;
-    if (dirty) { setError('请先保存或关闭编辑器中的修改。'); return; }
-    const projectId = ui.projectId; const expected = gitStatus;
-    setConfirmation({ title: '丢弃 ' + fileName(path) + ' 的未暂存更改？', description: '将恢复为暂存区内容。未跟踪文件会被移除。', label: '丢弃更改', danger: true,
-      perform: async () => { await runtime.workspace.discard(projectId, [path], expected); await refresh(projectId); setNotice('已丢弃未暂存更改。'); } });
-  }
-
-  function deleteEditor() {
-    if (!runtime || !editor || editor.fresh) return;
-    const document = editor;
-    setConfirmation({ title: '删除 ' + document.name + '？', description: '文件会从工作区移除，删除作为未暂存更改保留。',
-      label: '删除文件', danger: true,
-      perform: async () => {
-        await runtime.workspace.remove(document.projectId, document.path, document.revision!);
-        setEditor(undefined); await refresh(ui.projectId); setNotice('文件已删除。');
-      } });
-  }
-
-  async function renameEditor(name: string) {
-    if (!runtime || !editor || editor.fresh) return;
-    const document = editor;
-    await action(async () => {
-      const targetName = safePath(name.trim());
-      if (targetName.includes('/')) throw new Error('请输入文件名称，不包含文件夹路径。');
-      if (document.image ? mimeFor(targetName) !== mimeFor(document.path) : !/\.(md|txt)$/i.test(targetName)) {
-        throw new Error(document.image ? '请保留图片的原始格式扩展名。' : '文本文件请使用 .md 或 .txt。');
-      }
-      const target = document.path.slice(0, document.path.lastIndexOf('/') + 1) + targetName;
-      await runtime.workspace.move(document.projectId, document.path, target, document.revision!);
-      const current = await runtime.workspace.preview(document.projectId, target);
-      const saved = { ...document, path: target, name: targetName, savedName: targetName, revision: current.revision };
-      editorRef.current = saved; setEditor(saved); setSheet(undefined); await refresh(ui.projectId); setNotice('文件已重命名。');
-    });
-  }
 
   const changedPaths = (task: TaskRecord) => task.changedPaths ?? [...new Set(operations.filter((operation) => operation.runId === task.id)
     .flatMap((operation) => operation.changes.map((change) => change.path)))];
+
+  const editorActions = useEditorActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, ...editorSession, active, setSheet, setAttachment });
+  const { persistEditor, guard, closeEditor, openFile, newFile, importFile, deleteEditor, renameEditor } = editorActions;
+  const { reviewTask, reviewVersion, confirmRestore, reviewGit, changeStage, commitGit, discardGit } = useGitActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, gitStatus, dirty, review, setReview, setEditor, guard });
 
   return {
     ...ui, runtime, projects, selectedProject, files, versions, gitStatus, reviewGit, changeStage, commitGit, discardGit,
@@ -518,9 +209,10 @@ export function useWorkbench() {
     saveAndLeave: async () => {
       const next = confirmation;
       const saved = await action(async () => { await persistEditor(); await next?.perform(); setConfirmation(undefined); });
+      if (saved) next?.afterPerform?.();
       return saved;
     },
-    confirm: async () => { await action(async () => { await confirmation?.perform(); setConfirmation(undefined); }); },
+    confirm: async () => { const next = confirmation; const done = await action(async () => { await next?.perform(); setConfirmation(undefined); }); if (done) next?.afterPerform?.(); },
     exportEditor: () => action(async () => { if (runtime && editor) await runtime.io.exportFile(editor.projectId, editor.path); }),
     changedPaths,
   };

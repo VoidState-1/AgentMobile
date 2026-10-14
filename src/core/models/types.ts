@@ -116,3 +116,9 @@ export function unknownCapabilities(): ModelEntry['capabilities'] {
   return { tools: { support: 'unknown', source: 'user' }, images: { support: 'unknown', source: 'user' },
     reasoning: { support: 'unknown', source: 'user' } };
 }
+
+export type ConnectionInput = Omit<ProviderConnection, 'id' | 'credentialRef' | 'revision' | 'createdAt' | 'updatedAt' | 'check' | 'checkHistory' | 'catalogAt'> & { id?: string };
+export interface ModelInput {
+  id?: string; connectionId: string; apiId: string; name: string; enabled: boolean; favorite: boolean;
+  capabilities: Record<CapabilityName, ModelSupport>; parameters: ModelEntry['parameters'];
+}

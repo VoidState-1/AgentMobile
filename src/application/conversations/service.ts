@@ -1,10 +1,11 @@
-import type { MetadataStore } from '../storage/contracts';
+import { Signal } from '@/core/events/signal';
+import type { MetadataStore } from '@/core/storage/contracts';
 import type { Project } from '@/core/projects/types';
 import type { TaskRecord } from '@/core/runs/types';
-import { mainSessionId } from '../models/rules';
-import { safePath } from '../workspace/path';
-import { contentLimits } from '../agent/settings';
-import { emptyConversationState, type Conversation, type ConversationDraft, type ConversationState } from './types';
+import { mainSessionId } from '@/core/models/rules';
+import { safePath } from '@/core/workspace/path';
+import { contentLimits } from '@/core/agent/settings';
+import { emptyConversationState, type Conversation, type ConversationDraft, type ConversationState } from '@/core/conversations/types';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 function freeze<T>(value: T): T { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
@@ -14,17 +15,17 @@ const titleOf = (value: string) => value.trim().replace(/\s+/g, ' ').slice(0, 32
 export class ConversationService {
   private state = freeze(emptyConversationState());
   private queue: Promise<unknown> = Promise.resolve();
-  private listeners = new Set<() => void>();
+  private readonly signal = new Signal();
   private runs = new Map<string, number>();
   constructor(private metadata: MetadataStore, private id: () => string, private now = () => new Date().toISOString()) {}
   getSnapshot = () => this.state;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => this.signal.subscribe(listener);
   private exclusive<T>(work: () => Promise<T>): Promise<T> {
     const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next;
   }
   private async persist(next: ConversationState) {
     next.revision = this.state.revision + 1;
-    await this.metadata.put('conversations', 'state', next); this.state = freeze(clone(next)); this.listeners.forEach((listener) => listener());
+    await this.metadata.put('conversations', 'state', next); this.state = freeze(clone(next)); this.signal.publish();
   }
   private add(next: ConversationState, projectId: string, id = this.id(), title = '新对话'): Conversation {
     const time = this.now(); const conversation: Conversation = { id, projectId, title, titleSource: 'auto', createdAt: time, updatedAt: time };

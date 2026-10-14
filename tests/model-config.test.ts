@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { CredentialStore, MetadataStore } from '../src/core/storage/contracts';
-import { ModelConfigurationService } from '../src/core/models/service';
+import { ModelConfigurationService } from '@/application/models/configuration';
 import { configurationFingerprint, mainSessionId, selectedModelId } from '../src/core/models/rules';
 import { defaultModelParameters } from '../src/core/models/types';
 import type { ModelEntry, ProviderConnection } from '../src/core/models/types';

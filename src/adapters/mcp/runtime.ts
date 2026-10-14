@@ -1,6 +1,6 @@
 import { Buffer } from 'buffer';
 import type { MetadataStore } from '@/core/storage/contracts';
-import type { McpConfigurationService } from '@/core/mcp/service';
+import type { McpConfigurationService } from '@/application/mcp/configuration';
 import type { McpAttempt, McpLease } from '@/core/mcp/types';
 import { canonical } from '@/core/mcp/rules';
 import { validateImage } from '@/core/workspace/image';

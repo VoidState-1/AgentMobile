@@ -1,19 +1,20 @@
-import type { MetadataStore } from '../storage/contracts';
-import { emptySkillConfiguration, type SkillBundle, type SkillConfiguration, type SkillRepository } from './types';
-import { explicitSkills, SkillError, skillLimits, validateSkillMetadata } from './rules';
+import { Signal } from '@/core/events/signal';
+import type { MetadataStore } from '@/core/storage/contracts';
+import { emptySkillConfiguration, type SkillBundle, type SkillConfiguration, type SkillRepository } from '@/core/skills/types';
+import { explicitSkills, SkillError, skillLimits, validateSkillMetadata } from '@/core/skills/rules';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const freeze = <T>(value: T): T => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
 export class SkillService {
   private state = freeze(emptySkillConfiguration()); private queue: Promise<unknown> = Promise.resolve();
-  private listeners = new Set<() => void>(); private unsettled = false;
+  private readonly signal = new Signal(); private unsettled = false;
   constructor(private metadata: MetadataStore, readonly repository: SkillRepository) {}
   getSnapshot = () => this.state;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => this.signal.subscribe(listener);
   private exclusive<T>(work: () => Promise<T>): Promise<T> { const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next; }
   private async persist(value: SkillConfiguration) {
     value.revision = this.state.revision + 1; await this.metadata.put('skills', 'configuration', value); this.state = freeze(clone(value));
-    for (const listener of this.listeners) { try { listener(); } catch { /* A view cannot undo a committed configuration. */ } }
+    this.signal.publish();
   }
   async initialize() {
     await this.exclusive(async () => {

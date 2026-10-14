@@ -11,4 +11,3 @@ export const defaultSettings: ModelSettings = {
   model: '',
   imageInput: false,
 };
-

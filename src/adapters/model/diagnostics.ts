@@ -1,6 +1,6 @@
 import { normalizeContext, type Message, type Tool } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
-import type { ModelConfigurationService } from '@/core/models/service';
+import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { CheckKind, DiagnosticResult } from '@/core/models/types';
 import { configurationFingerprint } from '@/core/models/rules';
 import { discoverModels } from './catalog';

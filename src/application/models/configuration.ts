@@ -1,15 +1,13 @@
-import type { CredentialStore, MetadataStore } from '../storage/contracts';
+import { Signal } from '@/core/events/signal';
+import type { CredentialStore, MetadataStore } from '@/core/storage/contracts';
 import type { ModelSettings } from '@/core/legacy/model-settings';
-import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity, validateReasoningParameters } from './rules';
-import { presetModelEvidence } from './presets';
-import { defaultModelParameters, emptyModelConfiguration, unknownCapabilities } from './types';
-import type { CapabilityName, CheckKind, DiagnosticResult, DiscoveredModel, ModelConfiguration, ModelEntry, ModelRunLease, ModelSupport, ProviderConnection } from './types';
+import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity, validateReasoningParameters } from '@/core/models/rules';
+import { presetModelEvidence } from '@/core/models/presets';
+import { defaultModelParameters, emptyModelConfiguration, unknownCapabilities } from '@/core/models/types';
+import type { ConnectionInput, ModelInput, CheckKind, DiagnosticResult, DiscoveredModel, ModelConfiguration, ModelEntry, ModelRunLease, ProviderConnection } from '@/core/models/types';
 
-type ConnectionInput = Omit<ProviderConnection, 'id' | 'credentialRef' | 'revision' | 'createdAt' | 'updatedAt' | 'check' | 'checkHistory' | 'catalogAt'> & { id?: string };
-export interface ModelInput {
-  id?: string; connectionId: string; apiId: string; name: string; enabled: boolean; favorite: boolean;
-  capabilities: Record<CapabilityName, ModelSupport>; parameters: ModelEntry['parameters'];
-}
+
+
 interface KeyOperation { id: string; newRef?: string; retireRef?: string; retireLegacy?: boolean; state: 'prepared' | 'closed' }
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 function freeze<T>(value: T): T {
@@ -20,7 +18,7 @@ function freeze<T>(value: T): T {
 /** One atomic metadata record holds the graph; credentials use recoverable intents. */
 export class ModelConfigurationService {
   private state = freeze(emptyModelConfiguration());
-  private listeners = new Set<() => void>();
+  private readonly signal = new Signal();
   private queue: Promise<unknown> = Promise.resolve();
   private leases = new Map<string, number>();
   recoveryIssues: string[] = [];
@@ -28,14 +26,14 @@ export class ModelConfigurationService {
     private id: () => string, private now: () => string = () => new Date().toISOString()) {}
 
   getSnapshot = (): ModelConfiguration => this.state;
-  subscribe = (listener: () => void): (() => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void): (() => void) => this.signal.subscribe(listener);
   private async exclusive<T>(work: () => Promise<T>): Promise<T> {
     const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next;
   }
   private async persist(next: ModelConfiguration) {
     next.revision = this.state.revision + 1;
     await this.metadata.put('model-config', 'configuration', next);
-    this.state = freeze(clone(next)); this.listeners.forEach((listener) => listener());
+    this.state = freeze(clone(next)); this.signal.publish();
   }
   async initialize(): Promise<void> {
     await this.exclusive(async () => {

@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { Buffer } from 'node:buffer';
 import { zipSync } from 'fflate';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { SkillService } from '../src/core/skills/service';
+import { SkillService } from '@/application/skills/library';
 import { explicitSkills, skillPath } from '../src/core/skills/rules';
 import { GitSkillRepository } from '../src/adapters/skills/repository';
 import { createSkillRun } from '../src/adapters/skills/run';

@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { ConversationService } from '../src/core/conversations/service';
-import { ModelConfigurationService } from '../src/core/models/service';
+import { ConversationService } from '@/application/conversations/service';
+import { ModelConfigurationService } from '@/application/models/configuration';
 import { mainSessionId, selectedModelId, selectedModelMode } from '../src/core/models/rules';
 import { TaskManager } from '../src/adapters/agent/task-manager';
 import { WorkspaceService } from '../src/adapters/workspace/service';

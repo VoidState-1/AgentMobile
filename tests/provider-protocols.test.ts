@@ -4,7 +4,7 @@ import { normalizeContext, type Message } from '@earendil-works/pi-ai';
 import { protocolBody, protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { discoverModels } from '../src/adapters/model/catalog';
 import { diagnosticImage, runDiagnostic } from '../src/adapters/model/diagnostics';
-import { ModelConfigurationService } from '../src/core/models/service';
+import { ModelConfigurationService } from '@/application/models/configuration';
 import { WorkspaceService } from '../src/adapters/workspace/service';
 import { startAgent } from '../src/adapters/agent/runner';
 import type { CredentialStore } from '../src/core/storage/contracts';

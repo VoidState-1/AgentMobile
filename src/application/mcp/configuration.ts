@@ -1,20 +1,21 @@
-import type { CredentialStore, MetadataStore } from '../storage/contracts';
-import { canonical, mcpEndpoint, validateMcpServer } from './rules';
-import { emptyMcpConfiguration, type McpConfiguration, type McpLease, type McpServer, type McpServerInput, type McpServerSnapshot, type McpTool } from './types';
+import { Signal } from '@/core/events/signal';
+import type { CredentialStore, MetadataStore } from '@/core/storage/contracts';
+import { canonical, mcpEndpoint, validateMcpServer } from '@/core/mcp/rules';
+import { emptyMcpConfiguration, type McpConfiguration, type McpLease, type McpServer, type McpServerInput, type McpServerSnapshot, type McpTool } from '@/core/mcp/types';
 
 interface KeyIntent { id: string; newRef?: string; retireRef?: string; closed?: boolean }
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value));
 const freeze = <T>(value: T): T => { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; };
 export class McpConfigurationService {
   private state = freeze(emptyMcpConfiguration()); private queue: Promise<unknown> = Promise.resolve();
-  private listeners = new Set<() => void>(); private leases = new Map<string, number>();
+  private readonly signal = new Signal(); private leases = new Map<string, number>();
   constructor(private metadata: MetadataStore, private credentials: CredentialStore, private id: () => string) {}
   getSnapshot = () => this.state;
-  subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
+  subscribe = (listener: () => void) => this.signal.subscribe(listener);
   private exclusive<T>(work: () => Promise<T>): Promise<T> { const next = this.queue.then(work, work); this.queue = next.catch(() => {}); return next; }
   private async persist(next: McpConfiguration) {
     next.revision = this.state.revision + 1; await this.metadata.put('mcp-config', 'configuration', next);
-    this.state = freeze(clone(next)); for (const listener of this.listeners) { try { listener(); } catch { /* A view cannot roll back a committed configuration. */ } }
+    this.state = freeze(clone(next)); this.signal.publish();
   }
   async initialize() {
     await this.exclusive(async () => {

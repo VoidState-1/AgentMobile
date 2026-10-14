@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { ModelConfigurationService } from '../src/core/models/service';
+import { ModelConfigurationService } from '@/application/models/configuration';
 import { TaskManager } from '../src/adapters/agent/task-manager';
 import { testStorage } from './storage';
 import { answerEvents, streamed, toolEvents } from './protocol-fixtures';

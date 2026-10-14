@@ -4,4 +4,3 @@ export interface Version {
   message: string;
   timestamp: number;
 }
-

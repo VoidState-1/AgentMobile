@@ -1,8 +1,8 @@
 import type { AppServices } from '@/application/services';
-import type { ModelConfigurationService } from '@/core/models/service';
-import type { ConversationService } from '@/core/conversations/service';
-import type { AgentSettingsService } from '@/core/agent/settings';
-import type { SkillService } from '@/core/skills/service';
+import type { ModelConfigurationService } from '@/application/models/configuration';
+import type { ConversationService } from '@/application/conversations/service';
+import type { AgentSettingsService } from '@/application/settings/agent';
+import type { SkillService } from '@/application/skills/library';
 import { publicError } from '@/core/errors';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import type { McpRuntime } from '@/adapters/mcp/runtime';

@@ -20,6 +20,15 @@ export async function createStorage(): Promise<{
     'PRAGMA user_version = 1;',
   );
   const metadata: MetadataStore = {
+    async batch(entries) {
+      const rows = entries.map((entry) => ({ ...entry, payload: JSON.stringify(entry.value) }));
+      await db.withExclusiveTransactionAsync(async (transaction) => {
+        for (const row of rows) await transaction.runAsync(
+          'INSERT INTO records (bucket, id, payload) VALUES (?, ?, ?) ON CONFLICT(bucket, id) DO UPDATE SET payload = excluded.payload',
+          row.bucket, row.id, row.payload,
+        );
+      });
+    },
     async get<T>(bucket: string, id: string) {
       const row = await db.getFirstAsync<{ payload: string }>(
         'SELECT payload FROM records WHERE bucket = ? AND id = ?', bucket, id,

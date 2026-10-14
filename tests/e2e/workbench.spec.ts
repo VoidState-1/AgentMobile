@@ -62,6 +62,23 @@ test('未保存保护、独立编辑器和文件搜索', async ({ page }) => {
   await expect(page.getByText('这份草稿需要保留。', { exact: true })).toBeVisible();
 });
 
+test('未保存编辑切换项目，保存或放弃后都执行原来的导航动作', async ({ page }) => {
+  await page.goto('/'); await createProject(page, '编辑项目'); await createProject(page, '目标项目');
+  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click(); await openNote(page);
+  await page.getByLabel('正文', { exact: true }).fill('保存后应切换项目。');
+  await page.getByRole('button', { name: '切换到 目标项目', exact: true }).click();
+  await page.getByRole('button', { name: '保存后离开', exact: true }).click();
+  await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click(); await openNote(page);
+  await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');
+  await page.getByLabel('正文', { exact: true }).fill('应放弃的内容。');
+  await page.getByRole('button', { name: '切换到 目标项目', exact: true }).click();
+  await page.getByRole('button', { name: '放弃修改', exact: true }).click();
+  await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click(); await openNote(page);
+  await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');
+});
+
 test('深浅外观、项目切换和草稿保留', async ({ page }) => {
   await page.goto('/');
   await createProject(page, '项目一');

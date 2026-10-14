@@ -3,13 +3,13 @@ import type { Operation, ProjectFile } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
 import type { TaskRecord } from '@/core/runs/types';
 import type { GitStatus } from '@/core/git/contracts';
-import type { ModelConfigurationService } from '@/core/models/service';
+import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { CheckKind, DiagnosticResult } from '@/core/models/types';
-import type { ConversationService } from '@/core/conversations/service';
-import type { AgentSettingsService } from '@/core/agent/settings';
-import type { McpConfigurationService } from '@/core/mcp/service';
+import type { ConversationService } from '@/application/conversations/service';
+import type { AgentSettingsService } from '@/application/settings/agent';
+import type { McpConfigurationService } from '@/application/mcp/configuration';
 import type { McpAttempt } from '@/core/mcp/types';
-import type { SkillService } from '@/core/skills/service';
+import type { SkillService } from '@/application/skills/library';
 import type { SkillBundle, SkillRepository } from '@/core/skills/types';
 import type { PreferencesService } from './settings/preferences';
 

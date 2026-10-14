@@ -27,6 +27,16 @@ export async function createStorage(): Promise<{
     });
   }
   const metadata: MetadataStore = {
+    async batch(entries) {
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction('records', 'readwrite'); const store = transaction.objectStore('records');
+        transaction.oncomplete = () => resolve();
+        transaction.onerror = () => reject(transaction.error);
+        transaction.onabort = () => reject(transaction.error ?? new Error('浏览器存储操作中断'));
+        try { for (const entry of entries) store.put(entry.value, entry.bucket + '/' + entry.id); }
+        catch (error) { transaction.abort(); reject(error); }
+      });
+    },
     async get<T>(bucket: string, id: string) {
       return await transact('records', 'readonly', (store) => store.get(bucket + '/' + id)) as T | undefined;
     },

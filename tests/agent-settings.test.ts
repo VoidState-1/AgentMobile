@@ -1,9 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext } from '@earendil-works/pi-ai';
-import { AgentSettingsService, contentLimits, defaultAgentSettings, effectiveSystemPrompt, validateAgentSettings } from '../src/core/agent/settings';
+import { contentLimits, defaultAgentSettings, effectiveSystemPrompt, validateAgentSettings } from '@/core/agent/settings';
+import { AgentSettingsService } from '@/application/settings/agent';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { ConversationService } from '../src/core/conversations/service';
+import { ConversationService } from '@/application/conversations/service';
 import { startAgent } from '../src/adapters/agent/runner';
 import { protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { validateModelEntity } from '../src/core/models/rules';

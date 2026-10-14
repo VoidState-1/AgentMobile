@@ -1,6 +1,6 @@
 # Agent Mobile 新架构方案
 
-日期：2026-10-14。状态：实施中。R0 已完成；R1–R5 尚未完成。
+日期：2026-10-14。状态：实施中。R0/R1 已完成；R2 进行中，R3–R5 尚未完成。
 
 基线：`42403cf`，现有 React Native / Expo / TypeScript、Pi Agent Core、三类模型协议、远程 MCP、Agent Skills 和真实 Git 工作流。基线已通过 130 项单元测试和 35 项浏览器回归；这些结果不代表本文提出的多 Agent 能力已通过验证。
 
@@ -318,6 +318,12 @@ R0/R1 每次只迁移一个职责，使用临时兼容 facade 保持调用者工
 
 R0 已完成：正式领域类型归位；bootstrap 组装入口与运行时真实裁剪的 AppServices；界面文件/Git/配置/导入导出通过该入口；平台错误清理；共享组件/主题/状态归位；ESLint 分层限制；未使用的早期契约移除。旧任务/轨迹保留兼容导出，不迁移存储数据。
 
-R0 验证：npm run check 通过（134 项测试，包含真实 facade 权限边界与导入限制）；35 条浏览器回归通过；Web 与 Android/iOS JS/Hermes 导出通过。原生设备操作会在工作区/运行内核重构后执行；当前仍为全局单任务，没有新增多 Agent 功能。R1–R5 继续按第 14 节实施与验收。
+R0 验证：npm run check 通过（134 项测试，包含真实 facade 权限边界与导入限制）；35 条浏览器回归通过；Web 与 Android/iOS JS/Hermes 导出通过。
+
+R1 已完成：WorkspaceApplication 组合 Reader/FileCommands/GitService/RunSnapshots/MutationCoordinator，共享唯一队列与日志；编码由 ContentCodec 端口提供。模型/MCP/Skills/对话/Agent 设置用例迁入 application。工具按四组注册并标注副作用；PiEngineAdapter 只负责 SDK 绑定与事件映射，应用 RunController/RunRecorder/上下文/预算独立。三协议请求编码与流解析拆分。工作台拆出数据订阅、编辑器、Git 和草稿控制器；修复未保存确认后原导航被 busy 锁丢弃的问题。终态落库、释放项目租约后才发布完成，初始任务视图不再引用内部可变任务。
+
+R1 验证：136 项测试、36 条浏览器回归、三平台导出通过。Android API 36.1 x86_64 隔离模拟器完成 Git/index/工作区与回执恢复、两代 MCP/未知回执、Skills 自动/明确加载与版本更新流程；SQLite 和标准 Git 仓库核对通过。R1 未启用多 Agent。
+
+R2 进行中：请求槽公平队列与取消/前后台准入、Run/LaunchSnapshot/AgentDefinition 类型、RunRepository 版本化存储/索引/旧任务迁移/原子子创建回执已建立，5 项单元验证通过。SQLite/IndexedDB 已增加原子元数据批次端口；新运行仓库尚未接入实际启动/执行，原生新事务与运行树恢复仍待验证。共享组预算、运行调度/资源租约、界面接入和 R3–R5 仍需继续完成。
 
 当前继续沿用 isomorphic-git、SQLite/IndexedDB、SecureStore、Pi 与现有三协议；libgit2、后台执行、独立角色编辑器、token/费用硬预算、上下文自动压缩、提案自动合并、仓库导出/GC 与网页沙箱分别列为后续能力，按实际需求和设备验证推进。

@@ -8,6 +8,10 @@ export async function testStorage() {
   const records = new Map<string, unknown>();
   const resolve = (internal: string) => path.join(root, internal.replace(/^\/+/, ''));
   const metadata: MetadataStore = {
+    batch: async (entries) => {
+      const copies = entries.map((entry) => [entry.bucket + '/' + entry.id, structuredClone(entry.value)] as const);
+      for (const [key, value] of copies) records.set(key, value);
+    },
     get: async <T>(bucket: string, id: string) => structuredClone(records.get(bucket + '/' + id)) as T | undefined,
     put: async (bucket, id, value) => { records.set(bucket + '/' + id, structuredClone(value)); },
     all: async <T>(bucket: string) => [...records.entries()].filter(([key]) => key.startsWith(bucket + '/')).map(([, value]) => structuredClone(value) as T),

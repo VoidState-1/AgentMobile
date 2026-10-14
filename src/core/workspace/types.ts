@@ -31,3 +31,5 @@ export interface Operation {
   createdAt: string;
 }
 
+
+export interface WorkspaceChange { projectId: string; paths: readonly string[]; commit: string }

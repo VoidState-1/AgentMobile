@@ -1,6 +1,6 @@
 import { createHash, randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { McpConfigurationService } from '../src/core/mcp/service';
+import { McpConfigurationService } from '@/application/mcp/configuration';
 import { mcpEndpoint } from '../src/core/mcp/rules';
 import { McpRuntime } from '../src/adapters/mcp/runtime';
 import type { CredentialStore } from '../src/core/storage/contracts';
