@@ -179,7 +179,7 @@ P0 已实现：
 - 任务启动时冻结公开配置快照，密钥保留在宿主租约；打开配置、修改参数和密钥不改变运行任务。历史任务显示当时连接与模型，旧任务标记未知。
 - 完整配置页面、深浅主题、固定保存区、键盘避让、离开/刷新未保存保护。配置和运行生命周期已分离。
 
-实施位置：src/core/models（实体/规则/迁移/服务）、src/adapters/model（三协议/目录/检测）、src/adapters/agent/task-manager.ts（执行所有权）、src/features/model-config（页面/选择器）。
+实施位置：src/core/models（实体/规则）、src/application/models/configuration.ts（配置服务与迁移）、src/adapters/model（三协议/目录/检测）、src/application/runs/kernel.ts（执行所有权）、src/adapters/agent/resources.ts（冻结模型租约）、src/features/model-config（页面/选择器）。
 
 已通过的验证与原生进度详见 [validation.md](validation.md)。官方 Anthropic/Gemini 凭证暂不可用，本轮未执行这些供应商的真实付费调用。模拟验证证明协议组装、解析和宿主闭环，官方模型、账号权限、服务限额与实际网络仍需实测。
 

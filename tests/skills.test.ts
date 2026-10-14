@@ -8,10 +8,9 @@ import { GitSkillRepository } from '../src/adapters/skills/repository';
 import { createSkillRun } from '../src/adapters/skills/run';
 import { decodeSkillText, exportSkillPackage, importSkillPackage, parseSkill, validateBundle } from '../src/adapters/skills/package';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
-import { defaultAgentSettings } from '../src/core/agent/settings';
+import { startTestRun } from './agent-runtime';
 import { testStorage } from './storage';
-import { protocols, snapshot, toolEvents, answerEvents, sse } from './protocol-fixtures';
+import { chatSnapshot, protocols, snapshot, toolEvents, answerEvents, sse } from './protocol-fixtures';
 import { skillSource } from './skills-fixtures';
 
 const skillBundle = (version = 'VERSION_ONE') => validateBundle([{ path: 'SKILL.md', bytes: Buffer.from(skillSource('note-workflow', version)) },
@@ -126,8 +125,7 @@ describe('真实 Pi 任务中的技能', () => {
           toolEvents(protocol, 'write_text', { path: 'documents/skill-result.md', text: '来源、重点、待确认事项。', expectedRevision: null }) : answerEvents(protocol, '已按技能整理资料。');
       return new Response(sse(events), { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const model = snapshot(protocol); const started = await startAgent(workspace, project.id, '整理资料', { mode: 'remote', baseUrl: model.baseUrl, model: model.apiModelId, imageInput: false }, 'fixture-key', randomUUID,
-      () => {}, model, false, undefined, undefined, defaultAgentSettings(), undefined, run);
+    const model = snapshot(protocol); const started = await startTestRun(workspace, project.id, '整理资料', { model: model, secret: 'fixture-key', skills: run });
     const task = await started.done; expect(task.state).toBe('completed'); expect(task.skillActivations).toMatchObject([{ name: skill.name, source: 'agent' }]);
     expect(JSON.stringify(requests[0])).toContain('note-workflow'); expect(JSON.stringify(requests[0])).not.toContain('VERSION_ONE');
     expect(JSON.stringify(requests[1])).toContain('VERSION_ONE'); expect(JSON.stringify(requests[1])).not.toContain('RESOURCE_ONE'); expect(JSON.stringify(requests[2])).toContain('RESOURCE_ONE');
@@ -138,11 +136,10 @@ describe('真实 Pi 任务中的技能', () => {
     await f.service.install([skillBundle()], f.service.getSnapshot().commit); const skill = f.service.getSnapshot().skills[0]; await f.service.grant(project.id, skill.name, true, skill.revision);
     const requests: any[] = []; vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { requests.push(JSON.parse(String(init.body))); return new Response(sse(answerEvents('chat-completions', '已使用技能。')), { headers: { 'Content-Type': 'text/event-stream' } }); });
     const run = createSkillRun(f.repository, await f.service.capture(project.id, '$note-workflow 整理'));
-    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test', model: 'fixture', imageInput: false };
-    const started = await startAgent(workspace, project.id, '$note-workflow 整理', settings, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, defaultAgentSettings(), undefined, run);
+    const settings = chatSnapshot({ baseUrl: 'https://example.test', apiModelId: 'fixture' });
+    const started = await startTestRun(workspace, project.id, '$note-workflow 整理', { model: settings, secret: 'fixture', skills: run });
     const task = await started.done; expect(task.trace?.[0]).toMatchObject({ tool: 'load_skill', target: 'note-workflow', state: 'completed' }); expect(task.skillActivations?.[0].source).toBe('explicit');
     expect(JSON.stringify(requests[0])).toContain('VERSION_ONE');
-    const next = await startAgent(workspace, project.id, '继续', settings, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, defaultAgentSettings(), undefined,
-      createSkillRun(f.repository, await f.service.capture(project.id, '继续'))); await next.done; expect(JSON.stringify(requests[1])).not.toContain('VERSION_ONE');
+    const next = await startTestRun(workspace, project.id, '继续', { model: settings, secret: 'fixture', skills: createSkillRun(f.repository, await f.service.capture(project.id, '继续')) }); await next.done; expect(JSON.stringify(requests[1])).not.toContain('VERSION_ONE');
   });
 });

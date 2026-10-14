@@ -2,8 +2,10 @@ import { randomUUID } from 'node:crypto';
 import { execFileSync } from 'node:child_process';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
-import type { Operation, TaskRecord } from '../src/core/prototype/types';
+import { startTestRun } from './agent-runtime';
+import { chatSnapshot } from './protocol-fixtures';
+import type { Operation } from '../src/core/workspace/types';
+import type { TaskRecord } from '../src/core/runs/types';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -166,7 +168,7 @@ it('Pi 通过明确 Git 工具完成一次提交，其他用户暂存内容不�
     const event = name ? { choices: [{ delta: { tool_calls: [{ index: 0, id: 'call_git_' + round, function: { name, arguments: JSON.stringify(args) } }] }, finish_reason: 'tool_calls' }] } : { choices: [{ delta: { content: '已提交 Agent 文档。' }, finish_reason: 'stop' }] };
     return new Response('data: ' + JSON.stringify(event) + '\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
   });
-  const started = await startAgent(f.workspace, f.project.id, '写文档并提交', { mode: 'remote', model: 'test', baseUrl: 'https://example.test/v1', imageInput: false }, 'test-only', randomUUID, () => {});
+  const started = await startTestRun(f.workspace, f.project.id, '写文档并提交', { model: chatSnapshot({ apiModelId: 'test', baseUrl: 'https://example.test/v1' }), secret: 'test-only' });
   const task = await started.done; expect(task.state).toBe('completed'); expect(task.events.every((event) => event.state === 'done')).toBe(true);
   expect(writeResult).toMatchObject({ saved: true }); expect(writeResult.commit).toBeUndefined(); expect(task.finalCommit).not.toBe(task.baseCommit); expect(task.uncommittedPaths).toEqual([]);
   expect(f.cli('rev-list', '--count', 'HEAD').trim()).toBe('2'); expect(f.cli('ls-tree', '--name-only', 'HEAD')).not.toContain('user.md'); expect(f.cli('status', '--porcelain')).toContain('A  user.md');

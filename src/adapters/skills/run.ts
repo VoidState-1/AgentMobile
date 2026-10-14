@@ -39,4 +39,3 @@ export function createSkillRun(repository: SkillRepository, capture: { skills: r
     },
   };
 }
-export type SkillRun = ReturnType<typeof createSkillRun>;

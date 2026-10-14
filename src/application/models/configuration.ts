@@ -1,6 +1,6 @@
 import { Signal } from '@/core/events/signal';
 import type { CredentialStore, MetadataStore } from '@/core/storage/contracts';
-import type { ModelSettings } from '@/core/legacy/model-settings';
+import type { LegacyModelSettings } from '@/core/legacy/model-settings';
 import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity, validateReasoningParameters } from '@/core/models/rules';
 import { presetModelEvidence } from '@/core/models/presets';
 import { defaultModelParameters, emptyModelConfiguration, unknownCapabilities } from '@/core/models/types';
@@ -46,7 +46,7 @@ export class ModelConfigurationService {
     });
   }
   private async migrateLegacy() {
-    const legacy = await this.metadata.get<ModelSettings>('settings', 'model');
+    const legacy = await this.metadata.get<LegacyModelSettings>('settings', 'model');
     const next = emptyModelConfiguration(); next.migratedLegacy = true;
     if (!legacy?.baseUrl || !legacy.model) { await this.persist(next); return; }
     const time = this.now();

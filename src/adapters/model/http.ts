@@ -1,11 +1,10 @@
 import { fetch } from 'expo/fetch';
 import type { ModelRunSnapshot, ProviderConnection } from '@/core/models/types';
 import { normalizedServiceAddress } from '@/core/models/rules';
-import { ModelServiceError } from './settings';
 import { SseDecoder } from './sse';
 import { contentLimits, defaultAgentLimits } from '@/core/agent/settings';
 
-import { ProtocolError } from '@/core/models/errors';
+import { ModelServiceError, ProtocolError } from '@/core/models/errors';
 import { geminiResource } from '@/core/models/model-id';
 export { ProtocolError, geminiResource };
 export function safeModelError(error: unknown, aborted = false): string {

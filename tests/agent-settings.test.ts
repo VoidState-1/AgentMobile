@@ -5,11 +5,11 @@ import { contentLimits, defaultAgentSettings, effectiveSystemPrompt, validateAge
 import { AgentSettingsService } from '@/application/settings/agent';
 import { WorkspaceService } from '../src/adapters/workspace/service';
 import { ConversationService } from '@/application/conversations/service';
-import { startAgent } from '../src/adapters/agent/runner';
+import { startTestRun } from './agent-runtime';
 import { protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { validateModelEntity } from '../src/core/models/rules';
 import { defaultModelParameters, unknownCapabilities } from '../src/core/models/types';
-import { answerEvents, snapshot, streamed, toolEvents, sse } from './protocol-fixtures';
+import { chatSnapshot, answerEvents, snapshot, streamed, toolEvents, sse } from './protocol-fixtures';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
@@ -20,7 +20,7 @@ async function fixture() {
   const settings = new AgentSettingsService(storage.metadata); await settings.initialize();
   return { ...storage, workspace, project, settings };
 }
-const remote = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+const remote = chatSnapshot({ baseUrl: 'https://example.test/v1', apiModelId: 'test' });
 
 describe('Agent 设置持久化', () => {
   it('首次使用新默认预算，保存后重启恢复；快照不可修改', async () => {
@@ -55,7 +55,7 @@ describe('长任务真实 Pi 循环', () => {
   it('执行 35 次工具操作，不再触及旧的 10 轮/30 次上限', async () => {
     const f = await fixture(); let rounds = 0;
     vi.stubGlobal('fetch', async () => streamed(++rounds <= 35 ? toolEvents('chat-completions', 'list_files') : answerEvents('chat-completions', '长任务已完成。')));
-    const run = await startAgent(f.workspace, f.project.id, '请处理长任务', remote, 'fixture', randomUUID, () => {});
+    const run = await startTestRun(f.workspace, f.project.id, '请处理长任务', { model: remote, secret: 'fixture' });
     const task = await run.done; expect(task.state).toBe('completed'); expect(rounds).toBe(36);
     expect(task.events.filter((event) => event.state === 'done')).toHaveLength(35);
     expect(task.agentSettingsSnapshot?.limits.maxToolCalls).toBe(200);
@@ -63,10 +63,10 @@ describe('长任务真实 Pi 循环', () => {
   it('用户设置的轮数与工具次数仍执行，错误明确说明触及的预算', async () => {
     const f = await fixture(); vi.stubGlobal('fetch', async () => streamed(toolEvents('chat-completions', 'list_files')));
     const value = defaultAgentSettings(); value.limits.maxModelRounds = 2;
-    const rounds = await startAgent(f.workspace, f.project.id, 'test', remote, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, value);
+    const rounds = await startTestRun(f.workspace, f.project.id, 'test', { model: remote, secret: 'fixture', settings: value });
     expect((await rounds.done).error).toContain('模型请求上限（2 轮）');
     value.limits.maxModelRounds = 10; value.limits.maxToolCalls = 2;
-    const tools = await startAgent(f.workspace, f.project.id, 'test', remote, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, value);
+    const tools = await startTestRun(f.workspace, f.project.id, 'test', { model: remote, secret: 'fixture', settings: value });
     expect((await tools.done).error).toContain('工具调用上限（2 次）');
     f.workspace.claim(f.project.id, 'new-owner'); f.workspace.release(f.project.id, 'new-owner');
   });
@@ -75,10 +75,10 @@ describe('长任务真实 Pi 循环', () => {
     for (let index = 0; index < 8; index++) await f.metadata.put('tasks', 'history-' + index, { id: 'history-' + index, projectId: f.project.id,
       prompt: 'HISTORY_' + index, response: 'REPLY_' + index, mode: 'remote', state: 'completed', events: [], baseCommit: '', createdAt: '2026-10-14T00:00:0' + index + 'Z' });
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { requests.push(JSON.parse(String(init.body))); return streamed(answerEvents('chat-completions', '完成。')); });
-    const run = await startAgent(f.workspace, f.project.id, 'current', remote, 'fixture', randomUUID, () => {}); await run.done;
+    const run = await startTestRun(f.workspace, f.project.id, 'current', { model: remote, secret: 'fixture' }); await run.done;
     expect(requests[0].messages.filter((message: any) => message.role === 'user')).toHaveLength(9);
     const settings = defaultAgentSettings(); settings.limits.historyTasks = 0;
-    const next = await startAgent(f.workspace, f.project.id, 'no-history', remote, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, settings); await next.done;
+    const next = await startTestRun(f.workspace, f.project.id, 'no-history', { model: remote, secret: 'fixture', settings: settings }); await next.done;
     expect(requests[1].messages.filter((message: any) => message.role === 'user')).toHaveLength(1);
     expect(JSON.stringify(requests[1])).not.toContain('HISTORY_');
   });
@@ -90,16 +90,16 @@ describe('长任务真实 Pi 循环', () => {
       requests.push(JSON.parse(String(init.body))); if (requests.length === 1) { await held; return streamed(toolEvents('chat-completions', 'list_files')); }
       return streamed(answerEvents('chat-completions', '完成。'));
     });
-    const run = await startAgent(f.workspace, f.project.id, 'test', remote, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, old);
+    const run = await startTestRun(f.workspace, f.project.id, 'test', { model: remote, secret: 'fixture', settings: old });
     await vi.waitFor(() => expect(requests).toHaveLength(1));
     const updated = await f.settings.save({ ...old, systemPrompt: 'UPDATED_PROMPT', limits: { ...old.limits, maxModelRounds: 80 } }, 1);
     release(); const task = await run.done;
     expect(task.agentSettingsSnapshot?.systemPrompt).toBe('INITIAL_PROMPT'); expect(task.agentSettingsSnapshot?.revision).toBe(1);
     expect(Object.isFrozen(task.agentSettingsSnapshot)).toBe(true); expect(Object.isFrozen(task.agentSettingsSnapshot?.limits)).toBe(true);
     for (const request of requests) expect(request.messages[0].content).toContain('INITIAL_PROMPT');
-    const next = await startAgent(f.workspace, f.project.id, 'next', remote, 'fixture', randomUUID, () => {}, undefined, false, undefined, undefined, updated);
+    const next = await startTestRun(f.workspace, f.project.id, 'next', { model: remote, secret: 'fixture', settings: updated });
     await next.done; expect(requests[2].messages[0].content).toContain('UPDATED_PROMPT');
-    expect((await f.metadata.get<any>('tasks', task.id)).agentSettingsSnapshot.systemPrompt).toBe('INITIAL_PROMPT');
+    expect((await f.metadata.get<any>('runs-v2', task.id)).agentSettingsSnapshot.systemPrompt).toBe('INITIAL_PROMPT');
   });
   it('大文本写入和分页读取保留完整版本，实际响应可超过旧的 512 KB', async () => {
     const f = await fixture(); const text = '资料'.repeat(100_000); const requests: any[] = [];
@@ -108,7 +108,7 @@ describe('长任务真实 Pi 循环', () => {
       return new Response(sse(requests.length === 1 ? toolEvents('chat-completions', 'write_text', { path: 'documents/long.md', text, expectedRevision: null }) :
         requests.length === 2 ? toolEvents('chat-completions', 'read_text', { path: 'documents/long.md', offset: 12000, length: 16000 }) : answerEvents('chat-completions', '保存成功。')), { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const run = await startAgent(f.workspace, f.project.id, 'test', remote, 'fixture', randomUUID, () => {});
+    const run = await startTestRun(f.workspace, f.project.id, 'test', { model: remote, secret: 'fixture' });
     expect((await run.done).state).toBe('completed'); expect((await f.workspace.readText(f.project.id, 'documents/long.md')).text).toBe(text);
     const reading = requests[2].messages.filter((message: any) => message.role === 'tool').at(-1);
     expect(JSON.parse(reading.content)).toMatchObject({ text: text.slice(12000, 28000), offset: 12000, nextOffset: 28000, truncated: true, totalCharacters: 200000 });
@@ -141,11 +141,11 @@ describe('长任务真实 Pi 循环', () => {
     } }), { headers: { 'Content-Type': 'text/event-stream' } }));
     const configured = defaultAgentSettings(); configured.limits.maxRuntimeMs = 60_000; configured.limits.requestTimeoutMs = 60_000;
     let received!: () => void; const generating = new Promise<void>((resolve) => { received = resolve; });
-    const run = await startAgent(f.workspace, f.project.id, 'test', remote, 'fixture', randomUUID,
-      (task) => { if (task.trace?.some((item) => item.kind === 'reasoning' && item.text)) received(); }, undefined, false, undefined, undefined, configured);
+    const run = await startTestRun(f.workspace, f.project.id, 'test', { model: remote, secret: 'fixture', update: (task) => { if (task.trace?.some((item) => item.kind === 'reasoning' && item.text)) received(); }, settings: configured });
     await generating; await vi.advanceTimersByTimeAsync(60_000); const task = await run.done;
-    expect(task.state).toBe('failed'); expect(task.error).toContain('任务总时长上限（1 分钟）');
+    expect(task.state).toBe('failed'); expect(task.error).toContain('任务组总时长上限（1 分钟）');
     expect(task.trace?.[0]).toMatchObject({ text: '正在核对资料', state: 'error' });
-    expect(await f.metadata.get('tasks', task.id)).toEqual(task);
+    expect(await run.kernel.repository.view(task.id)).toEqual(task);
+    expect(await f.metadata.get('tasks', task.id)).toBeUndefined();
   });
 });

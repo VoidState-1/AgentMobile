@@ -60,6 +60,7 @@ it('入队冻结配置、消费精确草稿；真实开始时捕获基线，历�
   await f.workspace.write(f.project.id, 'documents/new.md', contentCodec.encodeText('最新基线'), null, { owner: firstRun.id });
   first.release(); await idle(f.kernel);
   const task = (await f.repository.views(f.project.id)).find((run) => run.id === queued.id)!;
+  expect(queued.state).toBe('queued'); // Published snapshots remain unchanged after execution.
   expect(task.state).toBe('completed'); expect(task.agentSettingsSnapshot!.systemPrompt).toBe(initial.systemPrompt);
   expect(contentCodec.decodeText((await f.workspace.git.tree(f.project.id, task.baseSnapshot!))['documents/new.md'])).toBe('最新基线');
   expect(await f.metadata.all('tasks')).toEqual([]); expect(await f.repository.transcript(task.id)).toBeDefined();

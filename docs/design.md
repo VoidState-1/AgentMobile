@@ -5,6 +5,8 @@
 
 新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：R0–R5 原型实施与阶段验证完成。实际执行使用 RunKernel、v2 运行仓库、组预算与请求池；两个不同项目根任务并行，同项目排队；一层 reader/reviewer 只读子 Agent 与 writer 隔离提案、冲突预检/可恢复合入、整组撤销已接入。
 
+2026-10-14 冗余清理：移除旧 TaskManager/startAgent、旧模型传输/检测接口、旧单任务预算与 tasks/transcripts 写入回退，运行控制器必须由内核提供执行资源；Agent、协议、MCP、Skills 回归统一通过 RunKernel 和 v2 仓库验证。旧模型配置、tasks 和 transcript 的迁移/兼容读取保留。移除无调用的 prototype 类型转发、workbench 转发、旧固定主题、未使用类型和 17 个模板素材；开启 TypeScript 未使用局部声明/参数检查。图片继续由系统文件选择器导入，删除未接入的 image-picker/image-manipulator 依赖和相册权限插件；图片变换仍未实现。Zod 由 MCP SDK 依赖引入，不再作为应用直接依赖。Android 验证脚本覆盖各自功能和故障路径，保留其测试用途。
+
 ## 1. 产品目标与范围
 
 Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导入项目，通过对话让 Agent 整理、创建和修改内容，在任务完成后查看成果与修改清单，并可恢复历史版本。
@@ -125,9 +127,9 @@ Opaque thinkingSignature/thoughtSignature 仅保留在宿主 transcript/协议�
 | 数据库 | expo-sqlite，WAL，FTS5 | 任务状态、会话、元数据、全文搜索 |
 | 工作区磁盘访问 | expo-file-system | 私有目录内真实文件 |
 | 文件历史 | 原型 isomorphic-git；目标 libgit2 原生模块 | 原型先验证 Git 格式及恢复；后续替换 Git 适配器 |
-| 输入校验 | Pi 工具采用 TypeBox；Zod 留作业务/UI schema | 避免重复维护工具 schema |
+| 输入校验 | Pi 工具采用 TypeBox，MCP 使用 SDK 校验 | 不预装尚未使用的业务/UI schema 库 |
 | 模型通信 | expo/fetch + 自有兼容 SSE 传输 | 作为 Pi streamFn 注入，避开 Node 供应商 SDK |
-| 图片 | expo-image、image-picker、image-manipulator | 导入、显示和基础变换 |
+| 图片 | expo-image 显示；expo-document-picker 导入 | 图片变换未实现，接入时再选择依赖 |
 | 文件导入和分享 | expo-document-picker、expo-sharing | 使用系统授权入口 |
 | 凭证 | expo-secure-store | Keychain/Keystore 支持 |
 | 网页 | 后续 react-native-webview | 分阶段开放网页交互 |

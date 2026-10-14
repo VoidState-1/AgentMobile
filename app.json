@@ -36,14 +36,6 @@
       ],
       "expo-secure-store",
       [
-        "expo-image-picker",
-        {
-          "photosPermission": "允许 Agent Mobile 导入你选择的图片到工作区。",
-          "cameraPermission": false,
-          "microphonePermission": false
-        }
-      ],
-      [
         "expo-splash-screen",
         {
           "backgroundColor": "#F5F6F8",

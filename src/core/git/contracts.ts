@@ -7,12 +7,6 @@ export interface GitFileStatus { path: string; headRevision: string | null; inde
 export interface GitStatus { head: string; indexRevision: string; workingRevision: string; files: GitFileStatus[] }
 export interface GitBaseline { head: string; working: string; index: string }
 
-export interface GitChange {
-  path: WorkspacePath;
-  status: 'added' | 'modified' | 'deleted' | 'renamed';
-  previousPath?: WorkspacePath;
-}
-
 /** Version operations are mediated by the host; never exposed as raw model tools. */
 export interface GitPort {
   /** Internal logical directory, not a device absolute path. */

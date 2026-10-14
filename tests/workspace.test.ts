@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { WorkspaceService } from '../src/adapters/workspace/service';
 import { safePath } from '../src/core/workspace/path';
 import { validateImage } from '../src/core/workspace/image';
-import type { Operation } from '../src/core/prototype/types';
+import type { Operation } from '../src/core/workspace/types';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];

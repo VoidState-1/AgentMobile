@@ -1,7 +1,7 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
 import { WorkspaceService, type WorkspaceChange } from '../src/adapters/workspace/service';
-import type { Operation } from '../src/core/prototype/types';
+import type { Operation } from '../src/core/workspace/types';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];

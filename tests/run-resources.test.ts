@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { WorkspaceService } from '../src/adapters/workspace/service';
 import { ModelConfigurationService } from '@/application/models/configuration';
-import { TaskManager } from '../src/adapters/agent/task-manager';
+import { createTestRuntime } from './agent-runtime';
 import { testStorage } from './storage';
 import { answerEvents, streamed, toolEvents } from './protocol-fixtures';
 
@@ -20,7 +20,7 @@ it('界面取消订阅不取消任务，启动时配置跨工具轮次固定，�
       requests.push({ body: JSON.parse(String(init.body)), headers: init.headers }); if (requests.length === 1) await held;
       return streamed(requests.length === 1 ? toolEvents('chat-completions', 'list_files') : answerEvents('chat-completions', '完成。'));
     });
-    const manager = new TaskManager(workspace, models, randomUUID); const detach = manager.subscribe(() => {});
+    const { kernel: manager } = await createTestRuntime(workspace, { models, files: storage.files }); const detach = manager.subscribe(() => {});
     await manager.start(project.id, '查看资料'); detach();
     await expect.poll(() => requests.length).toBe(1);
     await models.saveConnection({ ...connection, name: 'edited' }, { value: 'new-fixture' });

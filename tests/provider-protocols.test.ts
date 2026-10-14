@@ -6,7 +6,7 @@ import { discoverModels } from '../src/adapters/model/catalog';
 import { diagnosticImage, runDiagnostic } from '../src/adapters/model/diagnostics';
 import { ModelConfigurationService } from '@/application/models/configuration';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
+import { startTestRun } from './agent-runtime';
 import type { CredentialStore } from '../src/core/storage/contracts';
 import type { ModelProtocol, ProviderConnection } from '../src/core/models/types';
 import { configurationFingerprint } from '../src/core/models/rules';
@@ -43,12 +43,11 @@ describe.each(protocols)('%s 原生协议模拟', (protocol) => {
       bodies.push(JSON.parse(String(init.body))); requests.push(init);
       return streamed(bodies.length === 1 ? toolEvents(protocol, 'write_text', { path: 'documents/native.md', text: '原生协议工具写入成功', expectedRevision: null }) : answerEvents(protocol, '文档已保存。'));
     });
-    const config = snapshot(protocol); const task = await startAgent(workspace, project.id, '创建一份笔记', { mode: 'remote', baseUrl: config.baseUrl, model: config.apiModelId, imageInput: true },
-      'private-test-key', randomUUID, () => {}, config, true);
-    expect((await task.done).state).toBe('completed');
+    const config = snapshot(protocol); const task = await startTestRun(workspace, project.id, '创建一份笔记', { model: config, secret: 'private-test-key', web: true });
+    const completed = await task.done; expect(completed.state).toBe('completed');
     expect((await workspace.readText(project.id, 'documents/native.md')).text).toBe('原生协议工具写入成功');
     expect(bodies).toHaveLength(2); expect(JSON.stringify(bodies)).not.toContain('private-test-key');
-    expect(task.task.modelSnapshot?.protocol).toBe(protocol); expect(JSON.stringify(task.task)).not.toContain('private-test-key');
+    expect(completed.modelSnapshot?.protocol).toBe(protocol); expect(JSON.stringify(completed)).not.toContain('private-test-key');
     const headers = requests[0].headers as Record<string, string>;
     expect(headers[protocol === 'gemini' ? 'x-goog-api-key' : protocol === 'anthropic-messages' ? 'x-api-key' : 'Authorization']).toContain('private-test-key');
     expect(protocol === 'gemini' ? bodies[0].generationConfig : bodies[0]).toMatchObject(protocol === 'gemini' ? { maxOutputTokens: 512, temperature: 0.7 } : { max_tokens: 512, temperature: 0.7 });

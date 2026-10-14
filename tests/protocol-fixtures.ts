@@ -1,9 +1,12 @@
 import type { ModelProtocol, ModelRunSnapshot } from '../src/core/models/types';
+import { defaultOutputTokens } from '../src/core/agent/settings';
 export const protocols: ModelProtocol[] = ['chat-completions', 'anthropic-messages', 'gemini'];
 export const snapshot = (protocol: ModelProtocol): ModelRunSnapshot => ({ connectionId: 'test-connection', connectionName: '测试服务', connectionRevision: 1,
   modelEntryId: 'test-model', modelName: '测试模型', modelRevision: 1, apiModelId: protocol === 'gemini' ? 'models/test-model' : 'test-model',
   protocol, baseUrl: 'https://example.test/v1', compatibility: 'standard', apiVersion: '2023-06-01', auth: 'key',
   parameters: { maxOutputTokens: 512, temperature: 0.7, allowImages: true, reasoning: 'off' }, contextTokens: 32000 });
+export const chatSnapshot = (overrides: Partial<ModelRunSnapshot> = {}): ModelRunSnapshot => ({ ...snapshot('chat-completions'),
+  parameters: { maxOutputTokens: defaultOutputTokens, allowImages: false, reasoning: 'off' }, ...overrides });
 export const sse = (events: unknown[]) => events.map((event) => 'data: ' + (typeof event === 'string' ? event : JSON.stringify(event)) + '\n\n').join('');
 export function answerEvents(protocol: ModelProtocol, text: string): unknown[] {
   if (protocol === 'chat-completions') return [{ choices: [{ delta: { content: text }, finish_reason: 'stop' }] }, { choices: [], usage: { prompt_tokens: 10, completion_tokens: 5, total_tokens: 15, prompt_cache_hit_tokens: 3 } }, '[DONE]'];

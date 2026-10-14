@@ -173,7 +173,7 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 | Android/iOS/Web 导出 | 三平台 JavaScript/Hermes 打包通过；不等同于 iOS 原生编译和真机验收 |
 | Anthropic/Gemini 官方实测 | 待提供测试凭证；本轮未调用官方服务 |
 
-浏览器截图：work/config-mobile-light.png、work/config-mobile-dark.png。配置器测试源码在 tests/model-config.test.ts、tests/provider-protocols.test.ts、tests/task-manager.test.ts、tests/e2e/model-config.spec.ts。
+浏览器截图：work/config-mobile-light.png、work/config-mobile-dark.png。配置器测试源码在 tests/model-config.test.ts、tests/provider-protocols.test.ts、tests/run-resources.test.ts（原 TaskManager 测试已迁到 RunKernel）、tests/e2e/model-config.spec.ts。
 
 原生截图：work/config-android-light.png、work/config-android-dark.png，以及三个协议各自的 form/result 截图，均经视觉核对。模拟服务为 scripts/mock-model-server.mjs；操作脚本为 scripts/android-model-config.mjs。运行期间使用独立 emulator-5556，已有设备不做改动。三协议与重启检查分别重跑通过；调试自动化曾因同名认证选项、输入框被固定页脚遮挡和末行边界判断过严失败，已修正定位与滚动条件。
 
@@ -407,3 +407,11 @@ Android API 36.1 x86_64 隔离模拟器分段验证：实际 writer Pi 在私有
 复现：本地 delegation-fixture、已配置本地无认证模型的隔离开发客户端，运行 `node scripts/android-proposals.mjs <serial>`；`--fault` 仅执行回执故障段。模拟器输入含重复 R/r 的模态文本可能触发开发客户端重载，测试项目采用不含 Recovery 的名称。合成 SQLite/日志/截图保存在 work/，不提交。已停止本轮模拟器、Metro、fixture，保留用户 4180 预览服务。
 
 R0–R5 行为与迁移/失败路径验收完成。当前仅内置角色/父模型继承；IntelligentUI/WebView、后台服务、角色编辑/子模型选择、libgit2、token/费用硬预算、自动压缩、自动三方合并与 GC 尚未实现。iOS 原生/arm64 真机未验证；普通进程中断与失败注入不证明真实断电/fsync 保证。
+
+## 2026-10-14：重构遗留与依赖清理
+
+移除 10 个旧生产模块：TaskManager/startAgent、旧模型传输/检测、旧单任务预算、prototype/workbench 转发与固定主题；控制器不再回退到旧 tasks/transcripts 写入。保留模型配置、会话、任务与 transcript 的旧数据迁移。原集成测试使用 RunKernel/v2 仓库；终态发布的重复测试合并到已有内核验证，并补保留初始视图不被后续执行修改的断言，订阅者异常隔离测试迁到 AppServices。
+
+`npm run check` 通过（165 项测试；原 166 项中合并 1 项重复验证）；41 条 Playwright 浏览器回归通过（4 workers），覆盖协议、推理、预算、取消、Git、实时资料、并发、子 Agent、writer 提案、MCP、Skills 与旧数据迁移。开启 `noUnusedLocals/noUnusedParameters`，静态引用检查没有剩余孤立 src 模块；文件路由、Metro Pi alias、Web 平台实现按隐式入口保留。
+
+删除未接入的 image-picker/image-manipulator 和应用直接 Zod 依赖；MCP SDK 继续使用锁定的传递 Zod 版本。保留 Router 所需 Reanimated/Worklets/Gesture Handler。Expo Doctor 21/21、原生配置 introspection、Web/Android/iOS JS/Hermes 导出通过。清理 17 个未引用模板素材，使用中的六个应用图标/启动素材路径仍有效。未重跑原生安装与模拟器操作；没有修改 SQLite、Git 或原生桥接实现。本轮只使用模拟协议，没有调用付费模型。

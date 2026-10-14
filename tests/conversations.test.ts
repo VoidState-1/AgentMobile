@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationService } from '@/application/conversations/service';
 import { ModelConfigurationService } from '@/application/models/configuration';
 import { mainSessionId, selectedModelId, selectedModelMode } from '../src/core/models/rules';
-import { TaskManager } from '../src/adapters/agent/task-manager';
+import { createTestRuntime } from './agent-runtime';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import type { Project, TaskRecord } from '../src/core/prototype/types';
+import type { Project } from '../src/core/projects/types';
+import type { TaskRecord } from '../src/core/runs/types';
 import { testStorage } from './storage';
 import { answerEvents, streamed } from './protocol-fixtures';
 
@@ -76,7 +77,7 @@ it('实际 Agent 仅携带本对话历史，独立选择模型和模式，任务
   const ma = await models.saveModel({ ...input, name: 'Model A', apiId: 'model-a' }); const mb = await models.saveModel({ ...input, name: 'Model B', apiId: 'model-b' });
   await models.setSelection('session', ma.id, a.id); await models.setSelection('session', mb.id, b.id);
   const requests: any[] = []; vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => { requests.push(JSON.parse(String(init.body))); return streamed(answerEvents('chat-completions', '测试回复')); });
-  const manager = new TaskManager(workspace, models, randomUUID, false, conversations);
+  const { kernel: manager } = await createTestRuntime(workspace, { models, conversations, files: storage.files });
   const draft = await conversations.saveDraft(a.id, { text: 'A_ONLY' });
   await manager.start(p.id, 'A_ONLY', false, a.id, draft.revision); await expect.poll(() => manager.getSnapshot().active).toBeUndefined();
   expect(manager.getSnapshot().completed).toMatchObject({ conversationId: a.id, draftRevision: draft.revision });

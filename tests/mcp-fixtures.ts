@@ -7,7 +7,7 @@ export function mcpFixture(options: { modern?: boolean; sse?: boolean; paginated
   const requests: { method: string; params?: Record<string, any>; headers: Headers }[] = [];
   let tools = structuredClone(fixtureTools); let calls = 0; let callStatus = 200;
   let result: any = { content: [{ type: 'text', text: '远程资料：MCP 查询成功。' }], structuredContent: { source: 'fixture' } };
-  const handle = async (input: string | URL | Request, init?: RequestInit): Promise<Response> => {
+  const handle = async (_input: string | URL | Request, init?: RequestInit): Promise<Response> => {
     if (init?.method === 'GET' || init?.method === 'DELETE') return new Response(null, { status: 405 });
     const headers = new Headers(init?.headers);
     if (options.token && headers.get('authorization') !== 'Bearer ' + options.token) return new Response('Unauthorized', { status: 401 });

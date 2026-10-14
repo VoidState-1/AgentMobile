@@ -340,6 +340,6 @@ R5 已完成：writer 使用精确路径 grant 在私有 Git 候选树读写/移
 
 R5 验证：166 项检查、41 条浏览器回归、三平台导出通过；覆盖提案隔离/稳定回执/越权、原有脏文件/index、整批冲突与两种 no-op、图片移动/删除、候选 Git/SQLite 回执中断、合入第二文件中断恢复、文件已 recorded 而提案回执失败的完成屏障、根撤销、终态取消竞态与真实 facade 只读投影。浏览器真实 Pi writer → 候选查看 → 父检查/合入 → 根撤销通过。Android 隔离设备分段通过实际 writer/私有候选、index/HEAD 分离、来源归属、根撤销，并注入 merge recorded 回执异常，重启恢复文件/提案回执与根变化，不重放模型；已完成子结果保留。
 
-当前实施边界：子角色仅 reader/reviewer/writer，继承父冻结模型/Skills；没有角色自定义或子模型独立选择。历史原 TaskManager/startAgent 只为旧测试/直接调用保留兼容入口；实际 AppServices 使用 RunKernel。IntelligentUI/SandboxBridge 当前是扩展设计，尚未提供渲染器/网页执行；前台是运行基线，没有后台服务或自动恢复 Pi 续跑。iOS 原生与 arm64 真机尚未验证，Android 验证为 API 36.1 x86_64。R0–R5 的完成不包含上述后续能力。
+当前实施边界：子角色仅 reader/reviewer/writer，继承父冻结模型/Skills；没有角色自定义或子模型独立选择。2026-10-14 清理后已移除 TaskManager/startAgent 测试兼容入口，AppServices 与 Agent 集成测试统一使用 RunKernel；历史存储格式迁移保留。IntelligentUI/SandboxBridge 当前是扩展设计，尚未提供渲染器/网页执行；前台是运行基线，没有后台服务或自动恢复 Pi 续跑。iOS 原生与 arm64 真机尚未验证，Android 验证为 API 36.1 x86_64。R0–R5 的完成不包含上述后续能力。
 
 当前继续沿用 isomorphic-git、SQLite/IndexedDB、SecureStore、Pi 与现有三协议；libgit2、后台执行、独立角色编辑器、token/费用硬预算、上下文自动压缩、提案自动合并、仓库导出/GC 与网页沙箱分别列为后续能力，按实际需求和设备验证推进。

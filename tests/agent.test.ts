@@ -1,10 +1,10 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
-import { defaultSettings } from '../src/core/prototype/types';
+import { startTestRun } from './agent-runtime';
+import { chatSnapshot } from './protocol-fixtures';
 import { SseDecoder } from '../src/adapters/model/sse';
-import { compatibleTransport, modelFor } from '../src/adapters/model/compatible';
+import { protocolTransport, protocolModel } from '../src/adapters/model/protocols';
 import { normalizeContext } from '@earendil-works/pi-ai';
 import { testStorage } from './storage';
 
@@ -16,7 +16,7 @@ describe('Pi Agent 真实执行循环', () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
     const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('原型测试');
-    const started = await startAgent(workspace, project.id, '整理我的资料', defaultSettings, '', randomUUID, () => {});
+    const started = await startTestRun(workspace, project.id, '整理我的资料');
     const task = await started.done;
     expect(task.state).toBe('completed');
     expect(task.events.map((event) => [event.tool, event.state])).toEqual([
@@ -35,7 +35,7 @@ describe('Pi Agent 真实执行循环', () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
     const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('取消测试');
-    const started = await startAgent(workspace, project.id, '整理资料', defaultSettings, '', randomUUID, () => {});
+    const started = await startTestRun(workspace, project.id, '整理资料');
     started.cancel();
     expect((await started.done).state).toBe('cancelled');
     workspace.claim(project.id, 'another-run'); workspace.release(project.id, 'another-run');
@@ -51,10 +51,10 @@ describe('Pi Agent 真实执行循环', () => {
       return new Response('data: {"choices":[{"delta":{"content":"建议保留两段内容。"},"finish_reason":"stop"}]}\n\n',
         { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
-    const first = await startAgent(workspace, project.id, '请整理我的旅行资料', settings, 'test-only', randomUUID, () => {});
+    const settings = chatSnapshot({ baseUrl: 'https://example.test/v1', apiModelId: 'test' });
+    const first = await startTestRun(workspace, project.id, '请整理我的旅行资料', { model: settings, secret: 'test-only' });
     await first.done;
-    const second = await startAgent(workspace, project.id, '把上一个建议再简短一些', settings, 'test-only', randomUUID, () => {});
+    const second = await startTestRun(workspace, project.id, '把上一个建议再简短一些', { model: settings, secret: 'test-only' });
     await second.done;
     expect(requests[1].some((message) => message.role === 'user' && message.content === '请整理我的旅行资料')).toBe(true);
     expect(requests[1].some((message) => message.role === 'assistant' && message.content === '建议保留两段内容。')).toBe(true);
@@ -73,12 +73,12 @@ describe('Pi Agent 真实执行循环', () => {
       }] }, finish_reason: 'tool_calls' }] } : { choices: [{ delta: { content: '已查看项目资料。' }, finish_reason: 'stop' }] };
       return new Response('data: ' + JSON.stringify(event) + '\n\n', { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
-    const started = await startAgent(workspace, project.id, '查看资料', settings, 'test-only', randomUUID, () => {});
+    const settings = chatSnapshot({ baseUrl: 'https://example.test/v1', apiModelId: 'test' });
+    const started = await startTestRun(workspace, project.id, '查看资料', { model: settings, secret: 'test-only' });
     const task = await started.done;
     expect(task.response).toBe('已查看项目资料。');
     expect(task.events).toMatchObject([{ tool: 'list_files', state: 'done' }]);
-    const transcript = await storage.metadata.get<{ messages: unknown[] }>('transcripts', task.id);
+    const transcript = await storage.metadata.get<{ messages: unknown[] }>('run-transcripts', task.id);
     expect(JSON.stringify(transcript)).toContain('我先查看项目。');
   });
 });
@@ -94,8 +94,8 @@ describe('流式协议', () => {
   it('缺少完成标记的工具参数不会交给执行器', async () => {
     vi.stubGlobal('fetch', async () => new Response('data: {"choices":[{"delta":{"tool_calls":[{"index":0,"id":"x","function":{"name":"write_text","arguments":"{\\"path\\":\\"x"}}]}}]}\n\n',
       { headers: { 'Content-Type': 'text/event-stream' } }));
-    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
-    const stream = await compatibleTransport(settings, 'test-only')(modelFor(settings), normalizeContext({
+    const settings = chatSnapshot({ baseUrl: 'https://example.test/v1', apiModelId: 'test' });
+    const stream = await protocolTransport(settings, 'test-only')(protocolModel(settings), normalizeContext({
       messages: [{ role: 'user', content: 'hello', timestamp: Date.now() }],
     }));
     const final = await stream.result();
@@ -110,17 +110,17 @@ describe('流式协议', () => {
       return new Response('data: {"choices":[{"delta":{"content":"ok"},"finish_reason":"stop"}]}\n\n',
         { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const settings = { mode: 'remote' as const, baseUrl: 'https://example.test/v1', model: 'test', imageInput: false };
+    const settings = chatSnapshot({ baseUrl: 'https://example.test/v1', apiModelId: 'test' });
     const context = normalizeContext({ messages: [{
       role: 'toolResult', toolCallId: 'img', toolName: 'inspect_image', isError: false, timestamp: Date.now(),
       content: [{ type: 'text', text: '资料' }, { type: 'image', mimeType: 'image/png', data: 'test-image-base64' }],
     }] });
-    const disabled = await compatibleTransport(settings, 'not-in-body')(modelFor(settings), context);
+    const disabled = await protocolTransport(settings, 'not-in-body')(protocolModel(settings), context);
     await disabled.result();
     expect(requestBody).not.toContain('test-image-base64');
     expect(requestBody).not.toContain('not-in-body');
-    const enabledSettings = { ...settings, imageInput: true };
-    const enabled = await compatibleTransport(enabledSettings, 'not-in-body')(modelFor(enabledSettings), context);
+    const enabledSettings = { ...settings, parameters: { ...settings.parameters, allowImages: true } };
+    const enabled = await protocolTransport(enabledSettings, 'not-in-body')(protocolModel(enabledSettings), context);
     await enabled.result();
     expect(requestBody).toContain('data:image/png;base64,test-image-base64');
   });

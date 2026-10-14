@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext } from '@earendil-works/pi-ai';
-import type { TaskRecord } from '../src/core/prototype/types';
-import type { TraceItem } from '../src/core/prototype/trace';
-import { finishTool, settleTrace } from '../src/core/prototype/trace';
+import type { TaskRecord } from '../src/core/runs/types';
+import type { TraceItem } from '../src/core/trace';
+import { finishTool, settleTrace } from '../src/core/trace';
 import { protocolBody, protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { runSnapshot, validateModelEntity, validateReasoningParameters } from '../src/core/models/rules';
 import type { ModelEntry, ProviderConnection } from '../src/core/models/types';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
+import { startTestRun } from './agent-runtime';
 import { protocols, snapshot, streamed, answerEvents, toolEvents } from './protocol-fixtures';
 import { testStorage } from './storage';
 
@@ -43,8 +43,7 @@ describe.each(protocols)('%s 工作轨迹', (protocol) => {
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(String(init.body))); return streamed(bodies.length === 1 ? events : answerEvents(protocol, '两份笔记已核对。'));
     });
-    const run = await startAgent(workspace, project.id, '核对笔记', { mode: 'remote', baseUrl: config.baseUrl, model: config.apiModelId, imageInput: false },
-      'fixture-only-secret', randomUUID, (task) => updates.push(task), config);
+    const run = await startTestRun(workspace, project.id, '核对笔记', { model: config, secret: 'fixture-only-secret', update: (task) => updates.push(task) });
     const task = await run.done;
     expect(task.state).toBe('completed');
     expect(task.trace?.map((item) => item.kind)).toEqual(['reasoning', 'text', 'tool', 'tool', 'text']);
@@ -57,7 +56,8 @@ describe.each(protocols)('%s 工作轨迹', (protocol) => {
     expect(task.response).toBe('两份笔记已核对。');
     expect(updates.some((value) => value.trace?.some((item) => item.kind === 'reasoning' && item.state === 'running' && !!item.text))).toBe(true);
     expect(updates.find((value) => value.trace?.length === 1)?.trace).toHaveLength(1);
-    expect(await storage.metadata.get('tasks', task.id)).toEqual(task);
+    expect(await run.kernel.repository.view(task.id)).toEqual(task);
+    expect(await storage.metadata.get('tasks', task.id)).toBeUndefined();
     expect(JSON.stringify(task.trace)).not.toMatch(/signature|fixture-only-secret|opaque/);
     if (protocol === 'chat-completions') expect(bodies[1].messages.find((message: any) => message.role === 'assistant').reasoning_content).toBe('先核对两份资料。');
     if (protocol === 'anthropic-messages') expect(JSON.stringify(bodies[1])).toContain('anthropic-signature');
@@ -85,7 +85,7 @@ describe('轨迹恢复与推理参数', () => {
     expect(JSON.stringify(protocolBody(config, [message], []))).toContain('encrypted-only');
     const storage = await testStorage(); cleanups.push(storage.cleanup);
     const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('受保护推理');
-    const run = await startAgent(workspace, project.id, 'test', { mode: 'remote', baseUrl: config.baseUrl, model: config.apiModelId, imageInput: false }, 'fixture', randomUUID, () => {}, config);
+    const run = await startTestRun(workspace, project.id, 'test', { model: config, secret: 'fixture' });
     const task = await run.done;
     expect(task.trace?.[0]).toMatchObject({ kind: 'reasoning', visibility: 'unavailable', text: '' });
     expect(JSON.stringify(task.trace)).not.toContain('encrypted-only');
@@ -100,10 +100,11 @@ describe('轨迹恢复与推理参数', () => {
   });
   it('取消保留部分推理，串行检查点最终状态不被旧写入覆盖', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const originalPut = storage.metadata.put; let writing = 0; let maximum = 0;
-    storage.metadata.put = async (bucket, id, value) => {
-      if (bucket === 'tasks') { maximum = Math.max(maximum, ++writing); await new Promise((resolve) => setTimeout(resolve, 15)); }
-      await originalPut(bucket, id, value); if (bucket === 'tasks') writing--;
+    const originalBatch = storage.metadata.batch!; let writing = 0; let maximum = 0;
+    storage.metadata.batch = async (entries) => {
+      const runWrite = entries.some(entry => entry.bucket === 'runs-v2');
+      if (runWrite) { maximum = Math.max(maximum, ++writing); await new Promise((resolve) => setTimeout(resolve, 15)); }
+      try { await originalBatch(entries); } finally { if (runWrite) writing--; }
     };
     const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('取消推理');
     const config = snapshot('chat-completions'); config.compatibility = 'deepseek'; config.parameters.reasoning = 'on';
@@ -111,11 +112,11 @@ describe('轨迹恢复与推理参数', () => {
       controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"reasoning_content":"部分公开推理"}}]}\n\n'));
     } }), { headers: { 'Content-Type': 'text/event-stream' } }));
     let sawThinking!: () => void; const thinking = new Promise<void>((resolve) => { sawThinking = resolve; });
-    const run = await startAgent(workspace, project.id, 'test', { mode: 'remote', baseUrl: config.baseUrl, model: config.apiModelId, imageInput: false }, 'fixture', randomUUID,
-      (task) => { if (task.trace?.some((item) => item.kind === 'reasoning' && item.text)) sawThinking(); }, config);
+    const run = await startTestRun(workspace, project.id, 'test', { model: config, secret: 'fixture', update: (task) => { if (task.trace?.some((item) => item.kind === 'reasoning' && item.text)) sawThinking(); } });
     await thinking; run.cancel(); const task = await run.done;
     expect(task.state).toBe('cancelled'); expect(task.trace?.[0]).toMatchObject({ text: '部分公开推理', state: 'cancelled' });
-    expect(await storage.metadata.get('tasks', task.id)).toEqual(task); expect(maximum).toBe(1);
+    expect(await run.kernel.repository.view(task.id)).toEqual(task); expect(maximum).toBe(1);
+    expect(await storage.metadata.get('tasks', task.id)).toBeUndefined();
   });
   it('参数原样进入快照与三种协议，默认／关闭／开启含义保持独立', () => {
     const deepseek = snapshot('chat-completions'); deepseek.compatibility = 'deepseek'; deepseek.parameters.reasoning = 'on';

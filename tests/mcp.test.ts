@@ -8,9 +8,8 @@ import type { McpAttempt } from '../src/core/mcp/types';
 import { testStorage } from './storage';
 import { mcpFixture, fixtureTools } from './mcp-fixtures';
 import { WorkspaceService } from '../src/adapters/workspace/service';
-import { startAgent } from '../src/adapters/agent/runner';
-import { defaultAgentSettings } from '../src/core/agent/settings';
-import { answerEvents, toolEvents, sse } from './protocol-fixtures';
+import { startTestRun } from './agent-runtime';
+import { chatSnapshot, answerEvents, toolEvents, sse } from './protocol-fixtures';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { vi.useRealTimers(); vi.unstubAllGlobals(); vi.restoreAllMocks(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
@@ -168,8 +167,7 @@ describe('官方 MCP SDK 协议与持久化边界', () => {
       }
       return new Response(sse(toolEvents('chat-completions', 'mcp_0_0', { query: 'wait' })), { headers: { 'Content-Type': 'text/event-stream' } });
     });
-    const started = await startAgent(workspace, project.id, '取消测试', { mode: 'remote', baseUrl: 'https://model.example/v1', model: 'fixture', imageInput: false }, 'model-secret', randomUUID,
-      () => {}, undefined, false, undefined, undefined, defaultAgentSettings(), run);
+    const started = await startTestRun(workspace, project.id, '取消测试', { model: chatSnapshot({ baseUrl: 'https://model.example/v1', apiModelId: 'fixture' }), secret: 'model-secret', mcp: run });
     await sent; started.cancel(); const task = await started.done;
     expect(task.state).toBe('cancelled'); expect(task.trace?.find((entry) => entry.kind === 'tool')?.state).toBe('unknown');
     expect((await f.metadata.all<McpAttempt>('mcp-attempts'))[0].state).toBe('unknown');
@@ -186,8 +184,7 @@ describe('官方 MCP SDK 协议与持久化边界', () => {
       return new Response(sse(events), { headers: { 'Content-Type': 'text/event-stream' } });
     });
     const updates: string[] = [];
-    const started = await startAgent(workspace, project.id, '查询并保存资料', { mode: 'remote', baseUrl: 'https://model.example/v1', model: 'fixture', imageInput: false }, 'model-secret', randomUUID,
-      (task) => updates.push(JSON.stringify(task.trace)), undefined, false, undefined, undefined, defaultAgentSettings(), run);
+    const started = await startTestRun(workspace, project.id, '查询并保存资料', { model: chatSnapshot({ baseUrl: 'https://model.example/v1', apiModelId: 'fixture' }), secret: 'model-secret', update: (task) => updates.push(JSON.stringify(task.trace)), mcp: run });
     const task = await started.done; expect(task.state).toBe('completed'); expect(task.finalCommit).toBe(task.baseCommit); expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
     expect((await workspace.readText(project.id, 'documents/mcp.md')).text).toContain('MCP 查询成功');
     expect(modelRequests[0].tools.filter((tool: any) => tool.function.name.startsWith('mcp_'))).toHaveLength(1);

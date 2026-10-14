@@ -10,11 +10,10 @@ import { McpConfigurationService } from '@/application/mcp/configuration';
 import { McpRuntime } from '../src/adapters/mcp/runtime';
 import { SkillService } from '@/application/skills/library';
 import { GitSkillRepository } from '../src/adapters/skills/repository';
-import { TaskManager } from '../src/adapters/agent/task-manager';
+import { createTestRuntime } from './agent-runtime';
 import { decodeSkillText, importSkillPackage, validateBundle } from '../src/adapters/skills/package';
 import { testStorage } from './storage';
 import { ProposalService } from '../src/application/runs/proposals';
-import { RunRepository } from '../src/application/runs/repository';
 import { contentCodec } from '../src/adapters/storage/codec';
 
 const cleanup: (() => Promise<void>)[] = [];
@@ -29,9 +28,10 @@ async function fixture() {
   const mcpConfiguration = new McpConfigurationService(storage.metadata, credentials, randomUUID); await mcpConfiguration.initialize();
   const mcp = new McpRuntime(mcpConfiguration, storage.metadata, randomUUID, async (text) => text);
   const skills = new SkillService(storage.metadata, new GitSkillRepository(storage.files, storage.metadata, randomUUID)); await skills.initialize();
+  const { kernel, repository } = await createTestRuntime(workspace, { models, conversations, settings: agentSettings, mcp, skills });
   const io = { pickFile: async () => undefined, pickSkillPackage: async () => undefined, exportFile: vi.fn(async () => {}), exportSkill: vi.fn(async () => {}) };
   const api = createAppServices({ workspace, models, conversations, agentSettings, mcp, skills, preferences: new PreferencesService(storage.metadata),
-    agent: new TaskManager(workspace, models, randomUUID), tasks: async () => [], io, proposals: new ProposalService(workspace, new RunRepository(storage.metadata), contentCodec),
+    agent: kernel, tasks: (projectId, conversationId) => repository.views(projectId, conversationId), io, proposals: new ProposalService(workspace, repository, contentCodec),
     diagnose: async () => { throw new Error('native HTTP failure /private/path'); },
     skillPackage: { decodeText: decodeSkillText, validateBundle, importPackage: importSkillPackage } });
   return { ...storage, workspace, project, api, io };
@@ -67,4 +67,11 @@ it('额外的 owner 参数不能绕过项目锁；平台错误不会包含私有
   files.write = async () => { throw new Error('EIO /data/user/0/private/key'); };
   await expect(api.workspace.write(project.id, 'a.md', Buffer.from('A'), null)).rejects.toMatchObject({ code: 'STORAGE', message: '本地操作失败，请重试或重新打开应用恢复。' });
   await expect(api.models.diagnose('test', undefined, 'text')).rejects.toMatchObject({ code: 'STORAGE' });
+});
+
+it('视图订阅者异常不会把已保存的模型设置或对话变成失败操作', async () => {
+  const { api, project } = await fixture();
+  api.models.subscribe(() => { throw new Error('UI failed'); }); await api.models.setMode('remote'); expect(api.models.getSnapshot().mode).toBe('remote');
+  api.conversations.subscribe(() => { throw new Error('UI failed'); }); const conversation = await api.conversations.create(project.id);
+  expect(api.conversations.getSnapshot().conversations.some(value => value.id === conversation.id)).toBe(true);
 });
