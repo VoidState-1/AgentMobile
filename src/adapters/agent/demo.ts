@@ -46,6 +46,9 @@ export function demoTransport(prompt: string): { model: Model<string>; streamFn:
           '已完成演示任务：读取资料，并创建或更新 documents/summary.md。你可以查看文件变化和历史版本。\n\n演示模式使用预设步骤，不进行语义理解。' });
       }
     }
+    if (message.stopReason === 'toolUse') message.content.unshift({ type: 'text', text: [
+      '先查看项目中有哪些资料。', '读取文字资料，确认需要整理的内容。', '根据演示模板整理内容，并保存到 summary.md。',
+    ][round - 1] });
     void (async () => {
       stream.push({ type: 'start', partial: message });
       const text = message.content.find((part) => part.type === 'text');

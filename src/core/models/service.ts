@@ -1,6 +1,6 @@
 import type { CredentialStore, MetadataStore } from '../storage/contracts';
 import type { ModelSettings } from '../prototype/types';
-import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity } from './rules';
+import { configurationFingerprint, normalizedServiceAddress, runSnapshot, selectedModelId, serviceOrigin, validateConnectionEntity, validateModelEntity, validateReasoningParameters } from './rules';
 import { presetModelEvidence } from './presets';
 import { defaultModelParameters, emptyModelConfiguration, unknownCapabilities } from './types';
 import type { CapabilityName, CheckKind, DiagnosticResult, DiscoveredModel, ModelConfiguration, ModelEntry, ModelRunLease, ModelSupport, ProviderConnection } from './types';
@@ -190,6 +190,7 @@ export class ModelConfigurationService {
         checkHistory: !identityChanged && previous && configurationFingerprint(connection, previous) === configurationFingerprint(connection, { ...previous, parameters: input.parameters }) ? previous.checkHistory : undefined,
         createdAt: previous?.createdAt ?? time, updatedAt: time };
       validateModelEntity(model);
+      validateReasoningParameters(connection, model);
       if (connection.protocol === 'anthropic-messages' && (model.parameters.temperature ?? 0) > 1) throw new Error('Anthropic 温度范围为 0–1。');
       if (next.models.some((item) => item.id !== model.id && item.connectionId === connection.id && item.apiId === model.apiId)) throw new Error('此连接已经包含这个模型 ID。');
       next.models = [...next.models.filter((item) => item.id !== model.id), model];
@@ -272,6 +273,7 @@ export class ModelConfigurationService {
       if (!connection || (forAgent && (!connection.enabled || !model.enabled))) throw new Error('所选连接或模型已停用，请重新选择。');
       if (forAgent && model.capabilities.tools.support === 'unsupported') throw new Error('此模型不支持工具调用，不能执行工作区任务。');
       validateConnectionEntity(connection); validateModelEntity(model);
+      validateReasoningParameters(connection, model);
       if (connection.protocol === 'anthropic-messages' && (model.parameters.temperature ?? 0) > 1) throw new Error('Anthropic 温度范围为 0–1，请调整模型参数。');
       const ref = connection.credentialRef;
       const secret = connection.auth === 'none' ? '' : ref ? await this.credentials.get(ref) : '';

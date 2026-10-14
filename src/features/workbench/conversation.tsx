@@ -1,40 +1,15 @@
 import { useEffect, useRef, useState } from 'react';
 import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import {
-  ArrowDown, ArrowUp, Check, CheckCheck, ChevronDown, ChevronRight, CircleAlert, FileText, Image as ImageIcon,
+  ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, Image as ImageIcon,
   Layers, Paperclip, PenLine, Sparkles, Square, X,
 } from './icons';
 import type { TaskRecord } from '@/core/prototype/types';
 import type { Workbench } from './use-workbench';
 import { Brand, Button, IconButton, T } from './ui';
 import { useWorkbenchTheme } from './theme';
-import { Markdown } from './markdown';
-import { dateLabel, fileName, toolLabels } from './format';
-
-function Activity({ task }: { task: TaskRecord }) {
-  const theme = useWorkbenchTheme();
-  const [expanded, setExpanded] = useState(false);
-  const running = task.state === 'running';
-  const failures = task.events.filter((event) => event.state === 'error').length;
-  const open = expanded || running;
-  return <View style={{ marginVertical: 7 }}>
-    <Pressable accessibilityRole="button" accessibilityLabel="查看执行过程" onPress={() => setExpanded(!expanded)}
-      style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 7 }}>
-      {running ? <ActivityIndicator color={theme.accent} size="small" /> :
-        failures ? <CircleAlert size={14} color={theme.warning} /> : <CheckCheck size={14} color={theme.success} />}
-      <T tone="secondary" style={{ fontSize: 12 }}>{running ? '正在处理项目资料' : failures ? failures + ' 个步骤未完成' : '已执行 ' + task.events.length + ' 个步骤'}</T>
-      <ChevronDown size={13} color={theme.muted} style={{ transform: [{ rotate: open ? '180deg' : '0deg' }] }} />
-    </Pressable>
-    {open && <View style={{ gap: 7, padding: 12, borderRadius: 9, borderWidth: 1, borderColor: theme.border, backgroundColor: theme.background }}>
-      {task.events.map((event, index) => <View key={index} style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-        {event.state === 'started' ? <ActivityIndicator size={12} color={theme.accent} /> :
-          event.state === 'error' ? <CircleAlert size={13} color={theme.danger} /> : <Check size={13} color={theme.success} />}
-        <T tone={event.state === 'error' ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>{toolLabels[event.tool] ?? '处理项目资料'}</T>
-      </View>)}
-      {!task.events.length && <T tone="secondary" style={{ fontSize: 12 }}>正在准备…</T>}
-    </View>}
-  </View>;
-}
+import { TaskTrace } from './trace';
+import { dateLabel, fileName } from './format';
 
 function Exchange({ task, controller }: { task: TaskRecord; controller: Workbench }) {
   const theme = useWorkbenchTheme();
@@ -59,9 +34,7 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
         </View>
         <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?
           task.modelSnapshot.connectionName + ' · ' + task.modelSnapshot.modelName : '历史模型未知'}</T>
-        <Activity task={task} />
-        {task.response ? <Markdown content={task.response} /> : task.state === 'running' ?
-          <T tone="secondary" style={{ fontSize: 13, marginTop: 6 }}>正在读取与整理资料…</T> : null}
+        <TaskTrace task={task} />
         {!!task.error && <View style={{ backgroundColor: theme.dangerSoft, borderRadius: 8, padding: 12, marginTop: 8 }}>
           <T tone="danger" style={{ fontSize: 12 }}>{task.error}</T></View>}
         {task.state !== 'running' && <Pressable accessibilityRole="button" accessibilityLabel="查看变化" disabled={controller.busy}

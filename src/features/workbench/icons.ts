@@ -4,6 +4,7 @@ export { default as ArrowLeft } from 'lucide-react-native/icons/arrow-left';
 export { default as ArrowLeftRight } from 'lucide-react-native/icons/arrow-left-right';
 export { default as Check } from 'lucide-react-native/icons/check';
 export { default as CheckCheck } from 'lucide-react-native/icons/check-check';
+export { default as Brain } from 'lucide-react-native/icons/brain';
 export { default as ChevronDown } from 'lucide-react-native/icons/chevron-down';
 export { default as ChevronRight } from 'lucide-react-native/icons/chevron-right';
 export { default as CircleAlert } from 'lucide-react-native/icons/circle-alert';

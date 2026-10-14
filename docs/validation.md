@@ -204,3 +204,26 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 完整回归发现并修复项目创建结束前点击切换被忽略的问题：操作期间明确禁用项目切换。原生自动化等待开发菜单的首次提示，并区分输入草稿和添加引用后包含多行参考说明的任务消息。
 
 边界：草稿只保证最后成功写入的版本；切换不取消任务，但仍仅运行一个任务。对话永久删除、多任务并发、分叉、跨项目移动尚未实现。
+
+## 2026-10-14：有序工作轨迹与公开推理
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript、ESLint、74 项测试通过 |
+| 三协议真实 Pi 模拟循环 | 推理 → 过程文字 → 两个同名工具 → 最后一轮答案，顺序正确；toolCallId 独立配对；增量可见且最终快照持久化 |
+| 协议回传 | DeepSeek reasoning_content、Anthropic thinking/signature/redacted_thinking、Gemini 原生 parts/thoughtSignature 在工具后续轮保留；轨迹不包含不透明签名与测试密钥 |
+| 内容顺序 | Gemini 的文字/摘要多次交错不合并到首个文本块；Anthropic 非空初始文字块也进入轨迹 |
+| 推理参数 | off/default/on 冻结为任务快照；DeepSeek 开关、Anthropic 预算/自适应、Gemini 预算/等级映射正确；无效预算、不支持能力、Anthropic 温度约束在发送前拒绝 |
+| 取消与检查点 | 慢速存储下取消保留部分推理，任务写入串行，最终 cancelled 不被旧快照覆盖；恢复仅收束仍运行的节点 |
+| 浏览器 | 全量 18 条流程通过；三协议推理配置生效、工具详情、收起轨迹保留最后回复、刷新保留轨迹；中断恢复和旧任务兼容通过 |
+| 布局 | 390px 深浅主题截图检查通过；360×500 输入区可见、无页面横向溢出 |
+| Android 原生 | API 36.1 x86_64、独立 emulator-5556：Gemini 原生推理流、文字/工具顺序、工具输入/结果、SQLite 重启保留、深浅主题通过；生成摘要期间强制停止后恢复为 interrupted，已收到内容保留 |
+| 三平台导出 | Android、iOS、Web JS/Hermes 导出通过；iOS 原生与 arm64 真机待验证 |
+
+本轮不调用付费服务。Anthropic/Gemini 的官方服务验证仍待凭证，DeepSeek 新增开启推理路径也仅模拟验证；前版 DeepSeek 非推理路径的官方实测不能替代这些验证。通用 Chat Completions 推理开关方言和 Responses 尚未实现，不自动猜测模型开源属性或隐藏推理。
+
+原生复现：启动 Metro，并用 `AGENT_MOBILE_MOCK_TRACE=1 node scripts/mock-model-server.mjs` 开启本机流式 fixture；设置 ANDROID_HOME、AGENT_MOBILE_METRO_PORT 与 adb reverse 后运行 `node scripts/android-trace.mjs <serial>`。脚本使用测试凭证、生成数据和真实本地 Git/SQLite，不访问供应商。生成中断采用确定性暂停流。
+
+截图：work/trace-mobile-{协议}-light.png、work/trace-mobile-{协议}-dark.png、work/trace-android-light.png、work/trace-android-tool-details.png、work/trace-android-dark.png、work/trace-android-interrupted.png。截图与导出均为忽略的本地验证产物。
+
+持久化边界：每约 200ms 合并检查点，消息/工具边界与终态立即入队；强制停止可能丢失最后尚未提交的增量，不承诺逐 token 落盘或自动续跑。

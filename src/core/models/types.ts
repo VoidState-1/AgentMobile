@@ -14,7 +14,12 @@ export interface ModelParameters {
   maxOutputTokens: number;
   temperature?: number;
   allowImages: boolean;
-  reasoning: 'off' | 'provider-default';
+  reasoning: 'off' | 'provider-default' | 'on';
+  reasoningBudget?: number;
+  /** Explicit provider dialect; never inferred from a model ID. */
+  reasoningStrategy?: 'budget' | 'adaptive' | 'level';
+  reasoningEffort?: 'low' | 'medium' | 'high';
+  reasoningDisplay?: 'reasoning' | 'summary';
 }
 export interface DiagnosticResult {
   status: 'passed' | 'failed' | 'cancelled';

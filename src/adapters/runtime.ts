@@ -2,6 +2,7 @@ import '@/adapters/polyfills';
 import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import type { TaskRecord } from '@/core/prototype/types';
+import { settleTrace } from '@/core/prototype/trace';
 import { ModelConfigurationService } from '@/core/models/service';
 import { ConversationService } from '@/core/conversations/service';
 import { TaskManager } from './agent/task-manager';
@@ -23,6 +24,7 @@ async function initialize() {
   for (const task of tasks) {
     if (task.state === 'running') await storage.metadata.put('tasks', task.id, {
       ...task, state: 'interrupted', finalCommit: await workspace.git.head(task.projectId).catch(() => undefined),
+      trace: settleTrace(task.trace, 'interrupted', new Date().toISOString()),
       error: workspace.needsRecovery(task.projectId) ? '部分修改尚未完成恢复，请保留本地数据。' :
         '应用运行被中断，文件修改已恢复。可查看已完成结果后发起新任务。',
     });

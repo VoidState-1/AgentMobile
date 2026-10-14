@@ -31,6 +31,7 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
     parameters: { ...defaultModelParameters }, capabilities: { tools: 'unknown', images: 'unknown', reasoning: 'unknown' } };
   const [draft, setDraft] = useState(initial); const [output, setOutput] = useState(String(initial.parameters.maxOutputTokens));
   const [temperature, setTemperature] = useState(initial.parameters.temperature?.toString() ?? '');
+  const [reasoningBudget, setReasoningBudget] = useState(String(initial.parameters.reasoningBudget ?? 1024));
   const signature = (value: ModelInput, tokens: string, temp: string) => JSON.stringify([value, tokens, temp]);
   const [saved, setSaved] = useState(signature(initial, output, temperature)); const revision = useRef(model?.revision);
   const [notice, setNotice] = useState(''); const [deleting, setDeleting] = useState(false);
@@ -42,7 +43,7 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
     if (connection.protocol === 'gemini') geminiResource(draft.apiId);
     const value = await runtime!.models.saveModel({ ...draft, parameters: { ...draft.parameters, maxOutputTokens: Number(output), temperature: temperature.trim() ? Number(temperature) : undefined } }, revision.current);
     const next = edit(value); revision.current = value.revision; setSaved(signature(next, String(value.parameters.maxOutputTokens), value.parameters.temperature?.toString() ?? ''));
-    setDraft(next); setOutput(String(value.parameters.maxOutputTokens)); setTemperature(value.parameters.temperature?.toString() ?? ''); setNotice('模型配置已保存。');
+    setDraft(next); setOutput(String(value.parameters.maxOutputTokens)); setTemperature(value.parameters.temperature?.toString() ?? ''); setReasoningBudget(String(value.parameters.reasoningBudget ?? 1024)); setNotice('模型配置已保存。');
     if (!model) guard.allow(() => router.replace({ pathname: '/models/model', params: { id: value.id, connectionId } }));
   }); };
   const test = (kind: CheckKind) => { void action(async () => {
@@ -89,9 +90,27 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
         <Field label="温度（留空采用服务默认）" value={temperature} keyboardType="decimal-pad" editable={!busy} placeholder={'0–' + (model?.limits?.maxTemperature ?? (connection.protocol === 'anthropic-messages' ? 1 : 2))} onChangeText={setTemperature} />
         <Toggle label="允许图片输入" hint={draft.capabilities.images === 'unknown' ? '图片能力未知，建议先进行图片检测。' : '允许发送参考图片和工具读取的图片。'} value={draft.parameters.allowImages}
           disabled={busy || draft.capabilities.images === 'unsupported'} onChange={(allowImages) => update({ parameters: { ...draft.parameters, allowImages } })} />
-        <T tone="muted" style={{ fontSize: 11 }}>思考参数控制尚未开放；DeepSeek 使用非思考模式。其他协议遵循服务默认，必要签名随工具上下文回传。</T>
+        <Choices label="推理模式" value={draft.parameters.reasoning} disabled={busy} options={[
+          { value: 'off', label: '关闭' }, { value: 'provider-default', label: '服务默认' },
+          ...(connection.protocol !== 'chat-completions' || connection.compatibility === 'deepseek' ? [{ value: 'on', label: '开启' }] : []),
+        ]} onChange={(reasoning) => { if (reasoning !== 'on') setReasoningBudget('1024'); update({ parameters: { ...draft.parameters, reasoning: reasoning as ModelEntry['parameters']['reasoning'], ...(reasoning !== 'on' ? { reasoningBudget: undefined } : {}) } }); }} />
+        {draft.parameters.reasoning === 'on' && connection.protocol !== 'chat-completions' && <>
+          <Choices label="推理参数格式" value={draft.parameters.reasoningStrategy ?? 'budget'} disabled={busy} options={[
+            { value: 'budget', label: 'Token 预算' }, connection.protocol === 'gemini' ? { value: 'level', label: '推理等级' } : { value: 'adaptive', label: '自适应' },
+          ]} onChange={(reasoningStrategy) => { setReasoningBudget('1024'); update({ parameters: { ...draft.parameters, reasoningStrategy, reasoningBudget: undefined } }); }} />
+          {(draft.parameters.reasoningStrategy ?? 'budget') === 'budget' && <Field label="推理预算 tokens" value={reasoningBudget} keyboardType="number-pad" editable={!busy}
+            onChangeText={(value) => { setReasoningBudget(value); update({ parameters: { ...draft.parameters, reasoningBudget: Number(value) } }); }} />}
+          {draft.parameters.reasoningStrategy === 'level' && <Choices label="推理强度" value={draft.parameters.reasoningEffort ?? 'high'} disabled={busy}
+            options={[{ value: 'low', label: '低' }, { value: 'medium', label: '中' }, { value: 'high', label: '高' }]}
+            onChange={(reasoningEffort) => update({ parameters: { ...draft.parameters, reasoningEffort } })} />}
+        </>}
+        <Choices label="公开推理展示" value={draft.parameters.reasoningDisplay ?? (connection.protocol === 'chat-completions' ? 'reasoning' : 'summary')} disabled={busy}
+          options={[{ value: 'reasoning', label: '思考过程' }, { value: 'summary', label: '推理摘要' }]}
+          onChange={(reasoningDisplay) => update({ parameters: { ...draft.parameters, reasoningDisplay } })} />
+        <T tone="muted" style={{ fontSize: 11, lineHeight: 18 }}>仅显示服务公开返回的推理。DeepSeek 默认显示思考过程，Anthropic / Gemini 默认显示摘要。展示类型不改变服务输出，也不会生成隐藏推理。推理计入输出额度；请按模型文档选择参数格式，部分模型无法关闭推理。</T>
+        {connection.protocol === 'chat-completions' && connection.compatibility !== 'deepseek' && <T tone="secondary" style={{ fontSize: 11 }}>通用兼容协议没有统一开关；“关闭”不主动请求推理，“服务默认”由服务决定。支持 reasoning_content、reasoning 和 reasoning_summary 返回字段。</T>}
         {!!model?.limits && <T tone="secondary" style={{ fontSize: 11 }}>服务公布：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出上限 {model.limits.outputTokens?.toLocaleString() ?? '未知'}</T>}
-        <Button label="恢复默认参数" variant="ghost" disabled={busy} onPress={() => { update({ parameters: { ...defaultModelParameters, maxOutputTokens: Math.min(4096, model?.limits?.outputTokens ?? 4096) } }); setOutput(String(Math.min(4096, model?.limits?.outputTokens ?? 4096))); setTemperature(''); }} />
+        <Button label="恢复默认参数" variant="ghost" disabled={busy} onPress={() => { update({ parameters: { ...defaultModelParameters, maxOutputTokens: Math.min(4096, model?.limits?.outputTokens ?? 4096) } }); setOutput(String(Math.min(4096, model?.limits?.outputTokens ?? 4096))); setTemperature(''); setReasoningBudget('1024'); }} />
       </Section>
       <Section title="指定模型检测" hint="使用内置样本，可能计费。每项最多 2 次生成、128 输出 tokens、30 秒；不读取工作区。">
         {(['text', 'tools', 'images'] as const).map((kind) => <View key={kind} style={{ gap: 7 }}>

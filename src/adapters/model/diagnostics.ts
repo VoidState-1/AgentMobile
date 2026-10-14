@@ -31,6 +31,7 @@ export async function runDiagnostic(service: ModelConfigurationService, connecti
       try {
         if (lease.snapshot.connectionRevision !== connection.revision || configurationFingerprint(connection, service.getSnapshot().models.find((m) => m.id === model.id)) !== fingerprint) throw new ProtocolError('配置已改变，请重新检测。');
         const snapshot = { ...lease.snapshot, parameters: { ...lease.snapshot.parameters,
+          reasoning: 'off' as const, reasoningBudget: undefined,
           maxOutputTokens: Math.min(128, lease.snapshot.parameters.maxOutputTokens, model.limits?.outputTokens ?? 128),
           allowImages: kind === 'images' || lease.snapshot.parameters.allowImages } };
         const transport = protocolTransport(snapshot, lease.secret, platform === 'web'); const piModel = protocolModel(snapshot);

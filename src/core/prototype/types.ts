@@ -1,4 +1,5 @@
 import type { ModelRunSnapshot } from '@/core/models/types';
+import type { TraceItem } from './trace';
 
 export interface Project {
   id: string;
@@ -50,6 +51,8 @@ export interface TaskRecord {
   baseCommit: string;
   finalCommit?: string;
   response: string;
+  /** Absent on legacy tasks, whose original ordering cannot be reconstructed. */
+  trace?: TraceItem[];
   events: { tool: string; state: 'started' | 'done' | 'error'; description: string }[];
   error?: string;
   createdAt: string;
