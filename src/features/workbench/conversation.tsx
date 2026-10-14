@@ -5,6 +5,7 @@ import {
   Layers, Paperclip, PenLine, Sparkles, Square, X,
 } from '@/shared/ui/icons';
 import type { TaskRecord } from '@/core/runs/types';
+import { terminalRun } from '@/core/runs/records';
 import { contentLimits } from '@/core/agent/settings';
 import type { Workbench } from './use-workbench';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
@@ -35,10 +36,10 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
         </View>
         <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?
           task.modelSnapshot.connectionName + ' · ' + task.modelSnapshot.modelName : '历史模型未知'}</T>
-        <TaskTrace task={task} />
+        <TaskTrace task={task} cancelChild={(id) => { void Promise.resolve(controller.runtime?.agent.cancel(id)).catch(() => controller.setError('子任务取消状态保存失败，请重新打开应用恢复。')); }} />
         {!!task.error && <View style={{ backgroundColor: theme.dangerSoft, borderRadius: 8, padding: 12, marginTop: 8 }}>
           <T tone="danger" style={{ fontSize: 12 }}>{task.error}</T></View>}
-        {task.state !== 'running' && <Pressable accessibilityRole="button" accessibilityLabel="查看变化" disabled={controller.busy}
+        {terminalRun(task.state) && <Pressable accessibilityRole="button" accessibilityLabel="查看变化" disabled={controller.busy}
           onPress={() => { void controller.reviewTask(task); }} style={({ pressed }) => ({
             marginTop: 13, borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12,
             backgroundColor: pressed ? theme.inset : theme.surface, flexDirection: 'row', alignItems: 'center', gap: 10,

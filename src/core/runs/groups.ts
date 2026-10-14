@@ -8,4 +8,5 @@ export interface RunGroupRecord {
   requests: number;
   tools: number;
   byRun: Record<string, { requests: number; tools: number }>;
+  allocations?: Record<string, { requests: number; tools: number }>;
 }

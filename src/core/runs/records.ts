@@ -21,6 +21,7 @@ export interface RunRecord extends Omit<TaskRecord, 'state' | 'baseCommit' | 'tr
   deadlineAt?: string;
   revision?: number;
   legacyTraceMissing?: boolean;
+  delegationSnapshotRef?: string;
 }
 export interface LaunchSnapshot {
   id: string;
@@ -32,5 +33,5 @@ export interface LaunchSnapshot {
   skills?: readonly SkillSummary[];
   selectedPaths?: readonly string[];
 }
-export interface DelegationReceipt { id: string; parentRunId: string; childRunId: string; fingerprint: string }
+export interface DelegationReceipt { id: string; parentRunId: string; childRunId: string; fingerprint: string; parentTraceId?: string }
 export const terminalRun = (state: RunState): boolean => ['completed', 'failed', 'cancelled', 'interrupted'].includes(state);

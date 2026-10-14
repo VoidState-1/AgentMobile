@@ -40,14 +40,15 @@ export class PiEngineAdapter implements AgentEnginePort {
         receive({ type: 'assistant_end', round, response: response(message), transcript: JSON.parse(JSON.stringify({ messages: agent.state.messages })) });
       }
     });
-    return { get round() { return round; }, cancel: () => { cancelled = true; agent.abort(); }, execute: async () => {
+    const execute = async (prompt: string): ReturnType<EngineSession['execute']> => {
       if (cancelled) return { stopReason: 'aborted' };
-      try { await agent.prompt(input.prompt); } finally { controls.afterRequest?.(); }
+      try { await agent.prompt(prompt); } finally { controls.afterRequest?.(); }
       const last = [...agent.state.messages].reverse().find((message) => message.role === 'assistant');
       const reason = last?.role === 'assistant' ? last.stopReason : undefined;
       if (cancelled && (reason === undefined || reason === 'pending' || reason === 'deferred')) return { stopReason: 'aborted' };
       if (reason === undefined || reason === 'pending' || reason === 'deferred') return { stopReason: 'error', error: '模型未返回完整结束状态。' };
       return { stopReason: reason, error: agent.state.errorMessage };
-    } };
+    };
+    return { get round() { return round; }, cancel: () => { cancelled = true; agent.abort(); }, execute: () => execute(input.prompt), continue: execute };
   }
 }

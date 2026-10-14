@@ -26,7 +26,12 @@ export function runResourceFactory(models: ModelConfigurationService, mcp: McpRu
       const transport = snapshot ? { model: protocolModel(snapshot), streamFn: protocolTransport(snapshot, lease!.secret, web, request.settings.limits.requestTimeoutMs) } : demoTransport(request.prompt);
       return { launch: { mode, imageInput: snapshot?.parameters.allowImages ?? false, modelSnapshot: snapshot, contextTokens: transport.model.contextWindow, outputTokens: transport.model.maxTokens },
         engine: new PiEngineAdapter(transport, snapshot?.parameters.reasoningDisplay ?? (snapshot && snapshot.protocol !== 'chat-completions' ? 'summary' : 'reasoning')),
-        resources: { codec: contentCodec, mcp: mcpRun, skills: skillRun }, release };
+        resources: { codec: contentCodec, mcp: mcpRun, skills: skillRun }, release,
+        createChild: async (prompt) => {
+          const childTransport = snapshot ? { model: protocolModel(snapshot), streamFn: protocolTransport(snapshot, lease!.secret, web, request.settings.limits.requestTimeoutMs) } : demoTransport(prompt, true);
+          return { engine: new PiEngineAdapter(childTransport, snapshot?.parameters.reasoningDisplay ?? (snapshot && snapshot.protocol !== 'chat-completions' ? 'summary' : 'reasoning')),
+            resources: { codec: contentCodec, skills: createSkillRun(skills.repository, { skills: skillRun.snapshots, explicit: [] }) } };
+        } };
     } catch (error) { await release(); throw error; }
   } };
 }

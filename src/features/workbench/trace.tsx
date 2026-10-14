@@ -29,7 +29,7 @@ function Reasoning({ item }: { item: ContentTrace }) {
     </View>}
   </View>;
 }
-function ToolStep({ item }: { item: ToolTrace }) {
+function ToolStep({ item, childRuns, cancelChild }: { item: ToolTrace; childRuns?: TaskRecord[]; cancelChild?: (id: string) => void }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(false);
   const label = item.label ?? toolLabels[item.tool] ?? item.tool; const running = item.state === 'running';
   const Icon = item.tool === 'inspect_image' ? Image : item.tool === 'search_text' ? Search : FileText;
@@ -46,6 +46,9 @@ function ToolStep({ item }: { item: ToolTrace }) {
       {item.state === 'completed' && <Check size={12} color={theme.success} />}
       {expanded ? <ChevronDown size={13} color={theme.muted} /> : <ChevronRight size={13} color={theme.muted} />}
     </Pressable>
+    {!!item.childRunIds?.length && <View style={{ marginLeft: 22, borderLeftWidth: 1, borderLeftColor: theme.border, paddingLeft: 12, gap: 8 }}>
+      {childRuns?.filter((child) => item.childRunIds!.includes(child.id)).map((child) => <ChildTrace key={child.id} task={child} cancel={cancelChild} />)}
+    </View>}
     {expanded && <View style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, borderRadius: 8, padding: 10, gap: 7, marginTop: 4 }}>
       <T tone="muted" style={{ fontSize: 10 }}>第 {item.round} 轮 · {item.tool}{item.durationMs !== undefined ? ' · ' + duration(item.durationMs) : ''}</T>
       <T tone="secondary" style={{ fontSize: 11, fontWeight: '600' }}>输入</T>
@@ -57,7 +60,20 @@ function ToolStep({ item }: { item: ToolTrace }) {
     </View>}
   </View>;
 }
-export function TaskTrace({ task }: { task: TaskRecord }) {
+function ChildTrace({ task, cancel }: { task: TaskRecord; cancel?: (id: string) => void }) {
+  const [expanded, setExpanded] = useState(false); const theme = useWorkbenchTheme();
+  return <View testID="child-trace">
+    <Pressable accessibilityRole="button" accessibilityLabel={'展开子 Agent ' + task.prompt} accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
+      style={{ gap: 4, paddingVertical: 7 }}>
+      <T tone="secondary" style={{ fontSize: 12 }}>子 Agent · {{ queued: '等待启动', running: '执行中', waiting_children: '等待中', cancelling: '正在停止', completed: '已完成', failed: '执行失败', cancelled: '已停止', interrupted: '已中断' }[task.state]}</T>
+      <T tone="muted" numberOfLines={expanded ? undefined : 2} style={{ fontSize: 11 }}>{task.prompt}</T>
+    </Pressable>
+    {cancel && ['queued', 'running'].includes(task.state) && <Pressable accessibilityRole="button" accessibilityLabel={'停止子 Agent ' + task.prompt}
+      onPress={() => cancel(task.id)} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}><T tone="muted" style={{ fontSize: 11 }}>停止此子任务</T></Pressable>}
+    {expanded && <View style={{ padding: 10, backgroundColor: theme.background, borderRadius: 8 }}><TaskTrace task={task} />{!!task.error && <T tone="warning" style={{ fontSize: 11 }}>{task.error}</T>}</View>}
+  </View>;
+}
+export function TaskTrace({ task, cancelChild }: { task: TaskRecord; cancelChild?: (id: string) => void }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(true);
   if (!task.trace) return <View style={{ gap: 8, marginTop: 14 }}>
     {!!task.events.length && <T tone="muted" style={{ fontSize: 10 }}>历史步骤 · 旧任务未保存文字与工具的交错顺序</T>}
@@ -74,10 +90,10 @@ export function TaskTrace({ task }: { task: TaskRecord }) {
       {expanded ? <ChevronDown size={12} color={theme.muted} /> : <ChevronRight size={12} color={theme.muted} />}
     </Pressable>
     {expanded && <View style={{ gap: 9 }}>
-      {task.trace.map((item) => item.kind === 'tool' ? <ToolStep key={item.id} item={item} /> : item.kind === 'reasoning' ? <Reasoning key={item.id} item={item} /> :
+      {task.trace.map((item) => item.kind === 'tool' ? <ToolStep key={item.id} item={item} childRuns={task.children} cancelChild={cancelChild} /> : item.kind === 'reasoning' ? <Reasoning key={item.id} item={item} /> :
         item.text ? <View testID="trace-text" key={item.id} style={{ paddingVertical: 3 }}><Markdown content={item.text} /></View> : null)}
-      {task.state === 'running' && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 7 }}>
-        <ActivityIndicator size={12} color={theme.accent} /><T tone="muted" style={{ fontSize: 11 }}>Agent 正在处理…</T>
+      {['running', 'waiting_children'].includes(task.state) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 7 }}>
+        <ActivityIndicator size={12} color={theme.accent} /><T tone="muted" style={{ fontSize: 11 }}>{task.state === 'waiting_children' ? '等待子 Agent 收束…' : 'Agent 正在处理…'}</T>
       </View>}
       {!hasReasoning && task.mode === 'remote' && task.state !== 'running' && <T tone="muted" style={{ fontSize: 10 }}>服务未返回可展示的推理内容</T>}
     </View>}

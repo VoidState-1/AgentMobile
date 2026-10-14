@@ -3,7 +3,7 @@
 日期：2026-10-14
 状态：可交互原型。第 2 节记录实际实现，其余章节中尚未实现的首版目标仍为设计方案。
 
-新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：R0–R2 已完成，实际执行使用 RunKernel、v2 运行仓库、持久化组预算与请求池；暂时限制一个活动根任务，每次运行创建独立 Pi Agent。R3–R5 的子 Agent、不同项目并发和隔离提案尚未完成。
+新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：R0–R3 已完成，实际执行使用 RunKernel、v2 运行仓库、持久化组预算与请求池；主 Agent 支持一层只读子 Agent，暂时限制一个活动根任务。不同项目并发和隔离写入提案继续实施。
 
 ## 1. 产品目标与范围
 
@@ -45,7 +45,7 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | 连续对话 | 默认最多带入当前对话、同模式最近 12 次目标与回复，按模型窗口预留空间；数量可配置，不重放其他对话或旧工具调用 |
 | TypeScript、ESLint、Vitest、Playwright | 已配置并验证核心流程 |
 | Pi Agent Core 1.1.0 | 已接入；上游核心未修改，Metro 使用纯工具函数入口 |
-| 架构重构、多 Agent 与子 Agent | [新架构方案](architecture-v2.md) 实施中；R0–R2 分层、职责拆分、运行仓库/迁移、队列、共享预算、请求池与恢复已接入实际执行；R3–R5 未完成，当前仍限制一个活动根任务，不支持子 Agent |
+| 架构重构、多 Agent 与子 Agent | [新架构方案](architecture-v2.md) 实施中；R0–R3 已接入实际执行。支持 reader/reviewer 一层只读子 Agent，最多并行 2 个、总计 4 个；固定授权快照、组预算、去重回执、父结果汇总、嵌套轨迹、取消和恢复通过；R4–R5 未完成，仍限制一个活动根任务 |
 | SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
 | 模型密钥持久化 | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证 |
 | SQLite schema | 原型为版本 1 的 records(bucket,id,payload) 表；第 7 节规范化 schema/FTS 未实现 |

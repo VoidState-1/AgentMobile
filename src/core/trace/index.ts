@@ -5,6 +5,12 @@ interface TraceBase {
   startedAt: string;
   endedAt?: string;
   state: TraceState;
+  /** Absent on legacy traces; assigned by the host, never from timestamps. */
+  runId?: string;
+  rootRunId?: string;
+  parentRunId?: string;
+  runSequence?: number;
+  groupSequence?: number;
 }
 export interface ContentTrace extends TraceBase {
   kind: 'text' | 'reasoning';
@@ -21,6 +27,7 @@ export interface ToolTrace extends TraceBase {
   input: string;
   output?: string;
   durationMs?: number;
+  childRunIds?: string[];
 }
 export type TraceItem = ContentTrace | ToolTrace;
 

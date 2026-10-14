@@ -18,6 +18,7 @@ export interface EngineSession {
   readonly round: number;
   execute(): Promise<{ stopReason?: 'stop' | 'toolUse' | 'length' | 'error' | 'aborted'; error?: string }>;
   cancel(): void;
+  continue?(prompt: string): ReturnType<EngineSession['execute']>;
 }
 /** Binding-specific model transport and credentials stay behind the adapter. */
 export interface AgentEnginePort {

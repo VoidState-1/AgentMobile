@@ -3,13 +3,23 @@ import type { TaskRecord } from '@/core/runs/types';
 import type { RunPersistence } from './persistence';
 import { finishTool, recordContent, settleTrace } from '@/core/trace';
 
+export interface TraceIdentitySource { runId: string; rootRunId: string; parentRunId?: string; nextGroupSequence(): number }
+
 export class RunRecorder {
   private writes: Promise<unknown> = Promise.resolve();
   private timer?: ReturnType<typeof setTimeout>;
   private readonly indexes = new Map<string, number>();
+  private runSequence = 0;
   constructor(private readonly task: TaskRecord, private readonly store: RunPersistence, private readonly update: (task: TaskRecord) => void,
-    private readonly sanitize: <T>(value: T) => T = (value) => value, private readonly label: (tool: string) => string | undefined = () => undefined) { task.trace ??= []; }
-  snapshot = (): TaskRecord => ({ ...this.task, events: this.task.events.map((item) => ({ ...item })), trace: this.task.trace!.map((item) => ({ ...item })), skillActivations: this.task.skillActivations?.map((item) => ({ ...item })) });
+    private readonly sanitize: <T>(value: T) => T = (value) => value, private readonly label: (tool: string) => string | undefined = () => undefined,
+    private readonly identity?: TraceIdentitySource) { task.trace ??= []; }
+  snapshot = (): TaskRecord => {
+    if (this.identity) for (const item of this.task.trace!) if (item.runSequence === undefined) Object.assign(item, {
+      runId: this.identity.runId, rootRunId: this.identity.rootRunId, parentRunId: this.identity.parentRunId, runSequence: ++this.runSequence, groupSequence: this.identity.nextGroupSequence(),
+    });
+    return { ...this.task, events: this.task.events.map((item) => ({ ...item })), trace: this.task.trace!.map((item) => ({ ...item })),
+      children: this.task.children?.map((child) => JSON.parse(JSON.stringify(child)) as TaskRecord), skillActivations: this.task.skillActivations?.map((item) => ({ ...item })) };
+  };
   publish() { this.update(this.snapshot()); }
   persist(): Promise<void> {
     if (this.timer) { clearTimeout(this.timer); this.timer = undefined; }

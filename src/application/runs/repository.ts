@@ -6,6 +6,7 @@ import { AppError } from '@/core/errors';
 import { mainSessionId } from '@/core/models/rules';
 import { historyEntries } from './context';
 import type { RunPersistence } from './persistence';
+import type { RunGroupRecord } from '@/core/runs/groups';
 
 const runsBucket = 'runs-v2';
 interface RunIndex { ids: string[] }
@@ -59,7 +60,8 @@ export class RunRepository {
     return this.exclusive(() => this.write(frozen, frozenLaunch, frozenTrace));
   }
   saveTask(task: TaskRecord): Promise<void> {
-    const { trace, ...fields } = copy(task);
+    const value = copy(task); delete value.children;
+    const { trace, ...fields } = value;
     return this.exclusive(async () => {
       const previous = await this.get(task.id);
       if (!previous) throw new AppError('STORAGE', '运行记录不存在。');
@@ -86,16 +88,22 @@ export class RunRepository {
   }
   async view(id: string): Promise<TaskRecord | undefined> {
     const run = await this.get(id); if (!run) return;
-    return { ...run, trace: run.legacyTraceMissing ? undefined : await this.trace(id) };
+    const children = run.kind === 'root' ? await this.children(run.rootRunId) : undefined;
+    return { ...run, trace: run.legacyTraceMissing ? undefined : await this.trace(id), ...(children?.length ? { children } : {}) };
   }
   async views(projectId: string, conversationId?: string): Promise<TaskRecord[]> {
     const tasks: TaskRecord[] = []; let cursor: string | undefined;
     do {
       const page = await this.list(projectId, conversationId, cursor, 100);
-      for (const run of page.runs) tasks.push({ ...run, trace: run.legacyTraceMissing ? undefined : await this.trace(run.id) });
+      for (const run of page.runs) tasks.push((await this.view(run.id))!);
       cursor = page.cursor;
     } while (cursor);
     return tasks;
+  }
+  async children(rootRunId: string): Promise<TaskRecord[]> {
+    const children: TaskRecord[] = [];
+    for (const run of await this.group(rootRunId)) if (run.kind === 'child') children.push({ ...run, trace: await this.trace(run.id) });
+    return children;
   }
   async active(): Promise<RunRecord[]> {
     const index = await this.store.get<RunIndex>('run-indexes', 'active') ?? { ids: [] };
@@ -134,7 +142,8 @@ export class RunRepository {
     for (const id of index.ids) { const run = await this.get(id); if (run) runs.push(run); }
     return runs;
   }
-  createChild(receipt: DelegationReceipt, child: RunRecord, launch: LaunchSnapshot): Promise<string> {
+  delegation(id: string) { return this.store.get<DelegationReceipt>('run-delegations', id); }
+  createChild(receipt: DelegationReceipt, child: RunRecord, launch: LaunchSnapshot, group?: RunGroupRecord): Promise<string> {
     return this.exclusive(async () => {
       const previous = await this.store.get<DelegationReceipt>('run-delegations', receipt.id);
       if (previous) {
@@ -142,11 +151,18 @@ export class RunRepository {
         return previous.childRunId;
       }
       const parent = await this.get(receipt.parentRunId);
-      if (!parent || terminalRun(parent.state) || child.parentRunId !== parent.id || child.rootRunId !== parent.rootRunId || child.projectId !== parent.projectId || child.conversationId !== parent.conversationId || receipt.childRunId !== child.id || child.launchSnapshotRef !== launch.id)
+      if (!parent || terminalRun(parent.state) || parent.state === 'cancelling' || child.parentRunId !== parent.id || child.rootRunId !== parent.rootRunId || child.projectId !== parent.projectId || child.conversationId !== parent.conversationId || receipt.childRunId !== child.id || child.launchSnapshotRef !== launch.id || (group && group.rootRunId !== parent.rootRunId))
         throw new AppError('VALIDATION', '子任务与父任务的范围不匹配。');
       if (await this.get(child.id)) throw new AppError('CONFLICT', '子任务标识已存在。');
-      await this.batch([{ bucket: runsBucket, id: child.id, value: child }, { bucket: 'run-launches', id: launch.id, value: launch },
-        { bucket: 'run-delegations', id: receipt.id, value: receipt }, ...await this.indexes(child), await this.activeIndex(child)]);
+      const entries: MetadataEntry[] = [{ bucket: runsBucket, id: child.id, value: child }, { bucket: 'run-launches', id: launch.id, value: launch },
+        { bucket: 'run-delegations', id: receipt.id, value: receipt }, ...await this.indexes(child), await this.activeIndex(child)];
+      if (group) entries.push({ bucket: 'run-groups', id: group.rootRunId, value: group });
+      if (receipt.parentTraceId) {
+        const trace = await this.trace(parent.id); const tool = trace.find((item) => item.id === receipt.parentTraceId);
+        if (tool?.kind !== 'tool') throw new AppError('CONFLICT', '委派工具意图未保存，不能创建子任务。');
+        tool.childRunIds = [...(tool.childRunIds ?? []), child.id]; entries.push({ bucket: 'run-traces', id: parent.id, value: trace });
+      }
+      await this.batch(entries);
       return child.id;
     });
   }

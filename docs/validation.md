@@ -375,3 +375,13 @@ R2 请求资源池新增 3 项并发/公平/取消/前后台验证；运行仓�
 Android API 36.1 x86_64 隔离模拟器：android-smoke 的编辑/未保存保护、实际 Pi 工具、重启、主题通过；android-runs 核对实际 runs-v2、launch、transcript、4 次模型请求/3 次工具预算和无旧 tasks 双写。通过 SQLite trigger 在 run-migrations 写入点注入异常，验证 run/launch/trace/marker/索引全部回滚且来源保留；移除 trigger 后重启迁移完成。合成非终态父/子/排队运行收束 interrupted，公开轨迹与活动索引恢复，已消费草稿清理，文件操作数不增加。恢复树测试不是子 Agent 执行验证。
 
 Web 与 Android/iOS JS/Hermes 导出通过。本轮未改依赖/Expo 配置。iOS 原生与 arm64 真机待验证。复现原生验证：隔离开发客户端/Metro/adb reverse 就绪后运行 `node scripts/android-smoke.mjs <serial>`，再运行 `node scripts/android-runs.mjs <serial>`；后者只能用于合成测试设备，会注入测试记录与失败 trigger。R3–R5 尚未交付。
+
+## 2026-10-14：架构 v2 R3 只读子 Agent
+
+156 项测试通过：固定快照隔离父后续写入、独立上下文与工具 grant、同 invocation 去重/参数冲突/跨运行拒绝、两并行/四总数、定向与递归取消、child/receipt/预算事务中断重试、子额度和父汇总保留。新轨迹保存 run/root/parent 身份、单运行与组内宿主序号。
+
+37 条完整浏览器回归通过，另执行两个委派专项（38 个独立流程）：真实 Pi 创建两个子任务、只读工具集合、无自动复制父上下文、父等待不占槽、子结果先持久化、父引擎自动继续汇总、折叠轨迹与刷新；wait_agents 显式等待过程中通过 UI 只取消 A，B 继续完成并回传取消事实。
+
+Android API 36.1 x86_64 隔离模拟器运行本地 delegation-fixture，实际两个子 Pi 模型/只读工具闭环通过，服务测得并发模型请求最多 2。SQLite 核对同输入快照、独立 transcript、父轨迹子链接、组预算与公开汇总；另验证根任务递归取消及等待中强制终止后父/子均 interrupted。没有付费模型请求。复现：启动 `node scripts/delegation-fixture.mjs`、隔离开发客户端/Metro，并配置 ANDROID_HOME/AGENT_MOBILE_METRO_PORT，运行 `node scripts/android-delegation.mjs <serial>`；脚本只用于合成设备，会添加本地无认证模型配置。
+
+Web 与 Android/iOS JS/Hermes 导出通过。iOS 原生/arm64 真机仍待验证。R4 多根并发、共享 MCP 调度屏障和 R5 隔离写入提案尚未交付。

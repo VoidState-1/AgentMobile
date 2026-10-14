@@ -45,6 +45,7 @@ export class WorkspaceApplication {
   diff = (...args: Parameters<GitService['diff']>) => this.versions.diff(...args);
   discard = (...args: Parameters<GitService['discard']>) => this.versions.discard(...args);
   taskBaseline = (...args: Parameters<RunSnapshots['taskBaseline']>) => this.runs.taskBaseline(...args);
+  inputSnapshot = (...args: Parameters<RunSnapshots['inputSnapshot']>) => this.runs.inputSnapshot(...args);
   taskFinal = (...args: Parameters<RunSnapshots['taskFinal']>) => this.runs.taskFinal(...args);
   taskChanges = (...args: Parameters<RunSnapshots['taskChanges']>) => this.runs.taskChanges(...args);
   undoTask = (...args: Parameters<RunSnapshots['undoTask']>) => this.runs.undoTask(...args);

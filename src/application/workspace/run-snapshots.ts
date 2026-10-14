@@ -8,6 +8,9 @@ import type { GitService } from './git';
 
 export class RunSnapshots {
   constructor(private readonly context: WorkspaceContext, private readonly reader: WorkspaceReader, private readonly mutations: MutationCoordinator, private readonly versions: GitService) {}
+  inputSnapshot(projectId: string, owner: string, key: string): Promise<string> {
+    return this.mutations.serial(projectId, owner, async () => this.context.git.checkpoint(projectId, await this.reader.workingTree(projectId), 'delegations/' + key, await this.context.git.head(projectId)));
+  }
   taskBaseline(projectId: string, taskId: string): Promise<GitBaseline> {
     return this.mutations.serial(projectId, taskId, async () => {
       const head = await this.context.git.head(projectId);

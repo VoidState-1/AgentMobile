@@ -34,4 +34,6 @@ export interface TaskRecord {
   events: { tool: string; state: 'started' | 'done' | 'error'; description: string }[];
   error?: string;
   createdAt: string;
+  /** Public child views; persisted separately, never part of parent transcript. */
+  children?: TaskRecord[];
 }

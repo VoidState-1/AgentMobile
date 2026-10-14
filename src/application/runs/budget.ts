@@ -20,11 +20,32 @@ export class GroupBudget {
   }
   snapshot(): RunGroupRecord { if (!this.state) throw new AppError('STORAGE', '任务组预算尚未启动。'); return JSON.parse(JSON.stringify(this.state)) as RunGroupRecord; }
   remainingMs() { return Math.max(0, new Date(this.snapshot().deadlineAt).getTime() - this.now()); }
+  allocate(runId: string, allocation: { requests: number; tools: number }, commit: (group: RunGroupRecord) => Promise<void>): Promise<void> {
+    return this.exclusive(async () => {
+      const next = this.snapshot();
+      if (this.remainingMs() <= 0) { this.timeout(); throw new AppError('LIMIT', this.error!); }
+      if (!Number.isInteger(allocation.requests) || allocation.requests < 1 || !Number.isInteger(allocation.tools) || allocation.tools < 1) throw new AppError('VALIDATION', '子任务预算必须为正整数。');
+      const outstanding = (resource: 'requests' | 'tools') => Object.entries(next.allocations ?? {}).reduce((sum, [id, quota]) => sum + Math.max(0, quota[resource] - (next.byRun[id]?.[resource] ?? 0)), 0);
+      if (next.requests + outstanding('requests') + allocation.requests + 2 > next.limits.maxModelRounds || next.tools + outstanding('tools') + allocation.tools > next.limits.maxToolCalls)
+        throw new AppError('LIMIT', '任务组剩余额度不足以分配子任务并保留父任务汇总额度。');
+      next.allocations = { ...next.allocations, [runId]: { ...allocation } };
+      // The child, receipt and allocation commit in one metadata transaction.
+      await commit(next); this.state = next;
+    });
+  }
+  releaseAllocation(runId: string): Promise<void> {
+    return this.exclusive(async () => {
+      const next = this.snapshot(); if (!next.allocations?.[runId]) return;
+      delete next.allocations[runId]; await this.store.put('run-groups', this.rootRunId, next); this.state = next;
+    });
+  }
   reserve(runId: string, resource: 'requests' | 'tools', child = false): Promise<void> {
     return this.exclusive(async () => {
       const next = this.snapshot();
       const maximum = resource === 'requests' ? next.limits.maxModelRounds : next.limits.maxToolCalls;
       const reserve = resource === 'requests' && child ? 2 : 0;
+      const allocation = next.allocations?.[runId];
+      if (child && (!allocation || (next.byRun[runId]?.[resource] ?? 0) >= allocation[resource])) throw new AppError('LIMIT', '达到子任务分配的' + (resource === 'requests' ? '模型请求' : '工具调用') + '上限。');
       if (this.now() >= new Date(next.deadlineAt).getTime()) this.timeout();
       else if (next[resource] >= maximum - reserve) {
         if (child && resource === 'requests') throw new AppError('LIMIT', '任务组需保留父任务汇总额度，无法继续派发子任务请求。');

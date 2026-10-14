@@ -14,11 +14,13 @@ import { GroupBudget } from './budget';
 import { RunRepository } from './repository';
 import { RequestScheduler, type RequestPermit } from './request-scheduler';
 import type { PreparedRun, RunResourceFactory } from './resources';
+import { DelegationSession } from './delegation';
 
 export interface RunKernelSnapshot { active?: TaskRecord; completed?: TaskRecord; runs: readonly TaskRecord[]; error?: string; starting: boolean }
 interface Entry {
   record: RunRecord; view: TaskRecord; abort: AbortController; admitted: boolean; executing: boolean;
   prepared?: PreparedRun; conversation?: { release(): void }; cleanup?: Promise<void>;
+  delegation?: DelegationSession;
 }
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
 function freeze<T>(value: T): T { if (value && typeof value === 'object') { Object.values(value).forEach(freeze); Object.freeze(value); } return value; }
@@ -96,7 +98,10 @@ export class RunKernel {
   }
   cancel = async (runId?: string): Promise<void> => {
     const entry = runId ? this.entries.get(runId) : [...this.entries.values()].find((entry) => entry.admitted) ?? [...this.entries.values()][0];
-    if (!entry) return;
+    if (!entry) {
+      for (const root of this.entries.values()) if (runId && root.delegation?.owns(runId)) { await root.delegation.cancel(runId); return; }
+      return;
+    }
     entry.abort.abort();
     if (!entry.admitted) return;
     // executing includes baseline/resource preparation, before a Pi instance exists.
@@ -128,14 +133,18 @@ export class RunKernel {
   private async execute(entry: Entry) {
     const record = entry.record; const prepared = entry.prepared!;
     const budget = new GroupBudget(this.workspace.metadata, record.rootRunId, record.agentSettingsSnapshot!.limits);
+    let groupSequence = 0; const nextGroupSequence = () => ++groupSequence;
     let permit: RequestPermit | undefined;
     const releaseRequest = () => { permit?.release(); permit = undefined; };
     try {
       const group = await budget.start();
       record.deadlineAt = group.deadlineAt; await this.repository.save(record);
+      entry.delegation = prepared.createChild ? new DelegationSession(record, prepared, this.workspace, this.repository, budget, this.requests, this.limits, entry.abort, this.id, nextGroupSequence) : undefined;
       const started = await startRun(this.workspace, { ...prepared.launch, runId: record.id, projectId: record.projectId, conversationId: record.conversationId!, prompt: record.prompt,
         agentSettings: record.agentSettingsSnapshot!, draftRevision: record.draftRevision, createdAt: record.createdAt }, prepared.engine,
-      { ...prepared.resources, execution: { persistence: this.repository.execution(), signal: entry.abort.signal, remainingMs: () => budget.remainingMs(), error: () => budget.error, timeout: () => budget.timeout(),
+      { ...prepared.resources, execution: { persistence: this.repository.execution(), signal: entry.abort.signal, delegation: entry.delegation,
+        traceIdentity: { runId: record.id, rootRunId: record.rootRunId, nextGroupSequence },
+        remainingMs: () => budget.remainingMs(), error: () => budget.error, timeout: () => { budget.timeout(); entry.abort.abort(); },
         controls: { beforeRequest: async (signal) => {
           if (entry.abort.signal.aborted) throw new AppError('CANCELLED', '任务已取消。');
           permit = await this.requests.acquire(record.rootRunId, record.modelSnapshot?.connectionId ?? 'demo', signal ?? entry.abort.signal);

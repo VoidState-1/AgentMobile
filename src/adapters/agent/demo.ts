@@ -2,7 +2,7 @@ import { createAssistantMessageEventStream, type AssistantMessage, type Model, t
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 
 /** Scripted transport exercises Pi's real loop and host tools; it is not an LLM. */
-export function demoTransport(prompt: string): { model: Model<string>; streamFn: StreamFn } {
+export function demoTransport(prompt: string, readOnly = false): { model: Model<string>; streamFn: StreamFn } {
   let round = 0;
   const model: Model<string> = {
     id: 'scripted-demo', name: '演示', api: 'mobile-demo', provider: 'local-demo', baseUrl: '',
@@ -27,8 +27,8 @@ export function demoTransport(prompt: string): { model: Model<string>; streamFn:
       const listing = context.messages.find((item) => item.role === 'toolResult' && item.toolName === 'list_files');
       const text = listing?.role === 'toolResult' ? listing.content.filter((part) => part.type === 'text').map((part) => part.text).join('') : '[]';
       const files = JSON.parse(text) as { path: string; revision: string }[];
-      if (round === 2) call('read_text', { path: files.find((file) => /\.md$/.test(file.path))?.path ?? 'documents/notes.md' });
-      else if (round === 3) {
+      if (round === 2) call('read_text', { path: files.find((file) => /\.md$/.test(file.path))?.path ?? files[0]?.path ?? 'documents/notes.md' });
+      else if (round === 3 && !readOnly) {
         const reading = context.messages.find((item) => item.role === 'toolResult' && item.toolName === 'read_text');
         const data = reading?.role === 'toolResult' && !reading.isError ?
           JSON.parse(reading.content.filter((part) => part.type === 'text').map((part) => part.text).join('')) : { text: '' };
@@ -43,7 +43,8 @@ export function demoTransport(prompt: string): { model: Model<string>; streamFn:
         const failed = context.messages.some((item) => item.role === 'toolResult' && item.isError);
         message.content.push({ type: 'text', text: failed ?
           '演示遇到工具错误，请检查任务记录。已完成的修改仍保留在项目中。' :
-          '已完成演示任务：读取资料，并创建或更新 documents/summary.md。文件已保存，可在版本面板暂存并提交。\n\n演示模式使用预设步骤，不进行语义理解。' });
+          readOnly ? '已读取授权固定快照。此为只读预设演示结果，不进行语义理解。' :
+            '已完成演示任务：读取资料，并创建或更新 documents/summary.md。文件已保存，可在版本面板暂存并提交。\n\n演示模式使用预设步骤，不进行语义理解。' });
       }
     }
     if (message.stopReason === 'toolUse') message.content.unshift({ type: 'text', text: [
