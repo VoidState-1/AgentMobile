@@ -5,6 +5,7 @@ import {
   Layers, Paperclip, PenLine, Sparkles, Square, X,
 } from './icons';
 import type { TaskRecord } from '@/core/prototype/types';
+import { contentLimits } from '@/core/agent/settings';
 import type { Workbench } from './use-workbench';
 import { Brand, Button, IconButton, T } from './ui';
 import { useWorkbenchTheme } from './theme';
@@ -127,7 +128,7 @@ export function Conversation({ controller }: { controller: Workbench }) {
           <IconButton icon={X} size={30} label="移除参考文件" onPress={() => controller.setAttachment(undefined)} />
         </View>}
         <TextInput ref={input} accessibilityLabel="任务目标" testID="task-prompt" value={controller.prompt} onChangeText={controller.setPrompt}
-          multiline maxLength={4000} placeholder="描述你的任务，或选择一份资料开始…" placeholderTextColor={theme.muted}
+          multiline maxLength={contentLimits.promptCharacters} placeholder="描述你的任务，或选择一份资料开始…" placeholderTextColor={theme.muted}
           editable={!controller.conversationActive && !controller.busy && !!controller.selectedConversation} textAlignVertical="top"
           onContentSizeChange={(event) => setInputHeight(Math.max(54, Math.min(130, event.nativeEvent.contentSize.height)))}
           onKeyPress={(event) => {

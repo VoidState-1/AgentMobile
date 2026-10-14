@@ -5,10 +5,11 @@ import type { GitPort } from '@/core/git/contracts';
 import { isImage, mimeFor, safePath } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';
 import { createGitRepository } from '@/adapters/git/repository';
+import { contentLimits } from '@/core/agent/settings';
 
 const encode = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
 const decode = (value: string) => new Uint8Array(Buffer.from(value, 'base64'));
-const MAX_FILE_BYTES = 5 * 1024 * 1024;
+const MAX_FILE_BYTES = contentLimits.fileBytes;
 
 export class WorkspaceService {
   readonly git: GitPort;
@@ -80,14 +81,14 @@ export class WorkspaceService {
 
   async read(projectId: string, path: string) {
     const bytes = await this.fs.read(this.internal(projectId, path));
-    if (bytes.length > MAX_FILE_BYTES) throw new Error('文件超过原型的 5 MB 限制');
+    if (bytes.length > MAX_FILE_BYTES) throw new Error('文件超过 20 MB 限制');
     return { bytes, revision: await this.git.revision(bytes) };
   }
 
   async readText(projectId: string, path: string) {
     if (isImage(path)) throw new Error('图片请通过图片工具读取');
     const { bytes, revision } = await this.read(projectId, path);
-    if (bytes.length > 256 * 1024) throw new Error('文本超过 256 KB 限制');
+    if (bytes.length > contentLimits.textFileBytes) throw new Error('文本超过 1 MB 限制');
     return { text: Buffer.from(bytes).toString('utf8'), revision };
   }
 
@@ -128,8 +129,8 @@ export class WorkspaceService {
   ) {
     safePath(path);
     if (path === 'project.json') throw new Error('项目配置由宿主管理');
-    if (bytes.length > MAX_FILE_BYTES) throw new Error('文件超过 5 MB 限制');
-    if (!isImage(path) && bytes.length > 256 * 1024) throw new Error('文本超过 256 KB 限制');
+    if (bytes.length > MAX_FILE_BYTES) throw new Error('文件超过 20 MB 限制');
+    if (!isImage(path) && bytes.length > contentLimits.textFileBytes) throw new Error('文本超过 1 MB 限制');
     if (isImage(path)) validateImage(path, bytes);
     return this.serial(projectId, options.owner, async () => {
       const operationId = options.operationId ?? this.id();

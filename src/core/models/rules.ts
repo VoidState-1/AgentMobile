@@ -1,4 +1,5 @@
 import type { ModelConfiguration, ModelEntry, ModelRunSnapshot, ProviderConnection } from './types';
+import { contentLimits } from '../agent/settings';
 
 export function normalizedServiceAddress(value: string): string {
   let address: URL;
@@ -22,7 +23,7 @@ export function validateModelEntity(model: ModelEntry): void {
   if (!model.name.trim() || model.name.trim().length > 100) throw new Error('模型显示名称需要 1–100 个字符。');
   if (!model.apiId.trim() || model.apiId.trim().length > 180 || /[\s?#\\\u0000-\u001f]/.test(model.apiId)) throw new Error('请输入有效的请求模型 ID。');
   const p = model.parameters;
-  if (!Number.isInteger(p.maxOutputTokens) || p.maxOutputTokens < 16 || p.maxOutputTokens > 16384) throw new Error('输出上限应为 16–16,384 tokens。');
+  if (!Number.isInteger(p.maxOutputTokens) || p.maxOutputTokens < 16 || p.maxOutputTokens > contentLimits.outputTokens) throw new Error('输出上限应为 16–65,536 tokens。');
   if (model.limits?.outputTokens && p.maxOutputTokens > model.limits.outputTokens) throw new Error('输出上限超过模型公布的限制。');
   if (p.temperature !== undefined && (!Number.isFinite(p.temperature) || p.temperature < 0 || p.temperature > (model.limits?.maxTemperature ?? 2))) throw new Error('温度超出此模型支持的范围。');
   if (!['off', 'provider-default', 'on'].includes(p.reasoning)) throw new Error('推理模式无效。');

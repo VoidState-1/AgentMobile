@@ -110,7 +110,7 @@ function ModelEditor({ controller, model, connectionId }: { controller: Configur
         <T tone="muted" style={{ fontSize: 11, lineHeight: 18 }}>仅显示服务公开返回的推理。DeepSeek 默认显示思考过程，Anthropic / Gemini 默认显示摘要。展示类型不改变服务输出，也不会生成隐藏推理。推理计入输出额度；请按模型文档选择参数格式，部分模型无法关闭推理。</T>
         {connection.protocol === 'chat-completions' && connection.compatibility !== 'deepseek' && <T tone="secondary" style={{ fontSize: 11 }}>通用兼容协议没有统一开关；“关闭”不主动请求推理，“服务默认”由服务决定。支持 reasoning_content、reasoning 和 reasoning_summary 返回字段。</T>}
         {!!model?.limits && <T tone="secondary" style={{ fontSize: 11 }}>服务公布：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出上限 {model.limits.outputTokens?.toLocaleString() ?? '未知'}</T>}
-        <Button label="恢复默认参数" variant="ghost" disabled={busy} onPress={() => { update({ parameters: { ...defaultModelParameters, maxOutputTokens: Math.min(4096, model?.limits?.outputTokens ?? 4096) } }); setOutput(String(Math.min(4096, model?.limits?.outputTokens ?? 4096))); setTemperature(''); setReasoningBudget('1024'); }} />
+        <Button label="恢复默认参数" variant="ghost" disabled={busy} onPress={() => { const tokens = Math.min(defaultModelParameters.maxOutputTokens, model?.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens); update({ parameters: { ...defaultModelParameters, maxOutputTokens: tokens } }); setOutput(String(tokens)); setTemperature(''); setReasoningBudget('1024'); }} />
       </Section>
       <Section title="指定模型检测" hint="使用内置样本，可能计费。每项最多 2 次生成、128 输出 tokens、30 秒；不读取工作区。">
         {(['text', 'tools', 'images'] as const).map((kind) => <View key={kind} style={{ gap: 7 }}>

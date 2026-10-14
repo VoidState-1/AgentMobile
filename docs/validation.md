@@ -227,3 +227,27 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 截图：work/trace-mobile-{协议}-light.png、work/trace-mobile-{协议}-dark.png、work/trace-android-light.png、work/trace-android-tool-details.png、work/trace-android-dark.png、work/trace-android-interrupted.png。截图与导出均为忽略的本地验证产物。
 
 持久化边界：每约 200ms 合并检查点，消息/工具边界与终态立即入队；强制停止可能丢失最后尚未提交的增量，不承诺逐 token 落盘或自动续跑。
+
+## 2026-10-14：长任务预算与系统提示词设置
+
+默认模型请求 10 → 50 轮，工具调用 30 → 200 次，任务总时长 2 → 20 分钟，单次生成请求超时 60 → 300 秒。全局系统提示词与这四项预算、历史数量可从“设置 → Agent 设置”修改，分别恢复提示词/预算，并保存到 settings/agent。任务记录增加 agentSettingsSnapshot，固定启动时配置。
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript、ESLint、85 项测试通过 |
+| 长 Pi 任务 | 实际执行 35 次 list_files、36 轮模型请求，越过旧轮数/次数限制并完成；自定义低轮数/次数仍正确停止并指出对应上限 |
+| 请求与任务超时 | 使用可控时钟验证 75 秒流式请求可完成，显式 10 秒请求超时仍停止；任务总时长到期标为 failed 并保留部分推理，主动取消的原回归通过 |
+| 系统提示词与配置版本 | 设置保存/重开恢复、冻结快照、保存失败保持旧值、并发旧 revision 拒绝；运行中修改后，当前任务两轮请求仍用原提示词，下一任务采用新提示词和预算 |
+| 大文字资料 | 200,000 字符/600 KB UTF-8 文本通过真实工具写入与 Git 提交；超过旧 512 KB 的 SSE 响应正常解析；分页读取返回准确 offset/nextOffset/totalCharacters 与完整文件修订号；超过 1 MB 仍拒绝 |
+| 草稿、历史、模型上限 | 16,000 字符草稿保存通过，16,001 拒绝；携带 8 条历史，设为 0 后不携带；32,768 输出可配置，供应商公布更低值仍拒绝 |
+| 浏览器 | 21 条流程通过（首轮 20 条通过，旧默认输出断言更新后剩余 1 条定向重跑通过）；新增 Agent 设置保存、刷新、错误校验、未保存保护、深浅/短视口、运行快照和 6 MB 图片导入/刷新持久化 |
+| Android | API 36.1 x86_64，独立 emulator-5556：系统提示词及 80 轮/300 工具/30 分钟/600 秒保存、强制停止重开恢复，未保存保护、演示任务、深浅主题、独立恢复默认预算并再次重开，通过 |
+| 三平台导出 | Android、iOS、Web JS/Hermes 打包通过；iOS 原生与 arm64 真机待验证 |
+
+网络与内容限制同时提高：请求体 8 MB、SSE 响应 4 MB、单轮 32 工具、单次文字工具 240,000 字符、文本文件 1 MB、系统导入与浏览器导入 20 MB、模型图片 4 MB；像素上限仍为 2,400 万。新模型默认输出 8,192、可配置至 65,536，目录公布更低上限时继续约束；已有模型参数不迁移覆盖。
+
+原生复现：设置 ANDROID_HOME、AGENT_MOBILE_METRO_PORT，启动开发客户端和 Metro、配置 adb reverse，再运行 `node scripts/android-agent-settings.mjs <serial>`。本轮使用本地模拟协议与演示，不消耗真实供应商额度。
+
+视觉检查：work/agent-settings-mobile-light.png、work/agent-settings-mobile-dark.png、work/agent-settings-android-light.png、work/agent-settings-android-dark.png。390px 深浅主题和 360×500 视口均可用；原生保存按钮固定，软键盘与表单滚动正常。
+
+边界：供应商的上下文、输出、图片和限流约束仍适用；历史以字符量保守预留空间，精确 tokenizer、当前任务自动摘要压缩、后台常驻和自动续跑尚未实现。提示词编辑只改变模型行为描述，受控路径、版本校验和宿主工具权限继续执行。

@@ -3,6 +3,7 @@ import * as Crypto from 'expo-crypto';
 import { Platform } from 'react-native';
 import type { TaskRecord } from '@/core/prototype/types';
 import { settleTrace } from '@/core/prototype/trace';
+import { AgentSettingsService } from '@/core/agent/settings';
 import { ModelConfigurationService } from '@/core/models/service';
 import { ConversationService } from '@/core/conversations/service';
 import { TaskManager } from './agent/task-manager';
@@ -17,6 +18,7 @@ async function initialize() {
   const workspace = new WorkspaceService(storage.fs, storage.metadata, Crypto.randomUUID);
   const models = new ModelConfigurationService(storage.metadata, storage.credentials, Crypto.randomUUID);
   await models.initialize();
+  const agentSettings = new AgentSettingsService(storage.metadata); await agentSettings.initialize();
   await workspace.recover();
   const conversations = new ConversationService(storage.metadata, Crypto.randomUUID);
   await conversations.initialize(await workspace.projects());
@@ -30,7 +32,7 @@ async function initialize() {
     });
   }
   return {
-    workspace, ...storage, models, conversations, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations),
+    workspace, ...storage, models, conversations, agentSettings, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings),
     tasks: async (projectId: string, conversationId?: string) => (await storage.metadata.all<TaskRecord>('tasks'))
       .filter((task) => task.projectId === projectId && (!conversationId || task.conversationId === conversationId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };

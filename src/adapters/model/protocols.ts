@@ -3,6 +3,7 @@ import { createAssistantMessageEventStream, getCurrentSystemPrompt, getCurrentTo
 import type { StreamFn } from '@earendil-works/pi-agent-core';
 import type { ModelRunSnapshot } from '@/core/models/types';
 import { geminiResource, modelEndpoint, modelHeaders, ProtocolError, requestStream, safeModelError } from './http';
+import { contentLimits, defaultAgentLimits } from '@/core/agent/settings';
 
 type Wire = Record<string, any>;
 export type PublicThinking = ThinkingContent & { visibility?: 'reasoning' | 'summary' | 'unavailable' };
@@ -120,7 +121,7 @@ const argsObject = (value: unknown): ToolCall['arguments'] => {
   return value as ToolCall['arguments'];
 };
 
-export function protocolTransport(config: ModelRunSnapshot, secret: string, web = false): StreamFn {
+export function protocolTransport(config: ModelRunSnapshot, secret: string, web = false, timeoutMs = defaultAgentLimits.requestTimeoutMs): StreamFn {
   let requestSequence = 0;
   const headers = modelHeaders(config, secret, web);
   const endpoint = modelEndpoint(config, config.protocol === 'gemini' ? geminiResource(config.apiModelId) + ':streamGenerateContent?alt=sse' :
@@ -174,7 +175,7 @@ export function protocolTransport(config: ModelRunSnapshot, secret: string, web 
             if (typeof delta?.reasoning_summary === 'string' && delta.reasoning_summary) append('thinking', delta.reasoning_summary, 'summary');
             if (typeof delta?.content === 'string') text(delta.content);
             for (const update of delta?.tool_calls ?? []) {
-              if (!Number.isInteger(update.index) || update.index < 0 || update.index > 15) throw new ProtocolError('工具调用序号无效。');
+              if (!Number.isInteger(update.index) || update.index < 0 || update.index >= contentLimits.toolCallsPerRound) throw new ProtocolError('工具调用序号无效。');
               const call = calls.get(update.index) ?? { id: '', name: '', json: '' };
               if (update.id) call.id = update.id;
               call.name += update.function?.name ?? ''; call.json += update.function?.arguments ?? ''; calls.set(update.index, call);
@@ -192,7 +193,7 @@ export function protocolTransport(config: ModelRunSnapshot, secret: string, web 
               message.usage.cacheRead = number(event.message?.usage?.cache_read_input_tokens);
               message.usage.cacheWrite = number(event.message?.usage?.cache_creation_input_tokens);
             } else if (event.type === 'content_block_start') {
-              if (!began || !Number.isInteger(event.index) || event.index < 0 || event.index > 31 || blocks.has(event.index)) throw new ProtocolError('内容块序号无效。');
+              if (!began || !Number.isInteger(event.index) || event.index < 0 || event.index > 127 || blocks.has(event.index)) throw new ProtocolError('内容块序号无效。');
               const block = event.content_block; const index = message.content.length;
               if (block.type === 'text') { message.content.push({ type: 'text', text: block.text ?? '' }); stream.push({ type: 'text_start', contentIndex: index, partial: message }); }
               else if (block.type === 'tool_use') message.content.push({ type: 'toolCall', id: block.id, name: block.name, arguments: block.input ?? {} });
@@ -238,7 +239,7 @@ export function protocolTransport(config: ModelRunSnapshot, secret: string, web 
               if (part.functionCall) {
                 closeContent(message.content.length - 1);
                 const call = part.functionCall;
-                if (message.content.filter((p) => p.type === 'toolCall').length >= 16) throw new ProtocolError('工具调用超过限制。');
+                if (message.content.filter((p) => p.type === 'toolCall').length >= contentLimits.toolCallsPerRound) throw new ProtocolError('工具调用超过限制。');
                 message.content.push({ type: 'toolCall', id: 'gemini-' + requestId + '-' + message.content.length, name: call.name,
                   arguments: argsObject(call.args ?? {}), thoughtSignature: part.thoughtSignature });
               }
@@ -251,7 +252,7 @@ export function protocolTransport(config: ModelRunSnapshot, secret: string, web 
             }
           }
           return false;
-        });
+        }, timeoutMs);
         if (options?.signal?.aborted) throw new ProtocolError('请求已取消。');
         if (config.protocol === 'chat-completions') {
           if (!reason || !['stop', 'tool_calls', 'function_call', 'length'].includes(reason)) throw new ProtocolError('模型响应不完整；未执行工具。');
@@ -272,7 +273,7 @@ export function protocolTransport(config: ModelRunSnapshot, secret: string, web 
         const toolCalls = message.content.filter((p): p is ToolCall => p.type === 'toolCall');
         if (message.stopReason === 'toolUse' && !toolCalls.length) throw new ProtocolError('响应缺少工具内容。');
         if (config.protocol === 'anthropic-messages' && toolCalls.length && message.stopReason === 'stop') throw new ProtocolError('工具调用缺少完整结束标记。');
-        if (toolCalls.length > 16) throw new ProtocolError('单轮工具调用超过限制。');
+        if (toolCalls.length > contentLimits.toolCallsPerRound) throw new ProtocolError('单轮工具调用超过限制。');
         if (toolCalls.some((p) => !p.id || !/^[a-zA-Z0-9_-]{1,128}$/.test(p.name)) || new Set(toolCalls.map((p) => p.id)).size !== toolCalls.length) throw new ProtocolError('工具调用标识无效。');
         if (message.stopReason === 'length') message.content = message.content.filter((p) => p.type !== 'toolCall');
         if (message.stopReason === 'stop' && !message.content.some((p) => p.type === 'text' && p.text.trim())) throw new ProtocolError('模型没有返回可用回答。');

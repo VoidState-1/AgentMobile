@@ -1,3 +1,4 @@
+import { defaultOutputTokens } from '../agent/settings';
 export type ModelProtocol = 'chat-completions' | 'anthropic-messages' | 'gemini';
 export type ProviderPresetId = 'deepseek' | 'anthropic' | 'gemini' | 'custom';
 export type ModelSupport = 'supported' | 'unsupported' | 'unknown';
@@ -110,7 +111,7 @@ export function emptyModelConfiguration(): ModelConfiguration {
   return { schemaVersion: 1, revision: 0, mode: 'demo', connections: [], models: [],
     defaults: { projects: {}, sessions: {} }, recent: [], migratedLegacy: false };
 }
-export const defaultModelParameters: ModelParameters = { maxOutputTokens: 4096, allowImages: false, reasoning: 'off' };
+export const defaultModelParameters: ModelParameters = { maxOutputTokens: defaultOutputTokens, allowImages: false, reasoning: 'off' };
 export function unknownCapabilities(): ModelEntry['capabilities'] {
   return { tools: { support: 'unknown', source: 'user' }, images: { support: 'unknown', source: 'user' },
     reasoning: { support: 'unknown', source: 'user' } };

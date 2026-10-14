@@ -2,6 +2,7 @@ import * as DocumentPicker from 'expo-document-picker';
 import { File, Paths } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { WorkspaceService } from '@/adapters/workspace/service';
+import { contentLimits } from '@/core/agent/settings';
 
 export async function pickFile() {
   const result = await DocumentPicker.getDocumentAsync({
@@ -11,7 +12,7 @@ export async function pickFile() {
   if (result.canceled) return;
   const asset = result.assets[0];
   const file = new File(asset.uri);
-  if (file.size > 5 * 1024 * 1024) throw new Error('导入文件暂限 5 MB');
+  if (file.size > contentLimits.fileBytes) throw new Error('导入文件暂限 20 MB');
   return { name: asset.name, bytes: await file.bytes() };
 }
 

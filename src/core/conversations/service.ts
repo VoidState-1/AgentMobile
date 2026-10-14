@@ -2,6 +2,7 @@ import type { MetadataStore } from '../storage/contracts';
 import type { Project, TaskRecord } from '../prototype/types';
 import { mainSessionId } from '../models/rules';
 import { safePath } from '../workspace/path';
+import { contentLimits } from '../agent/settings';
 import { emptyConversationState, type Conversation, type ConversationDraft, type ConversationState } from './types';
 
 const clone = <T>(value: T): T => JSON.parse(JSON.stringify(value)) as T;
@@ -103,7 +104,7 @@ export class ConversationService {
   }
   async saveDraft(id: string, input: Omit<ConversationDraft, 'revision'>): Promise<ConversationDraft> {
     return this.exclusive(async () => {
-      if (input.text.length > 4000) throw new Error('对话草稿最多 4,000 字符。');
+      if (input.text.length > contentLimits.promptCharacters) throw new Error('对话草稿最多 16,000 字符。');
       if (input.attachment) safePath(input.attachment);
       const next = clone(this.state); this.require(next, id);
       const previous = next.drafts[id] ?? { text: '', revision: 0 };

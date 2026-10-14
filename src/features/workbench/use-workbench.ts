@@ -377,6 +377,10 @@ export function useWorkbench() {
       requestAnimationFrame(() => router.push('/models')); });
   }
   function openModels() { setSheet('models'); }
+  function openAgentSettings() {
+    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+      requestAnimationFrame(() => router.push('/settings/agent')); });
+  }
   async function reviewTask(task: TaskRecord) {
     if (!runtime) return;
     await action(async () => {
@@ -451,7 +455,7 @@ export function useWorkbench() {
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
     startRenameConversation, renameConversation, archiveConversation, restoreConversation, returnToActiveConversation,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
-    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
+    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openAgentSettings, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {
       const next = confirmation;

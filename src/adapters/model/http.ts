@@ -3,6 +3,7 @@ import type { ModelRunSnapshot, ProviderConnection } from '@/core/models/types';
 import { normalizedServiceAddress } from '@/core/models/rules';
 import { ModelServiceError } from './settings';
 import { SseDecoder } from './sse';
+import { contentLimits, defaultAgentLimits } from '@/core/agent/settings';
 
 export class ProtocolError extends Error {}
 export function safeModelError(error: unknown, aborted = false): string {
@@ -58,9 +59,9 @@ export async function requestJson(url: string, headers: Record<string, string>, 
   });
 }
 export async function requestStream(url: string, headers: Record<string, string>, body: unknown, signal: AbortSignal | undefined,
-  receive: (data: string) => boolean): Promise<void> {
+  receive: (data: string) => boolean, timeoutMs = defaultAgentLimits.requestTimeoutMs): Promise<void> {
   const serialized = JSON.stringify(body);
-  if (new TextEncoder().encode(serialized).byteLength > 2 * 1024 * 1024) throw new ProtocolError('本次输入超过 2 MB，请减少资料。');
+  if (new TextEncoder().encode(serialized).byteLength > contentLimits.requestBytes) throw new ProtocolError('本次输入超过 8 MB，请分段处理资料。');
   await withRequest(signal, async (requestSignal) => {
     const response = await fetch(url, { method: 'POST', headers, body: serialized, signal: requestSignal });
     if (!response.ok) throw new ModelServiceError(response.status);
@@ -72,11 +73,11 @@ export async function requestStream(url: string, headers: Record<string, string>
       while (true) {
         if (requestSignal.aborted) throw new ProtocolError('请求已取消或超时。');
         const chunk = await reader.read(); if (chunk.done) break;
-        size += chunk.value.byteLength; if (size > 512 * 1024) throw new ProtocolError('模型响应超过 512 KB 限制。');
+        size += chunk.value.byteLength; if (size > contentLimits.responseBytes) throw new ProtocolError('模型响应超过 4 MB 限制，请分段处理。');
         for (const data of sse.push(decoder.decode(chunk.value, { stream: true }))) if (receive(data)) return;
       }
       for (const data of sse.push(decoder.decode())) if (receive(data)) return;
       if (requestSignal.aborted) throw new ProtocolError('请求已取消或超时。');
     } finally { requestSignal.removeEventListener('abort', cancelReader); await reader.cancel().catch(() => {}); }
-  });
+  }, timeoutMs);
 }

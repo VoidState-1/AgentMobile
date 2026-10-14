@@ -56,7 +56,7 @@ async function tap(label) {
 async function scrollTo(label, inputOnly = false) {
   for (let i = 0; i < 12; i++) {
     const list = nodes(await dump());
-    const footer = list.find((node) => ['保存连接', '保存模型'].includes(node['content-desc']));
+    const footer = list.find((node) => ['保存连接', '保存模型', '保存 Agent 设置'].includes(node['content-desc']));
     const maximumY = footer ? Number([...footer.bounds.matchAll(/\d+/g)][1][0]) - 20 : 2350;
     if (list.some((node) => {
       const bounds = [...node.bounds.matchAll(/\d+/g)].map((m) => Number(m[0]));

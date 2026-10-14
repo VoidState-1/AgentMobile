@@ -211,7 +211,7 @@ export class ModelConfigurationService {
         if (!model) {
           model = { id: this.id(), connectionId, apiId: entry.apiId, name: entry.name, enabled: true, favorite: false, revision: 1,
             capabilities: { ...unknownCapabilities(), ...presetModelEvidence(connection.presetId, entry.apiId) },
-            parameters: { ...defaultModelParameters, maxOutputTokens: Math.min(4096, entry.limits?.outputTokens ?? 4096) },
+            parameters: { ...defaultModelParameters, maxOutputTokens: Math.min(defaultModelParameters.maxOutputTokens, entry.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens) },
             catalog: { source: 'discovered', missing: false }, checks: {}, createdAt: time, updatedAt: time };
           validateModelEntity(model); next.models.push(model);
         }

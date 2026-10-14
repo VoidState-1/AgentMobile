@@ -59,7 +59,7 @@ test('运行中改参数和密钥、浏览配置，后续轮次保留旧配置',
   await page.getByLabel('最大输出 tokens', { exact: true }).fill('1024'); await page.getByRole('button', { name: '保存模型', exact: true }).click();
   await expect(page.getByText('模型配置已保存。', { exact: true })).toBeVisible();
   release!(); await returnToWorkbench(page); await expect(page.getByText('已完成', { exact: true })).toBeVisible();
-  expect(requests).toHaveLength(2); for (const request of requests) { expect(request.headers.authorization).toBe('Bearer fixture-old-key'); expect(request.body.max_tokens).toBe(4096); }
+  expect(requests).toHaveLength(2); for (const request of requests) { expect(request.headers.authorization).toBe('Bearer fixture-old-key'); expect(request.body.max_tokens).toBe(8192); }
   await page.getByLabel('任务目标', { exact: true }).fill('下一条消息'); await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect.poll(() => requests.length).toBe(3); expect(requests[2].headers.authorization).toBe('Bearer fixture-new-key'); expect(requests[2].body.max_tokens).toBe(1024);
 });

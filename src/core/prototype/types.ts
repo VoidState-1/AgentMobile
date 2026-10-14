@@ -1,5 +1,6 @@
 import type { ModelRunSnapshot } from '@/core/models/types';
 import type { TraceItem } from './trace';
+import type { AgentSettings } from '../agent/settings';
 
 export interface Project {
   id: string;
@@ -47,6 +48,7 @@ export interface TaskRecord {
   prompt: string;
   mode: 'demo' | 'remote';
   modelSnapshot?: ModelRunSnapshot;
+  agentSettingsSnapshot?: AgentSettings;
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   baseCommit: string;
   finalCommit?: string;

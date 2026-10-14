@@ -70,7 +70,7 @@ describe('多连接配置、凭证和运行快照', () => {
     const model = await addModel(service, connection); const running = await service.acquireModel(model.id);
     await service.saveConnection({ ...connection, name: '更新名称' }, { value: 'new-key' });
     await service.saveModel({ ...edit(model), parameters: { ...model.parameters, maxOutputTokens: 1024 } });
-    expect(running.secret).toBe('old-key'); expect(running.snapshot.parameters.maxOutputTokens).toBe(4096);
+    expect(running.secret).toBe('old-key'); expect(running.snapshot.parameters.maxOutputTokens).toBe(8192);
     expect(f.keys.get(connection.credentialRef!)).toBe('old-key');
     const next = await service.acquireModel(model.id);
     expect(next.secret).toBe('new-key'); expect(next.snapshot.parameters.maxOutputTokens).toBe(1024);

@@ -1,4 +1,5 @@
 import type { WorkspaceService } from '@/adapters/workspace/service';
+import { contentLimits } from '@/core/agent/settings';
 
 export async function pickFile(): Promise<{ name: string; bytes: Uint8Array } | undefined> {
   return new Promise((resolve, reject) => {
@@ -7,7 +8,7 @@ export async function pickFile(): Promise<{ name: string; bytes: Uint8Array } | 
     input.onchange = async () => {
       try {
         const file = input.files?.[0];
-        if (file && file.size > 5 * 1024 * 1024) { reject(new Error('导入文件暂限 5 MB')); return; }
+        if (file && file.size > contentLimits.fileBytes) { reject(new Error('导入文件暂限 20 MB')); return; }
         resolve(file ? { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) } : undefined);
       } catch { reject(new Error('无法读取选择的文件')); }
     };
