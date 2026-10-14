@@ -1,4 +1,4 @@
-export type TraceState = 'running' | 'completed' | 'error' | 'cancelled' | 'interrupted';
+export type TraceState = 'running' | 'completed' | 'error' | 'cancelled' | 'interrupted' | 'unknown';
 interface TraceBase {
   id: string;
   round: number;
@@ -16,6 +16,7 @@ export interface ToolTrace extends TraceBase {
   kind: 'tool';
   callId: string;
   tool: string;
+  label?: string;
   target?: string;
   input: string;
   output?: string;

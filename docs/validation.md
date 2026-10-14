@@ -276,3 +276,27 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 原生检查同时发现并修复异步启动结束时导航覆盖用户选择的时序问题：会话标签选择提前到任务启动前，之后保持用户选中的资料/版本页面。自动化等待连接保存后的路由重建完成；多轮写入 fixture 使用独立工具调用 ID。
 
 边界：刷新展示已成功写入的版本，不展示文件操作应用中的中间状态；有未保存正文或名称时保留草稿并标记新版本，不静默覆盖。应用外部文件监视、多页面协作尚未实现。
+
+## 2026-10-14：远程 MCP
+
+手机作为客户端连接 Streamable HTTP 服务器，官方客户端锁定 2.3.1。实现范围见 [remote-mcp.md](remote-mcp.md)，入口为“设置 → 远程 MCP”。本轮使用本地可控 MCP/模型服务，不访问付费供应商。
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript、ESLint、104 项测试通过；新增 16 项 MCP 验证 |
+| 官方 SDK | 2026-07-28 server/discover/逐请求元数据，以及 2025-11-25 initialize/session 回退；JSON/SSE、分页和进度通过 |
+| 项目授权 | 默认关闭、项目隔离、目录变更撤销授权、未授权工具不进入模型请求；实际 Pi 远端查询 → 本地 write_text → Git 提交通过 |
+| 配置/凭证 | 冻结工具/参数/Token 租约，替换或删除后旧 Token 等租约释放再清理；保存失败与初始化清理恢复通过；参数预览、返回结果、定义与任务快照无测试 Token |
+| 失败与恢复 | 参数/定义校验在发送前拒绝；发送日志失败不联网；HTTP 认证拒绝与未知执行区分；取消/超时/超大回执/保存回执失败均保留未知状态，同参数不自动重发；prepared/dispatched 重启收束通过 |
+| 浏览器完整回归 | 29 条全量流程通过；包含两代 MCP、配置/授权、工作轨迹、刷新缺失 Token、深浅主题、未保存保护、未知记录与删除连接后核对 |
+| Android 原生 | API 36.1 x86_64、独立 emulator-5556：两代 SSE MCP 真网络调用、Token 重开保留、Agent/Git 文件、进度、发送后强制停止恢复为 interrupted/unknown、显式解除重试限制通过 |
+| 原生持久化证据 | 直接读取隔离模拟器 SQLite：两代调用均有 completed 回执、匹配 completed 工具轨迹及不同 base/final Git commit；暂停调用保留 unknown 回执和 interrupted 任务，核对时间已记录；任务/回执无 Token |
+| 三平台导出 | Web、Android/iOS JS/Hermes 导出通过；Expo Doctor 21/21 通过；iOS 原生、arm64 真机与真实外部 MCP 服务待验证 |
+
+完整浏览器回归发现并修复内置工具标签变化和删除连接后编辑页卸载导致导航未完成的问题。原生自动化最初误点被页脚遮住的授权开关，已改为定位可交互控件并检查完整可见范围及 checked 状态；同时通过模拟服务器调用计数和原生 SQLite 回执确认真正执行，不能只依赖模拟模型的完成回复。
+
+原生复现：`node scripts/mock-mcp-server.mjs` 启动本机 4181 fixture；配置 ANDROID_HOME/AGENT_MOBILE_METRO_PORT、开发客户端和 adb reverse，运行 `node scripts/android-mcp.mjs <serial>`。SDK schema 校验器会标注输入定义，因此编译前复制 schema，保持任务快照不可变；Metro 为 SDK 和 PKCE 使用浏览器入口，避免 Node 默认分支。
+
+截图经视觉检查：work/mcp-mobile-light.png、work/mcp-mobile-dark.png、work/mcp-android-tool.png、work/mcp-android-restored.png、work/mcp-android-unknown.png。布局延续紧凑工具界面，配置固定保存区，远端步骤按时间显示。
+
+边界：首版只支持无需认证/Bearer Token 与完整 HTTPS 端点（loopback 可 HTTP），尚无 OAuth、自定义 Header、旧 SSE 双端点、stdio、Resources/Prompts 浏览、Tasks、MCP Apps、sampling/roots/elicitation 或后台常驻。未知状态采用保守语义，远端 exactly-once、幂等键和业务撤销未实现。删除/重建连接不会绕过同端点/工具/参数的未知记录。

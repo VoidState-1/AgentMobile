@@ -6,6 +6,8 @@ import { settleTrace } from '@/core/prototype/trace';
 import { AgentSettingsService } from '@/core/agent/settings';
 import { ModelConfigurationService } from '@/core/models/service';
 import { ConversationService } from '@/core/conversations/service';
+import { McpConfigurationService } from '@/core/mcp/service';
+import { McpRuntime } from './mcp/runtime';
 import { TaskManager } from './agent/task-manager';
 import { createStorage } from './storage/platform';
 import { WorkspaceService } from './workspace/service';
@@ -19,6 +21,12 @@ async function initialize() {
   const models = new ModelConfigurationService(storage.metadata, storage.credentials, Crypto.randomUUID);
   await models.initialize();
   const agentSettings = new AgentSettingsService(storage.metadata); await agentSettings.initialize();
+  const mcpConfiguration = new McpConfigurationService(storage.metadata, storage.credentials, Crypto.randomUUID);
+  await mcpConfiguration.initialize();
+  const mcp = new McpRuntime(mcpConfiguration, storage.metadata, Crypto.randomUUID,
+    (value) => Crypto.digestStringAsync(Crypto.CryptoDigestAlgorithm.SHA256, value));
+  await mcp.recover();
+  const unknownMcp = await mcp.unknown();
   await workspace.recover();
   const conversations = new ConversationService(storage.metadata, Crypto.randomUUID);
   await conversations.initialize(await workspace.projects());
@@ -26,13 +34,15 @@ async function initialize() {
   for (const task of tasks) {
     if (task.state === 'running') await storage.metadata.put('tasks', task.id, {
       ...task, state: 'interrupted', finalCommit: await workspace.git.head(task.projectId).catch(() => undefined),
-      trace: settleTrace(task.trace, 'interrupted', new Date().toISOString()),
+      trace: settleTrace(task.trace?.map((item) => item.kind === 'tool' && unknownMcp.some((attempt) => attempt.traceId === item.id) ?
+        { ...item, state: 'unknown', output: '远端结果未知，可能已执行。请在 MCP 设置中核对后解除重试限制。', endedAt: new Date().toISOString() } : item), 'interrupted', new Date().toISOString()),
       error: workspace.needsRecovery(task.projectId) ? '部分修改尚未完成恢复，请保留本地数据。' :
+        unknownMcp.some((attempt) => attempt.taskId === task.id) ? '任务已中断，部分 MCP 调用的远端结果未知，请先核对服务状态。' :
         '应用运行被中断，文件修改已恢复。可查看已完成结果后发起新任务。',
     });
   }
   return {
-    workspace, ...storage, models, conversations, agentSettings, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings),
+    workspace, ...storage, models, conversations, agentSettings, mcp, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp),
     tasks: async (projectId: string, conversationId?: string) => (await storage.metadata.all<TaskRecord>('tasks'))
       .filter((task) => task.projectId === projectId && (!conversationId || task.conversationId === conversationId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };

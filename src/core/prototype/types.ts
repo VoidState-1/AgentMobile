@@ -1,6 +1,7 @@
 import type { ModelRunSnapshot } from '@/core/models/types';
 import type { TraceItem } from './trace';
 import type { AgentSettings } from '../agent/settings';
+import type { McpServerSnapshot } from '../mcp/types';
 
 export interface Project {
   id: string;
@@ -49,6 +50,7 @@ export interface TaskRecord {
   mode: 'demo' | 'remote';
   modelSnapshot?: ModelRunSnapshot;
   agentSettingsSnapshot?: AgentSettings;
+  mcpSnapshot?: McpServerSnapshot[];
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   baseCommit: string;
   finalCommit?: string;

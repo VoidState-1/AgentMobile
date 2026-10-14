@@ -67,6 +67,8 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       <T tone="secondary" style={{ fontSize: 12 }}>管理服务连接、模型、默认选择与检测。</T>
       <Button label="Agent 设置" variant="secondary" onPress={controller.openAgentSettings} />
       <T tone="secondary" style={{ fontSize: 12 }}>编辑系统提示词，调整长任务执行预算。</T>
+      <Button label="远程 MCP" variant="secondary" onPress={controller.openMcpConfig} />
+      <T tone="secondary" style={{ fontSize: 12 }}>连接远程服务器，按项目授权 Agent 工具。</T>
     </Sheet>
     {controller.sheet === 'models' && controller.runtime && <ModelPicker service={controller.runtime.models}
       configuration={controller.configuration} projectId={controller.projectId} conversationId={controller.conversationId}

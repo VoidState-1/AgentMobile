@@ -7,13 +7,14 @@ import { defaultSettings } from '@/core/prototype/types';
 import type { WorkspaceService } from '@/adapters/workspace/service';
 import { startAgent } from './runner';
 import { defaultAgentSettings, type AgentSettingsService } from '@/core/agent/settings';
+import type { McpRuntime, McpRun } from '@/adapters/mcp/runtime';
 
 /** Runtime owns execution; view subscriptions never own cancellation. */
 export class TaskManager {
   private state: { active?: TaskRecord; completed?: TaskRecord; error?: string; starting: boolean } = { starting: false };
   private listeners = new Set<() => void>();
   private cancellation?: () => void;
-  constructor(private workspace: WorkspaceService, private models: ModelConfigurationService, private id: () => string, private web = false, private conversations?: ConversationService, private settings?: AgentSettingsService) {}
+  constructor(private workspace: WorkspaceService, private models: ModelConfigurationService, private id: () => string, private web = false, private conversations?: ConversationService, private settings?: AgentSettingsService, private mcp?: McpRuntime) {}
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private publish(value: typeof this.state) { this.state = value; this.listeners.forEach((listener) => listener()); }
@@ -23,6 +24,7 @@ export class TaskManager {
     this.publish({ ...this.state, starting: true, error: undefined }); let lease: ModelRunLease | undefined;
     const agentSettings = this.settings?.getSnapshot() ?? defaultAgentSettings();
     let conversationLease: Awaited<ReturnType<ConversationService['acquireRun']>> | undefined;
+    let mcpRun: McpRun | undefined;
     try {
       if (this.conversations) {
         await this.conversations.ensureProject(projectId);
@@ -30,21 +32,23 @@ export class TaskManager {
       }
       const mode = selectedModelMode(this.models.getSnapshot(), conversationId);
       if (mode === 'remote') lease = await this.models.acquireSelection(projectId, conversationId);
+      if (mode === 'remote' && this.mcp) mcpRun = this.mcp.createRun(await this.mcp.configuration.acquireProject(projectId));
       if (imageAttached && mode === 'remote' && !lease?.snapshot.parameters.allowImages) throw new Error('所选模型配置未开启图片输入。请开启图片输入，或移除图片后发送；草稿已保留。');
       const settings = lease ? { mode, baseUrl: lease.snapshot.baseUrl, model: lease.snapshot.apiModelId, imageInput: lease.snapshot.parameters.allowImages } : defaultSettings;
       const started = await startAgent(this.workspace, projectId, prompt, settings, lease?.secret ?? '', this.id,
-        (task) => this.publish({ ...this.state, active: task }), lease?.snapshot, this.web, conversationId, draftRevision, agentSettings);
+        (task) => this.publish({ ...this.state, active: task }), lease?.snapshot, this.web, conversationId, draftRevision, agentSettings, mcpRun);
       this.cancellation = started.cancel; this.publish({ ...this.state, starting: false, active: started.task });
       const held = lease; lease = undefined;
+      const heldMcp = mcpRun; mcpRun = undefined;
       const heldConversation = conversationLease; conversationLease = undefined;
-      void started.done.then(async (task) => { await held?.release(); heldConversation?.release(); this.cancellation = undefined; this.publish({ starting: false, completed: task }); }).catch(async () => {
-        await held?.release(); heldConversation?.release(); this.cancellation = undefined; this.publish({ starting: false, error: '任务状态保存失败，请重新打开应用恢复。' });
+      void started.done.then(async (task) => { await heldMcp?.close(); await held?.release(); heldConversation?.release(); this.cancellation = undefined; this.publish({ starting: false, completed: task }); }).catch(async () => {
+        await heldMcp?.close(); await held?.release(); heldConversation?.release(); this.cancellation = undefined; this.publish({ starting: false, error: '任务状态保存失败，请重新打开应用恢复。' });
       });
       await this.conversations?.acknowledgeSubmission(conversationId, draftRevision).catch(() => {
         this.publish({ ...this.state, error: '任务已启动，草稿清理尚未完成；重开时将根据任务记录修复。' });
       });
     } catch (error) {
-      await lease?.release(); conversationLease?.release(); this.publish({ ...this.state, starting: false }); throw error;
+      await mcpRun?.close(); await lease?.release(); conversationLease?.release(); this.publish({ ...this.state, starting: false }); throw error;
     }
   }
 }

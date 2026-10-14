@@ -56,12 +56,14 @@ async function tap(label) {
 async function scrollTo(label, inputOnly = false) {
   for (let i = 0; i < 12; i++) {
     const list = nodes(await dump());
-    const footer = list.find((node) => ['保存连接', '保存模型', '保存 Agent 设置'].includes(node['content-desc']));
+    const footer = list.find((node) => ['保存连接', '保存模型', '保存 Agent 设置', '保存 MCP 连接'].includes(node['content-desc']));
     const maximumY = footer ? Number([...footer.bounds.matchAll(/\d+/g)][1][0]) - 20 : 2350;
-    if (list.some((node) => {
+    const interactive = list.filter((node) => node['content-desc'] === label && (node.clickable === 'true' || node.class === 'android.widget.EditText'));
+    const candidates = !inputOnly && interactive.length ? interactive : list;
+    if (candidates.some((node) => {
       const bounds = [...node.bounds.matchAll(/\d+/g)].map((m) => Number(m[0]));
       return inputOnly ? node.class === 'android.widget.EditText' && node['content-desc'] === label && bounds[3] - bounds[1] > 60 && bounds[1] > 240 && bounds[3] < maximumY :
-        (node['content-desc'] === label || node.text === label) && (bounds[1] + bounds[3]) / 2 > 240 && (bounds[1] + bounds[3]) / 2 < maximumY;
+        (node['content-desc'] === label || node.text === label) && bounds[1] > 240 && bounds[3] < maximumY && bounds[3] - bounds[1] > 40;
     })) return;
     await adb('shell', 'input', 'swipe', '520', '1700', '520', '620', '350'); await sleep(300);
   }

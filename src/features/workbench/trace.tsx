@@ -31,16 +31,16 @@ function Reasoning({ item }: { item: ContentTrace }) {
 }
 function ToolStep({ item }: { item: ToolTrace }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(false);
-  const label = toolLabels[item.tool] ?? item.tool; const running = item.state === 'running';
+  const label = item.label ?? toolLabels[item.tool] ?? item.tool; const running = item.state === 'running';
   const Icon = item.tool === 'inspect_image' ? Image : item.tool === 'search_text' ? Search : FileText;
-  const failed = ['error', 'cancelled', 'interrupted'].includes(item.state);
+  const failed = ['error', 'cancelled', 'interrupted', 'unknown'].includes(item.state);
   return <View testID="trace-tool" style={{ paddingVertical: 5 }}>
     <Pressable accessibilityRole="button" accessibilityLabel={'查看工具详情 ' + label + (item.target ? ' ' + item.target : '')}
       accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
       style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36, gap: 7 }}>
       {running ? <ActivityIndicator size={14} color={theme.accent} /> : failed ? <CircleAlert size={15} color={theme.warning} /> : <Icon size={15} color={theme.secondary} />}
       <View style={{ flex: 1, gap: 2, minWidth: 0 }}>
-        <T tone={failed ? 'warning' : 'secondary'} style={{ fontSize: 12 }}>{label}{running ? ' · 执行中' : failed ? ' · ' + ({ error: '失败', cancelled: '已停止', interrupted: '已中断' }[item.state as 'error' | 'cancelled' | 'interrupted']) : ''}</T>
+        <T tone={failed ? 'warning' : 'secondary'} style={{ fontSize: 12 }}>{label}{running ? ' · 执行中' : failed ? ' · ' + ({ error: '失败', cancelled: '已停止', interrupted: '已中断', unknown: '远端结果未知' }[item.state as 'error' | 'cancelled' | 'interrupted' | 'unknown']) : ''}</T>
         {!!item.target && <T tone="muted" numberOfLines={1} style={{ fontSize: 10 }}>{item.target}</T>}
       </View>
       {item.state === 'completed' && <Check size={12} color={theme.success} />}
@@ -52,6 +52,7 @@ function ToolStep({ item }: { item: ToolTrace }) {
       <T selectable style={{ fontSize: 11, lineHeight: 18 }}>{item.input || '{}'}</T>
       <T tone="secondary" style={{ fontSize: 11, fontWeight: '600' }}>结果</T>
       <T selectable tone={item.state === 'error' ? 'danger' : 'secondary'} style={{ fontSize: 11, lineHeight: 18 }}>{item.output || (running ? '等待工具结果…' : failed ? '操作未完整结束，已完成的文件修改仍保留。' : '操作成功。')}</T>
+      {item.state === 'unknown' && <T tone="warning" style={{ fontSize: 11 }}>远端可能已执行。请到 MCP 设置核对服务状态后，再解除重试限制。</T>}
       {(item.input.length >= 6000 || (item.output?.length ?? 0) >= 6000) && <T tone="muted" style={{ fontSize: 10 }}>详情仅显示前 6,000 字符。</T>}
     </View>}
   </View>;
