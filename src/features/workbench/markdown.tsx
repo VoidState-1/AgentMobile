@@ -27,18 +27,18 @@ export function resolveImagePath(documentPath: string, target: string): string {
 
 function LocalImage({ source, alt, load }: { source: string; alt: string; load: (target: string) => Promise<string> }) {
   const theme = useWorkbenchTheme();
-  const [uri, setUri] = useState<string>();
-  const [failed, setFailed] = useState(false);
+  const [state, setState] = useState<{ source: string; load: typeof load; uri?: string; failed?: boolean }>();
+  const currentState = state?.source === source && state.load === load ? state : undefined;
   useEffect(() => {
     let current = true;
-    load(source).then((value) => { if (current) setUri(value); }).catch(() => { if (current) setFailed(true); });
+    load(source).then((uri) => { if (current) setState({ source, load, uri }); }).catch(() => { if (current) setState({ source, load, failed: true }); });
     return () => { current = false; };
   }, [source, load]);
   return <View style={{ gap: 6, marginVertical: 10 }}>
-    {uri ? <Image source={{ uri }} contentFit="contain" accessibilityLabel={alt}
+    {currentState?.uri ? <Image source={{ uri: currentState.uri }} contentFit="contain" accessibilityLabel={alt}
       style={{ height: 220, width: '100%', borderRadius: 9, backgroundColor: theme.inset }} /> :
       <View style={{ height: 70, borderRadius: 9, backgroundColor: theme.inset, alignItems: 'center', justifyContent: 'center', gap: 4 }}>
-        <ImageOff size={19} color={theme.muted} /><T tone="muted" style={{ fontSize: 12 }}>{failed ? '图片不可用' : '加载图片…'}</T>
+        <ImageOff size={19} color={theme.muted} /><T tone="muted" style={{ fontSize: 12 }}>{currentState?.failed ? '图片不可用' : '加载图片…'}</T>
       </View>}
     {!!alt && <T tone="secondary" style={{ textAlign: 'center', fontSize: 12 }}>{alt}</T>}
   </View>;

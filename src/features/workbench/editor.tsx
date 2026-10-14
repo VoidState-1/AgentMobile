@@ -13,11 +13,12 @@ export function Editor({ controller, mobile }: { controller: Workbench; mobile: 
   const theme = useWorkbenchTheme();
   const document = controller.editor!;
   const readonly = !!controller.active && controller.active.projectId === document.projectId;
+  const imageVersions = controller.files.filter((file) => isImage(file.path)).map((file) => file.path + ':' + file.revision).join('|');
   const loadImage = useCallback(async (target: string) => {
     const path = resolveImagePath(document.path, target);
-    if (!isImage(path) || !controller.runtime) throw new Error('图片不可用');
+    if (!imageVersions || !isImage(path) || !controller.runtime) throw new Error('图片不可用');
     return (await controller.runtime.workspace.preview(document.projectId, path)).content;
-  }, [document.path, document.projectId, controller.runtime]);
+  }, [document.path, document.projectId, controller.runtime, imageVersions]);
   const update = (patch: Partial<typeof document>) => controller.setEditor((value) => value ? { ...value, ...patch } : value);
   useEffect(() => {
     if (Platform.OS !== 'web') return;

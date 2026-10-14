@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type SetStateAction } from 'react';
 import { Platform } from 'react-native';
 import { Buffer } from 'buffer';
 import { useRouter } from 'expo-router';
@@ -41,9 +41,12 @@ export function useWorkbench() {
   const [error, setError] = useState('');
   const [notice, setNotice] = useState('');
   const [active, setActive] = useState<TaskRecord>();
-  const [editor, setEditor] = useState<EditorDocument>();
+  const [editor, setEditorState] = useState<EditorDocument>();
   const editorRef = useRef<EditorDocument | undefined>(undefined);
-  useEffect(() => { editorRef.current = editor; }, [editor]);
+  const setEditor = useCallback((value: SetStateAction<EditorDocument | undefined>) => {
+    const next = typeof value === 'function' ? value(editorRef.current) : value;
+    editorRef.current = next; setEditorState(next);
+  }, []);
   const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name'>();
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
@@ -107,33 +110,29 @@ export function useWorkbench() {
     const value = runtimeRef.current;
     if (!value) return;
     const request = ++refreshId.current;
-    setProjects(await value.workspace.projects());
-    if (!projectId) return;
-    const [nextFiles, nextVersions, nextTasks, nextOperations] = await Promise.all([
-      value.workspace.files(projectId), value.workspace.git.log(projectId), value.tasks(projectId),
-      value.metadata.all<Operation>('operations'),
+    if (!projectId) { const nextProjects = await value.workspace.projects(); if (request === refreshId.current) setProjects(nextProjects); return; }
+    const open = editorRef.current;
+    const [snapshot, nextTasks, nextProjects] = await Promise.all([
+      value.workspace.snapshot(projectId, open?.projectId === projectId && !open.fresh ? open.path : undefined), value.tasks(projectId), value.workspace.projects(),
     ]);
     if (request !== refreshId.current || useWorkbenchUi.getState().projectId !== projectId) return;
-    setFiles(nextFiles.filter((file) => file.path !== 'project.json'));
-    setVersions(nextVersions); setTasks(nextTasks);
-    setOperations(nextOperations.filter((operation) => operation.projectId === projectId && operation.phase === 'recorded'));
+    setProjects(nextProjects); setFiles(snapshot.files.filter((file) => file.path !== 'project.json'));
+    setVersions(snapshot.versions); setTasks(nextTasks); setOperations(snapshot.operations);
     const document = editorRef.current;
-    if (document && document.projectId === projectId && !document.fresh) {
-      const current = nextFiles.find((file) => file.path === document.path);
+    if (document && document.projectId === projectId && !document.fresh && open?.path === document.path && open.revision === document.revision) {
+      const current = snapshot.files.find((file) => file.path === document.path);
       if (current?.revision !== document.revision) {
         const modified = document.text !== document.savedText || document.name !== document.savedName;
-        if (modified) setEditor((value) => value ? { ...value, externalChanged: true } : value);
+        if (modified) { const next = { ...document, externalChanged: true }; editorRef.current = next; setEditor(next); }
         else if (!current) { editorRef.current = undefined; setEditor(undefined); }
-        else {
-          const latest = await value.workspace.preview(projectId, document.path);
-          if (editorRef.current === document) {
-            const next = { ...document, text: latest.content, savedText: latest.content, revision: latest.revision, externalChanged: false };
-            editorRef.current = next; setEditor(next);
-          }
+        else if (snapshot.preview?.path === document.path) {
+          const latest = snapshot.preview;
+          const next = { ...document, text: latest.content, savedText: latest.content, revision: latest.revision, externalChanged: false };
+          editorRef.current = next; setEditor(next);
         }
       }
     }
-  }, []);
+  }, [setEditor]);
 
   useEffect(() => {
     let mounted = true;
@@ -158,16 +157,30 @@ export function useWorkbench() {
 
   useEffect(() => {
     if (!runtime) return;
+    let disposed = false; let needed = false; let refreshing = false;
+    const requestRefresh = () => {
+      needed = true; if (refreshing) return; refreshing = true;
+      void (async () => {
+        while (needed && !disposed) {
+          needed = false;
+          try { await refresh(useWorkbenchUi.getState().projectId); }
+          catch { if (!disposed) setError('读取最新资料失败，请重新打开项目。'); }
+        }
+      })().finally(() => { refreshing = false; });
+    };
+    const workspaceSubscription = runtime.workspace.subscribe((change) => {
+      if (change.projectId === useWorkbenchUi.getState().projectId) requestRefresh();
+    });
     const configSubscription = runtime.models.subscribe(() => setConfiguration(runtime.models.getSnapshot()));
     const conversationSubscription = runtime.conversations.subscribe(() => setConversationState(runtime.conversations.getSnapshot()));
     const taskSubscription = runtime.agent.subscribe(() => {
       const state = runtime.agent.getSnapshot(); setActive(state.active);
       if (!state.active && !state.starting) {
-        void refresh(useWorkbenchUi.getState().projectId).catch(() => setError('读取任务结果失败，请重试。'));
+        requestRefresh();
         if (state.error || state.completed?.error) setError(state.error ?? state.completed?.error ?? '');
       }
     });
-    return () => { configSubscription(); conversationSubscription(); taskSubscription(); };
+    return () => { disposed = true; refreshId.current = refreshId.current + 1; workspaceSubscription(); configSubscription(); conversationSubscription(); taskSubscription(); };
   }, [runtime, refresh]);
 
   useEffect(() => {
@@ -350,6 +363,7 @@ export function useWorkbench() {
 
   async function beginTask() {
     if (!runtime || !ui.projectId || !ui.conversationId || !prompt.trim() || active) return;
+    ui.selectTab('agent');
     const submitted = composerRef.current;
     const saved = await flushDraft(submitted);
     if (submitted.conversationId !== ui.conversationId) throw new Error('对话已切换，请确认当前输入后发送。');
@@ -359,7 +373,6 @@ export function useWorkbench() {
     if (composerRef.current === submitted) {
       const next = { conversationId: ui.conversationId, text: '' }; composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
     }
-    ui.selectTab('agent');
   }
 
   async function submit() {

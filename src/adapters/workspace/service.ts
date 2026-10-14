@@ -10,6 +10,7 @@ import { contentLimits } from '@/core/agent/settings';
 const encode = (bytes: Uint8Array) => Buffer.from(bytes).toString('base64');
 const decode = (value: string) => new Uint8Array(Buffer.from(value, 'base64'));
 const MAX_FILE_BYTES = contentLimits.fileBytes;
+export interface WorkspaceChange { projectId: string; paths: readonly string[]; commit: string }
 
 export class WorkspaceService {
   readonly git: GitPort;
@@ -17,6 +18,17 @@ export class WorkspaceService {
   private readonly queues = new Map<string, Promise<unknown>>();
   private readonly owners = new Map<string, string>();
   private readonly blocked = new Set<string>();
+  private readonly listeners = new Set<(change: WorkspaceChange) => void>();
+
+  subscribe = (listener: (change: WorkspaceChange) => void): (() => void) => {
+    this.listeners.add(listener); return () => { this.listeners.delete(listener); };
+  };
+  private notify(change: WorkspaceChange) {
+    const value = Object.freeze({ ...change, paths: Object.freeze([...change.paths]) });
+    // View failures must not turn a committed operation into a recovery issue.
+    try { this.changed(); } catch { /* Legacy observer is isolated. */ }
+    for (const listener of this.listeners) { try { listener(value); } catch { /* Observers do not own writes. */ } }
+  }
 
   constructor(
     private readonly fs: HostFileSystem,
@@ -44,9 +56,9 @@ export class WorkspaceService {
     await this.fs.write(this.internal(project.id, 'documents/notes.md'), Buffer.from(
       '# 我的资料\n\n在这里写下你的想法，也可以导入文字和图片。\n',
     ));
-    await this.git.commit(project.id, ['project.json', 'documents/notes.md'], '创建工作区');
+    const commit = await this.git.commit(project.id, ['project.json', 'documents/notes.md'], '创建工作区');
     await this.metadata.put('projects', project.id, project);
-    this.changed();
+    this.notify({ projectId: project.id, paths: ['project.json', 'documents/notes.md'], commit });
     return project;
   }
 
@@ -95,6 +107,19 @@ export class WorkspaceService {
   async preview(projectId: string, path: string) {
     const { bytes, revision } = await this.read(projectId, path);
     return { revision, content: isImage(path) ? 'data:' + mimeFor(path) + ';base64,' + encode(bytes) : Buffer.from(bytes).toString('utf8') };
+  }
+
+  /** Read a committed view between queued mutations, including the open file. */
+  snapshot(projectId: string, openPath?: string) {
+    const next = (this.queues.get(projectId) ?? Promise.resolve()).catch(() => {}).then(async () => {
+      const [files, versions, operations] = await Promise.all([
+        this.files(projectId), this.git.log(projectId), this.metadata.all<Operation>('operations'),
+      ]);
+      const preview = openPath && files.some((file) => file.path === openPath) ?
+        { path: openPath, ...await this.preview(projectId, openPath) } : undefined;
+      return { files, versions, operations: operations.filter((operation) => operation.projectId === projectId && operation.phase === 'recorded'), preview };
+    });
+    this.queues.set(projectId, next); return next;
   }
 
   claim(projectId: string, owner: string) {
@@ -221,7 +246,7 @@ export class WorkspaceService {
       if (project) await this.metadata.put('projects', project.id, { ...project, updatedAt: new Date().toISOString() });
       operation.phase = 'recorded';
       await this.metadata.put('operations', operation.id, operation);
-      this.changed();
+      this.notify({ projectId: operation.projectId, paths: operation.changes.map((change) => change.path), commit: operation.commit! });
       return operation.commit!;
     } catch (error) {
       this.blocked.add(operation.projectId);
