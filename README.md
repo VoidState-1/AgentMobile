@@ -22,6 +22,8 @@
 
 使用说明：[docs/prototype.md](docs/prototype.md)。技术设计：[docs/design.md](docs/design.md)。验证与限制：[docs/validation.md](docs/validation.md)。
 
+后续重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)，包括父子任务、共享预算、权限/快照、Git 修改归属与分阶段迁移；尚未实施。
+
 ## 开发
 
 Node.js 满足 Expo SDK 57 的要求，当前开发环境为 24.11.0；使用 npm 和 package-lock.json。

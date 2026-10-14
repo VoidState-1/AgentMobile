@@ -3,6 +3,8 @@
 日期：2026-10-14
 状态：可交互原型。第 2 节记录实际实现，其余章节中尚未实现的首版目标仍为设计方案。
 
+新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：分层依赖、运行内核、父子任务、共享预算、只读子 Agent、项目写入租约、隔离提案、数据迁移和 R0–R5 验收。该方案尚未实施；当前仍由全局单任务 TaskManager 调度，每次任务创建独立 Pi Agent。
+
 ## 1. 产品目标与范围
 
 Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导入项目，通过对话让 Agent 整理、创建和修改内容，在任务完成后查看成果与修改清单，并可恢复历史版本。
@@ -43,6 +45,7 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | 连续对话 | 默认最多带入当前对话、同模式最近 12 次目标与回复，按模型窗口预留空间；数量可配置，不重放其他对话或旧工具调用 |
 | TypeScript、ESLint、Vitest、Playwright | 已配置并验证核心流程 |
 | Pi Agent Core 1.1.0 | 已接入；上游核心未修改，Metro 使用纯工具函数入口 |
+| 架构重构、多 Agent 与子 Agent | [新架构方案](architecture-v2.md) 已撰写；R0–R5 尚未实施。当前不支持多任务并发或子 Agent；拟先实现固定快照的只读委派，再接不同项目并发与隔离写入提案 |
 | SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
 | 模型密钥持久化 | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证 |
 | SQLite schema | 原型为版本 1 的 records(bucket,id,payload) 表；第 7 节规范化 schema/FTS 未实现 |
@@ -298,6 +301,8 @@ Git 历史不是备份。当前可导出单文件；完整项目/仓库包和会
 operationId 由宿主持久化生成；模型 toolCallId 用作关联，不能独自作为跨模型重试的幂等键。
 
 ## 9. Agent harness 与模型适配
+
+本节状态图与 ModelPort 是早期目标说明，不代表当前所有状态均已实现。后续运行内核、父子任务、权限、预算和引擎边界以 [architecture-v2.md](architecture-v2.md) 为准；当前实际使用 Pi Agent Core、TypeBox 工具参数校验，以及第 2 节列出的任务状态与功能。
 
 任务状态：
 
