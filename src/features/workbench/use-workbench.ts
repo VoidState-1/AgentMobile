@@ -47,7 +47,7 @@ export function useWorkbench() {
     const next = typeof value === 'function' ? value(editorRef.current) : value;
     editorRef.current = next; setEditorState(next);
   }, []);
-  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name'>();
+  const [sheet, setSheet] = useState<'create' | 'projects' | 'settings' | 'attach' | 'rename' | 'models' | 'conversations' | 'conversation-name' | 'skills'>();
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
   const [conversationToRename, setConversationToRename] = useState<string>();
@@ -394,6 +394,10 @@ export function useWorkbench() {
     guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
       requestAnimationFrame(() => router.push('/mcp')); });
   }
+  function openSkills() {
+    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+      requestAnimationFrame(() => router.push('/skills')); });
+  }
   function openAgentSettings() {
     guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
       requestAnimationFrame(() => router.push('/settings/agent')); });
@@ -472,7 +476,7 @@ export function useWorkbench() {
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
     startRenameConversation, renameConversation, archiveConversation, restoreConversation, returnToActiveConversation,
     confirmation, setConfirmation, selectProject, createProject, newProject, openFile, newFile, closeEditor, importFile, submit, renameEditor,
-    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openAgentSettings, openMcpConfig, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
+    stop: () => runtime?.agent.cancel(), openSettings, openModelConfig, openAgentSettings, openMcpConfig, openSkills, openModels, reviewTask, reviewVersion, confirmRestore, deleteEditor,
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {
       const next = confirmation;

@@ -56,7 +56,7 @@ async function tap(label) {
 async function scrollTo(label, inputOnly = false) {
   for (let i = 0; i < 12; i++) {
     const list = nodes(await dump());
-    const footer = list.find((node) => ['保存连接', '保存模型', '保存 Agent 设置', '保存 MCP 连接'].includes(node['content-desc']));
+    const footer = list.find((node) => ['保存连接', '保存模型', '保存 Agent 设置', '保存 MCP 连接', '保存技能'].includes(node['content-desc']));
     const maximumY = footer ? Number([...footer.bounds.matchAll(/\d+/g)][1][0]) - 20 : 2350;
     const interactive = list.filter((node) => node['content-desc'] === label && (node.clickable === 'true' || node.class === 'android.widget.EditText'));
     const candidates = !inputOnly && interactive.length ? interactive : list;

@@ -9,6 +9,7 @@ import { dateLabel, fileName } from './format';
 import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
 import { ConversationsPanel } from '@/features/conversations/panel';
+import { SkillPicker } from '@/features/skills/picker';
 
 function RenameSheet({ controller }: { controller: Workbench }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
@@ -24,6 +25,7 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
   const theme = useWorkbenchTheme();
   const [projectSearch, setProjectSearch] = useState('');
   return <>
+    {controller.sheet === 'skills' && <SkillPicker controller={controller} />}
     {(controller.sheet === 'conversations' || controller.sheet === 'conversation-name') && <ConversationsPanel controller={controller} />}
     <Sheet visible={controller.sheet === 'create'} title="新建项目" subtitle="文字、图片和会话都在同一个工作区里。"
       onClose={() => controller.setSheet(undefined)} busy={controller.busy}
@@ -69,6 +71,8 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       <T tone="secondary" style={{ fontSize: 12 }}>编辑系统提示词，调整长任务执行预算。</T>
       <Button label="远程 MCP" variant="secondary" onPress={controller.openMcpConfig} />
       <T tone="secondary" style={{ fontSize: 12 }}>连接远程服务器，按项目授权 Agent 工具。</T>
+      <Button label="Agent Skills" variant="secondary" onPress={controller.openSkills} />
+      <T tone="secondary" style={{ fontSize: 12 }}>导入、编辑和启用可复用的工作流程。</T>
     </Sheet>
     {controller.sheet === 'models' && controller.runtime && <ModelPicker service={controller.runtime.models}
       configuration={controller.configuration} projectId={controller.projectId} conversationId={controller.conversationId}

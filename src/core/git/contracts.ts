@@ -20,4 +20,6 @@ export interface GitPort {
   log(workspaceId: WorkspaceId): Promise<Version[]>;
   findOperation(workspaceId: WorkspaceId, operationId: string): Promise<CommitOid | undefined>;
   tree(workspaceId: WorkspaceId, ref: CommitOid): Promise<Record<WorkspacePath, Uint8Array>>;
+  entries(workspaceId: WorkspaceId, ref: CommitOid): Promise<{ path: WorkspacePath; revision: string }[]>;
+  readAt(workspaceId: WorkspaceId, ref: CommitOid, path: WorkspacePath): Promise<Uint8Array>;
 }

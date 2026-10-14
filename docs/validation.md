@@ -300,3 +300,29 @@ Android 新开发客户端已编译成功，新增 react-native-svg 和开发菜
 截图经视觉检查：work/mcp-mobile-light.png、work/mcp-mobile-dark.png、work/mcp-android-tool.png、work/mcp-android-restored.png、work/mcp-android-unknown.png。布局延续紧凑工具界面，配置固定保存区，远端步骤按时间显示。
 
 边界：首版只支持无需认证/Bearer Token 与完整 HTTPS 端点（loopback 可 HTTP），尚无 OAuth、自定义 Header、旧 SSE 双端点、stdio、Resources/Prompts 浏览、Tasks、MCP Apps、sampling/roots/elicitation 或后台常驻。未知状态采用保守语义，远端 exactly-once、幂等键和业务撤销未实现。删除/重建连接不会绕过同端点/工具/参数的未知记录。
+
+## 2026-10-14：Agent Skills
+
+接入通用 SKILL.md、Markdown/ZIP 导入和独立 Git 技能库。用户从“设置 → Agent Skills”管理内容与项目启用，输入区提供“选择技能”。实现和兼容范围见 [agent-skills.md](agent-skills.md)。本轮使用本地模拟模型，不调用付费服务。
+
+| 验证 | 结果 |
+| --- | --- |
+| npm run check | TypeScript、ESLint、118 项测试通过；新增 14 项技能验证 |
+| 格式与导入 | YAML 块标量、BOM/CRLF、可选元数据、多技能 ZIP、目录规范化、导出再导入通过；重复字段、错误类型、别名、越界、重复大小写路径、嵌套技能与超限拒绝 |
+| 解压边界 | 不仅校验声明大小；伪造 ZIP 大小字段后，实际输出超过限制仍被流式检查拒绝，通过 |
+| Git/SQLite 与恢复 | 多文件写入中断后日志恢复；Git 已提交但技能配置未保存时重新扫描；更新撤销旧启用、历史恢复新提交、内部库不进项目列表通过 |
+| 版本固定 | 任务捕获旧 Git commit 后，编辑或删除技能仍可读取旧正文与资源；引用文件变化也改变技能版本，旧页面/预览提交被拒绝 |
+| 三协议真实 Pi 模拟循环 | Chat Completions、Anthropic Messages、Gemini：首轮仅目录 → load_skill 正文 → read_skill_resource 引用 → write_text/Git 保存；未启用技能正文不进入模型请求，通过 |
+| 明确调用与上下文 | $技能名 由宿主首轮注入并保存加载轨迹；重复加载去重、下一任务不携带旧技能正文、未启用调用保留草稿、普通金额不误识别，通过 |
+| 浏览器 | 32 条全量回归通过；补充防护修改后的 3 条技能流程定向重跑通过；覆盖导入/编辑/引用、启用/撤销、自动与明确调用、历史/导出/删除、未保存保护、深浅/短视口、运行期间更新与删除 |
+| Android | API 36.1 x86_64、独立 emulator-5556：系统文件选择器导入 ZIP、项目启用、实际 Pi 自动加载/引用/Git 文件，重启后资源编辑/重新启用、明确调用读取新资源、深色与版本历史，分段验证通过 |
+| 原生持久化证据 | 隔离模拟器 SQLite 验证自动/明确激活、completed 资源轨迹和 Git 修改；资源更新前后任务技能 revision 不同，重新启用已保存；技能库没有出现在用户项目表，导入/更新操作均有 recorded 回执 |
+| 打包与依赖 | Web、Android/iOS JS/Hermes 导出通过，Expo Doctor 21/21；iOS 原生与 arm64 真机仍待验证 |
+
+原生自动化修复了两处测试干扰：Modal 输入中的重复 R 键会触发开发客户端重载，因此改用不触发快捷键的样本文本；编辑弹窗内的硬件 Back 会触发关闭/未保存保护，改为直接点击键盘上方的应用按钮。版本行包含修订号，等待改为匹配“当前版本”片段；截图等待正文加载后再捕获。原生数据库与模拟服务实际请求共同验证结果，不能只依赖完成回复。
+
+复现：启动 `node scripts/mock-skills-server.mjs`，设置 ANDROID_HOME/AGENT_MOBILE_METRO_PORT，配置开发客户端和 adb reverse，运行 `node scripts/android-skills.mjs <serial>`。持久化核对可独立执行 `node scripts/android-skills-records.mjs <serial>`。脚本使用隔离 fixture 与生成数据。
+
+截图：work/skills-mobile-light.png、work/skills-mobile-dark.png、work/skills-android-library.png、work/skills-android-trace.png、work/skills-android-dark.png、work/skills-android-history.png。深浅界面与原生历史截图经过视觉检查，技能加载与资源读取沿用有序轨迹。
+
+边界：脚本只读不执行、其他二进制资源只保留供导出，allowed-tools 不增加工具权限。远程市场/自动下载、原生目录扫描、改名/分叉、已删除技能恢复、签名与容量清理尚未实现；演示模式不会理解技能语义。当前未做自动上下文压缩，未来必须保护已激活技能内容。

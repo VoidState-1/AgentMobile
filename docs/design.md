@@ -51,6 +51,7 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | 模型调用与 Agent 循环 | Chat Completions、Anthropic Messages、Gemini 原生 REST/SSE 已实现；三协议模拟工具闭环与图片输入通过；DeepSeek 前版已做官方实测 |
 | 服务配置与诊断 | 独立连接与凭证、预设/自定义协议、分页发现、手工模型、文本/工具/图片检测；分平台保存检测结果 |
 | 远程 MCP | Streamable HTTP、两代协议协商、Bearer/无需认证、工具发现与项目授权、Pi 执行/进度/轨迹、未知回执与重试限制；[实施设计](remote-mcp.md)；OAuth/Resources/Prompts/Tasks/MCP Apps 尚未实现 |
+| Agent Skills | 标准 SKILL.md/ZIP 导入、本地编辑/资源/历史恢复、项目启用、目录/正文/资源渐进加载、明确调用与任务 Git 版本快照；[实施设计](agent-skills.md)；脚本执行与远程市场尚未实现 |
 | 多供应商/模型配置器 | [实施记录](provider-model-configurator.md)；多连接、多模型、能力依据、参数、收藏、分层默认与运行快照已实现；Anthropic/Gemini 官方实测待凭证 |
 | 任务运行配置 | 启动时冻结服务/模型/参数版本，凭证通过宿主租约使用；界面关闭或切换配置路由不停止任务 |
 | Agent 设置 | 全局系统提示词与执行预算可编辑、恢复默认并持久化；任务保存启动时配置版本，修改只影响新任务 |

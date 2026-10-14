@@ -8,13 +8,15 @@ import type { WorkspaceService } from '@/adapters/workspace/service';
 import { startAgent } from './runner';
 import { defaultAgentSettings, type AgentSettingsService } from '@/core/agent/settings';
 import type { McpRuntime, McpRun } from '@/adapters/mcp/runtime';
+import type { SkillService } from '@/core/skills/service';
+import { createSkillRun } from '@/adapters/skills/run';
 
 /** Runtime owns execution; view subscriptions never own cancellation. */
 export class TaskManager {
   private state: { active?: TaskRecord; completed?: TaskRecord; error?: string; starting: boolean } = { starting: false };
   private listeners = new Set<() => void>();
   private cancellation?: () => void;
-  constructor(private workspace: WorkspaceService, private models: ModelConfigurationService, private id: () => string, private web = false, private conversations?: ConversationService, private settings?: AgentSettingsService, private mcp?: McpRuntime) {}
+  constructor(private workspace: WorkspaceService, private models: ModelConfigurationService, private id: () => string, private web = false, private conversations?: ConversationService, private settings?: AgentSettingsService, private mcp?: McpRuntime, private skills?: SkillService) {}
   getSnapshot = () => this.state;
   subscribe = (listener: () => void) => { this.listeners.add(listener); return () => { this.listeners.delete(listener); }; };
   private publish(value: typeof this.state) { this.state = value; this.listeners.forEach((listener) => listener()); }
@@ -31,12 +33,13 @@ export class TaskManager {
         conversationLease = await this.conversations.acquireRun(conversationId, projectId, prompt.split('\n\n参考文件：')[0]);
       }
       const mode = selectedModelMode(this.models.getSnapshot(), conversationId);
+      const skillRun = this.skills ? createSkillRun(this.skills.repository, await this.skills.capture(projectId, prompt)) : undefined;
       if (mode === 'remote') lease = await this.models.acquireSelection(projectId, conversationId);
       if (mode === 'remote' && this.mcp) mcpRun = this.mcp.createRun(await this.mcp.configuration.acquireProject(projectId));
       if (imageAttached && mode === 'remote' && !lease?.snapshot.parameters.allowImages) throw new Error('所选模型配置未开启图片输入。请开启图片输入，或移除图片后发送；草稿已保留。');
       const settings = lease ? { mode, baseUrl: lease.snapshot.baseUrl, model: lease.snapshot.apiModelId, imageInput: lease.snapshot.parameters.allowImages } : defaultSettings;
       const started = await startAgent(this.workspace, projectId, prompt, settings, lease?.secret ?? '', this.id,
-        (task) => this.publish({ ...this.state, active: task }), lease?.snapshot, this.web, conversationId, draftRevision, agentSettings, mcpRun);
+        (task) => this.publish({ ...this.state, active: task }), lease?.snapshot, this.web, conversationId, draftRevision, agentSettings, mcpRun, skillRun);
       this.cancellation = started.cancel; this.publish({ ...this.state, starting: false, active: started.task });
       const held = lease; lease = undefined;
       const heldMcp = mcpRun; mcpRun = undefined;

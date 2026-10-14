@@ -50,5 +50,11 @@ export function createGitRepository(host: HostFileSystem): GitPort {
       }
       return files;
     },
+    async entries(projectId, ref) {
+      const entries = await git.walk({ ...options(projectId), trees: [git.TREE({ ref })], map: async (filepath, [entry]) =>
+        entry && await entry.type() === 'blob' ? { path: filepath, revision: await entry.oid() } : undefined });
+      return entries.filter((entry: { path: string; revision: string } | undefined): entry is { path: string; revision: string } => !!entry);
+    },
+    readAt: async (projectId, ref, filepath) => new Uint8Array((await git.readBlob({ ...options(projectId), oid: ref, filepath })).blob),
   };
 }

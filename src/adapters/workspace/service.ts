@@ -44,9 +44,10 @@ export class WorkspaceService {
     return (await this.metadata.all<Project>('projects')).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
   }
 
-  async create(name: string): Promise<Project> {
+  async create(name: string, requestedId?: string): Promise<Project> {
+    if (requestedId && !/^[a-zA-Z0-9-]{1,80}$/.test(requestedId)) throw new Error('工作区标识无效');
     const project: Project = {
-      id: this.id(), name: name.trim().slice(0, 60) || '未命名项目',
+      id: requestedId ?? this.id(), name: name.trim().slice(0, 60) || '未命名项目',
       createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
     };
     await this.git.init(project.id);
@@ -208,6 +209,24 @@ export class WorkspaceService {
       })).filter((change) => change.before !== change.after);
       if (!changes.length) return expectedHead;
       return this.prepare(projectId, changes, '恢复版本 ' + ref.slice(0, 7), this.id());
+    });
+  }
+
+  /** Host-only bulk replacement, using the same recoverable log and Git commit. */
+  async replaceFiles(projectId: string, files: { path: string; bytes: Uint8Array | null }[], expectedHead: string, message: string) {
+    for (const file of files) {
+      if (safePath(file.path) === 'project.json') throw new Error('项目配置由宿主管理');
+      if (file.bytes && file.bytes.length > MAX_FILE_BYTES) throw new Error('文件超过 20 MB 限制');
+      if (file.bytes && isImage(file.path)) validateImage(file.path, file.bytes);
+    }
+    if (new Set(files.map((file) => file.path.toLowerCase())).size !== files.length) throw new Error('目标文件路径重复');
+    return this.serial(projectId, undefined, async () => {
+      if (await this.git.head(projectId) !== expectedHead) throw new Error('VERSION_CONFLICT：文件库已变化，请重新读取。');
+      const changes: Operation['changes'] = [];
+      for (const file of files) { const before = await this.bytesOrNull(projectId, file.path); const change = { path: file.path, before: before ? encode(before) : null, after: file.bytes ? encode(file.bytes) : null };
+        if (change.before !== change.after) changes.push(change);
+      }
+      return changes.length ? this.prepare(projectId, changes, message, this.id()) : expectedHead;
     });
   }
 

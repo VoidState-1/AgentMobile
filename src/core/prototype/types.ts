@@ -2,6 +2,7 @@ import type { ModelRunSnapshot } from '@/core/models/types';
 import type { TraceItem } from './trace';
 import type { AgentSettings } from '../agent/settings';
 import type { McpServerSnapshot } from '../mcp/types';
+import type { SkillSummary } from '../skills/types';
 
 export interface Project {
   id: string;
@@ -51,6 +52,8 @@ export interface TaskRecord {
   modelSnapshot?: ModelRunSnapshot;
   agentSettingsSnapshot?: AgentSettings;
   mcpSnapshot?: McpServerSnapshot[];
+  skillsSnapshot?: readonly SkillSummary[];
+  skillActivations?: { name: string; revision: string; source: 'explicit' | 'agent'; at: string }[];
   state: 'running' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
   baseCommit: string;
   finalCommit?: string;

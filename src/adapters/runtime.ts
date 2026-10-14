@@ -8,6 +8,8 @@ import { ModelConfigurationService } from '@/core/models/service';
 import { ConversationService } from '@/core/conversations/service';
 import { McpConfigurationService } from '@/core/mcp/service';
 import { McpRuntime } from './mcp/runtime';
+import { SkillService } from '@/core/skills/service';
+import { GitSkillRepository } from './skills/repository';
 import { TaskManager } from './agent/task-manager';
 import { createStorage } from './storage/platform';
 import { WorkspaceService } from './workspace/service';
@@ -28,6 +30,8 @@ async function initialize() {
   await mcp.recover();
   const unknownMcp = await mcp.unknown();
   await workspace.recover();
+  const skills = new SkillService(storage.metadata, new GitSkillRepository(storage.fs, storage.metadata, Crypto.randomUUID));
+  await skills.initialize();
   const conversations = new ConversationService(storage.metadata, Crypto.randomUUID);
   await conversations.initialize(await workspace.projects());
   const tasks = await storage.metadata.all<TaskRecord>('tasks');
@@ -42,7 +46,7 @@ async function initialize() {
     });
   }
   return {
-    workspace, ...storage, models, conversations, agentSettings, mcp, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp),
+    workspace, ...storage, models, conversations, agentSettings, mcp, skills, agent: new TaskManager(workspace, models, Crypto.randomUUID, Platform.OS === 'web', conversations, agentSettings, mcp, skills),
     tasks: async (projectId: string, conversationId?: string) => (await storage.metadata.all<TaskRecord>('tasks'))
       .filter((task) => task.projectId === projectId && (!conversationId || task.conversationId === conversationId)).sort((a, b) => b.createdAt.localeCompare(a.createdAt)),
   };

@@ -139,6 +139,7 @@ export function Conversation({ controller }: { controller: Workbench }) {
           style={{ height: inputHeight, color: theme.text, fontSize: 14, lineHeight: 23, paddingVertical: 5 }} />
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
           <IconButton icon={Paperclip} label="添加参考资料" disabled={!!controller.conversationActive || controller.busy} size={36} onPress={() => controller.setSheet('attach')} />
+          <IconButton icon={Sparkles} label="选择技能" disabled={!!controller.conversationActive || controller.busy} size={36} onPress={() => controller.setSheet('skills')} />
           <Pressable accessibilityRole="button" accessibilityLabel="模型设置" onPress={controller.openModels}
             style={{ flexDirection: 'row', alignItems: 'center', gap: 5, flex: 1, minHeight: 36 }}>
             <T tone="secondary" numberOfLines={1} style={{ fontSize: 11 }}>{controller.modelLabel}</T>
