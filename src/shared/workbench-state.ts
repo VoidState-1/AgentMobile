@@ -16,11 +16,14 @@ interface WorkbenchUi {
   setAppearance: (appearance: AppearanceMode) => void;
 }
 
-export const useWorkbenchUi = create<WorkbenchUi>((set) => ({
-  tab: 'agent', appearance: 'system', commitDrafts: {},
-  setCommitDraft: (projectId, text) => set((state) => ({ commitDrafts: { ...state.commitDrafts, [projectId]: text } })),
+export const useWorkbenchUi = create<WorkbenchUi>(set => ({
+  tab: 'agent',
+  appearance: 'system',
+  commitDrafts: {},
+  setCommitDraft: (projectId, text) =>
+    set(state => ({ commitDrafts: { ...state.commitDrafts, [projectId]: text } })),
   selectProject: (projectId, conversationId) => set({ projectId, conversationId, tab: 'agent' }),
-  selectConversation: (conversationId) => set({ conversationId, tab: 'agent' }),
-  selectTab: (tab) => set({ tab }),
-  setAppearance: (appearance) => set({ appearance }),
+  selectConversation: conversationId => set({ conversationId, tab: 'agent' }),
+  selectTab: tab => set({ tab }),
+  setAppearance: appearance => set({ appearance }),
 }));

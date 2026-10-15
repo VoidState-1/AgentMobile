@@ -10,7 +10,8 @@ await tap('浅色');
 await tap('模型与供应商');
 await tap('运行模式：演示模式');
 await tap('返回');
-if ((await dump()).includes('切换项目') && !(await dump()).includes('新建项目')) await tap('切换项目');
+if ((await dump()).includes('切换项目') && !(await dump()).includes('新建项目'))
+  await tap('切换项目');
 await tap('新建项目');
 await tap('项目名称');
 await adb('shell', 'input', 'text', projectName);
@@ -39,8 +40,16 @@ await screenshot('workbench-android-light.png');
 await tap('资料');
 await waitFor('打开 documents/summary.md');
 await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
-await adb('shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d',
-  'exp+agent-mobile://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A' + metroPort, 'com.agentmobile.app');
+await adb(
+  'shell',
+  'am',
+  'start',
+  '-a',
+  'android.intent.action.VIEW',
+  '-d',
+  'exp+agent-mobile://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A' + metroPort,
+  'com.agentmobile.app',
+);
 await tap('资料');
 await waitFor('打开 documents/summary.md');
 await tap('打开 documents/notes.md');
@@ -54,10 +63,20 @@ await sleep(1000);
 await screenshot('workbench-android-dark.png');
 await screenshot('workbench-android.png');
 await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
-await adb('shell', 'am', 'start', '-a', 'android.intent.action.VIEW', '-d',
-  'exp+agent-mobile://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A' + metroPort, 'com.agentmobile.app');
+await adb(
+  'shell',
+  'am',
+  'start',
+  '-a',
+  'android.intent.action.VIEW',
+  '-d',
+  'exp+agent-mobile://expo-development-client/?url=http%3A%2F%2F127.0.0.1%3A' + metroPort,
+  'com.agentmobile.app',
+);
 await waitFor('会话');
 if (!(await dump()).includes('workbench-dark')) throw new Error('重启后深色偏好丢失。');
 await screenshot('workbench-android-reopened-dark.png');
 await fs.writeFile('work/native-ui.xml', await dump());
-process.stdout.write('Android smoke passed: editing, unsaved protection, themes, Pi tools, Git write, force-stop persistence.\n');
+process.stdout.write(
+  'Android smoke passed: editing, unsaved protection, themes, Pi tools, Git write, force-stop persistence.\n',
+);

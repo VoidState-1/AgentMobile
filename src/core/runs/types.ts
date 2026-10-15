@@ -5,7 +5,15 @@ import type { McpServerSnapshot } from '../mcp/types';
 import type { SkillSummary } from '../skills/types';
 import type { StopReason } from './termination';
 
-export type RunState = 'queued' | 'running' | 'waiting_children' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
+export type RunState =
+  | 'queued'
+  | 'running'
+  | 'waiting_children'
+  | 'cancelling'
+  | 'completed'
+  | 'failed'
+  | 'cancelled'
+  | 'interrupted';
 
 /** In-memory execution view. Persistence and queries use independent records. */
 export interface ExecutionView {

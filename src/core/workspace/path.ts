@@ -3,13 +3,23 @@ export function safePath(input: string, allowRoot = false): string {
   if (allowRoot && input === '') return '';
   const path = input.normalize('NFC');
   if (
-    !path || path.length > 220 || path !== path.trim() ||
-    /[\\:\u0000-\u001f\u007f]/.test(path) || path.startsWith('/') ||
-    path.split('/').some((part) =>
-      !part || part === '.' || part === '..' || part.toLowerCase() === '.git' ||
-      part.toLowerCase().startsWith('.git') || /[. ]$/.test(part) ||
-      /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part),
-    )
+    !path ||
+    path.length > 220 ||
+    path !== path.trim() ||
+    /[\\:\u0000-\u001f\u007f]/.test(path) ||
+    path.startsWith('/') ||
+    path
+      .split('/')
+      .some(
+        part =>
+          !part ||
+          part === '.' ||
+          part === '..' ||
+          part.toLowerCase() === '.git' ||
+          part.toLowerCase().startsWith('.git') ||
+          /[. ]$/.test(part) ||
+          /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part),
+      )
   ) {
     throw new AppError('VALIDATION', 'INVALID_PATH：请使用工作区内的相对路径。');
   }
@@ -18,8 +28,14 @@ export function safePath(input: string, allowRoot = false): string {
 
 export function mimeFor(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase();
-  return ({ png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<string, string>)[ext ?? ''] ??
-    (ext === 'md' ? 'text/markdown' : 'text/plain');
+  return (
+    (
+      { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<
+        string,
+        string
+      >
+    )[ext ?? ''] ?? (ext === 'md' ? 'text/markdown' : 'text/plain')
+  );
 }
 
 export function isImage(path: string): boolean {
@@ -27,5 +43,7 @@ export function isImage(path: string): boolean {
 }
 export const canAgentWriteText = (path: string): boolean => /\.(md|txt)$/i.test(path);
 export function canMoveWithinFormat(from: string, to: string): boolean {
-  return isImage(from) ? isImage(to) && mimeFor(from) === mimeFor(to) : !isImage(to) && canAgentWriteText(to);
+  return isImage(from)
+    ? isImage(to) && mimeFor(from) === mimeFor(to)
+    : !isImage(to) && canAgentWriteText(to);
 }

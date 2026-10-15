@@ -9,6 +9,12 @@ export interface SchedulerLimits {
   depth: number;
 }
 export const defaultSchedulerLimits: Readonly<SchedulerLimits> = Object.freeze({
-  activeRoots: 2, modelRequests: 2, connectionRequests: 2, queuedRoots: 16, queuedPerProject: 4,
-  parallelChildren: 2, totalChildren: 4, depth: 1,
+  activeRoots: 2,
+  modelRequests: 2,
+  connectionRequests: 2,
+  queuedRoots: 16,
+  queuedPerProject: 4,
+  parallelChildren: 2,
+  totalChildren: 4,
+  depth: 1,
 });

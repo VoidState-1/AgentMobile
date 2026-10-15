@@ -1,5 +1,11 @@
 import type { MetadataEntry, MetadataStore } from './contracts';
-import type { JournalScope, OperationBody, OperationDraft, OperationHeader, OperationQuery } from '../workspace/journal';
+import type {
+  JournalScope,
+  OperationBody,
+  OperationDraft,
+  OperationHeader,
+  OperationQuery,
+} from '../workspace/journal';
 import type { RunHeader, RunInput, RunResult, RunWrite } from '../runs/records';
 import type { RunHeaderQuery } from '../runs/queries';
 import type { TraceNode, TraceTextChunk, TranscriptFrame, TraceWrite } from '../runs/trace-storage';

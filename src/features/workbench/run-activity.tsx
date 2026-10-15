@@ -5,21 +5,71 @@ import { T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
 
 /** Compact global roots view; child activity stays in its delegation trace. */
-export const RunActivity = memo(function RunActivity({ controller }: { controller: RunsCapability }) {
+export const RunActivity = memo(function RunActivity({
+  controller,
+}: {
+  controller: RunsCapability;
+}) {
   const theme = useWorkbenchTheme();
   if (!controller.runs.length) return null;
-  return <View testID="run-activity" style={{ borderBottomWidth: 1, borderBottomColor: theme.border, backgroundColor: theme.surface, paddingVertical: 6 }}>
-    <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ paddingHorizontal: 14, gap: 8, alignItems: 'center' }}>
-      <T tone="muted" style={{ fontSize: 10 }}>活动任务 · {controller.runs.length}</T>
-      {controller.runs.map((run) => <Pressable key={run.id} accessibilityRole="button" accessibilityLabel={'查看活动任务 ' + run.prompt} disabled={controller.busy}
-        onPress={() => controller.returnToActiveConversation(run)} style={{ paddingHorizontal: 9, paddingVertical: 5, borderWidth: 1, borderColor: theme.border, borderRadius: 7,
-          maxWidth: 200, flexDirection: 'row', alignItems: 'center', gap: 6, backgroundColor: run.conversationId === controller.conversationId ? theme.accentSoft : theme.surface }}>
-        {run.state !== 'queued' && <ActivityIndicator size={10} color={theme.accent} />}
-        <View style={{ minWidth: 0, flexShrink: 1 }}>
-          <T numberOfLines={1} style={{ fontSize: 11 }}>{controller.projects.find((project) => project.id === run.projectId)?.name ?? '项目'} · {run.prompt}</T>
-          <T tone="muted" style={{ fontSize: 9 }}>{run.state === 'queued' ? '排队中' : run.state === 'waiting_children' ? '等待子任务' : run.state === 'cancelling' ? '正在停止' : '执行中'}</T>
-        </View>
-      </Pressable>)}
-    </ScrollView>
-  </View>;
+  return (
+    <View
+      testID="run-activity"
+      style={{
+        borderBottomWidth: 1,
+        borderBottomColor: theme.border,
+        backgroundColor: theme.surface,
+        paddingVertical: 6,
+      }}
+    >
+      <ScrollView
+        horizontal
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 14, gap: 8, alignItems: 'center' }}
+      >
+        <T tone="muted" style={{ fontSize: 10 }}>
+          活动任务 · {controller.runs.length}
+        </T>
+        {controller.runs.map(run => (
+          <Pressable
+            key={run.id}
+            accessibilityRole="button"
+            accessibilityLabel={'查看活动任务 ' + run.prompt}
+            disabled={controller.busy}
+            onPress={() => controller.returnToActiveConversation(run)}
+            style={{
+              paddingHorizontal: 9,
+              paddingVertical: 5,
+              borderWidth: 1,
+              borderColor: theme.border,
+              borderRadius: 7,
+              maxWidth: 200,
+              flexDirection: 'row',
+              alignItems: 'center',
+              gap: 6,
+              backgroundColor:
+                run.conversationId === controller.conversationId ? theme.accentSoft : theme.surface,
+            }}
+          >
+            {run.state !== 'queued' && <ActivityIndicator size={10} color={theme.accent} />}
+            <View style={{ minWidth: 0, flexShrink: 1 }}>
+              <T numberOfLines={1} style={{ fontSize: 11 }}>
+                {controller.projects.find(project => project.id === run.projectId)?.name ?? '项目'}{' '}
+                · {run.prompt}
+              </T>
+              <T tone="muted" style={{ fontSize: 9 }}>
+                {run.state === 'queued'
+                  ? '排队中'
+                  : run.state === 'waiting_children'
+                    ? '等待子任务'
+                    : run.state === 'cancelling'
+                      ? '正在停止'
+                      : '执行中'}
+              </T>
+            </View>
+          </Pressable>
+        ))}
+      </ScrollView>
+    </View>
+  );
 });

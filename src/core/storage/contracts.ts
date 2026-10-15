@@ -6,7 +6,11 @@ export interface MetadataStore {
   batch?(entries: readonly MetadataEntry[]): Promise<void>;
 }
 
-export interface MetadataEntry { bucket: string; id: string; value: unknown }
+export interface MetadataEntry {
+  bucket: string;
+  id: string;
+  value: unknown;
+}
 
 export interface StorageStat {
   kind: 'file' | 'directory';

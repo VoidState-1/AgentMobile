@@ -14,12 +14,12 @@
 
 暂不新增自定义角色、插件沙箱、ORM、后台服务、网页执行、国际化平台或在线 GC；不替换 Pi、Git 后端、状态管理库。开发数据可按当前格式重建，不为保存旧原型数据保留常驻分支。当前格式的正常 Git 历史/撤销、日志恢复和外部协议支持仍是功能要求。
 
-| 目标 | 完成标准 |
-| --- | --- |
-| 正确性 | 取消、截止、预算、引擎故障和回执失败可区分；根/子公共规则一致 |
-| 查询范围 | 摘要不读取操作正文或完整历史轨迹；分页在底层查询生效 |
-| 安全与恢复 | 权限不扩大，意图先于副作用落盘，完成不先于必要回执；恢复幂等 |
-| 维护性 | 当前实体不继承旧展示 DTO；公共契约独立；关键规则只维护一份 |
+| 目标       | 完成标准                                                      |
+| ---------- | ------------------------------------------------------------- |
+| 正确性     | 取消、截止、预算、引擎故障和回执失败可区分；根/子公共规则一致 |
+| 查询范围   | 摘要不读取操作正文或完整历史轨迹；分页在底层查询生效          |
+| 安全与恢复 | 权限不扩大，意图先于副作用落盘，完成不先于必要回执；恢复幂等  |
+| 维护性     | 当前实体不继承旧展示 DTO；公共契约独立；关键规则只维护一份    |
 
 文件数、代码行数、断言数量和“消灭全部 if”不作为完成标准。性能结论注明设备、样本、构建类型和基线；浏览器通过不能代替原生/真机验证。
 
@@ -41,19 +41,19 @@ flowchart TD
   W --> G[GitPort / HostFileSystem]
 ```
 
-| 目标位置 | 职责 |
-| --- | --- |
-| src/core/errors.ts | 公共错误码与安全错误；不解析提示文案 |
-| src/core/runs/termination.ts | 停止原因与终态判定的纯规则 |
-| src/core/runs/records.ts、queries.ts | 当前运行实体；独立摘要/详情 DTO |
-| src/core/workspace/journal.ts | 明确日志类型、摘要/正文及端口 |
-| src/core/storage/business-store.ts | 跨日志/运行/KV 的有类型同库原子批次 |
-| src/application/runs/execution-driver.ts | 请求槽、预算、意图 flush、停止和清理 |
-| src/application/workspace/journal.ts | 项目队列内日志用例与恢复读取 |
-| src/application/tools/file-read.ts | 三种来源共用的受限读取工具 |
-| src/adapters/storage/native、web | 当前结构初始化、热查询、索引、事务和开发数据重建 |
-| src/bootstrap/storage-init.ts、startup.ts | 当前格式检查与明确启动阶段；不建立历史迁移模块 |
-| src/application/api、features/workbench | 独立公共接口与窄界面能力 |
+| 目标位置                                  | 职责                                             |
+| ----------------------------------------- | ------------------------------------------------ |
+| src/core/errors.ts                        | 公共错误码与安全错误；不解析提示文案             |
+| src/core/runs/termination.ts              | 停止原因与终态判定的纯规则                       |
+| src/core/runs/records.ts、queries.ts      | 当前运行实体；独立摘要/详情 DTO                  |
+| src/core/workspace/journal.ts             | 明确日志类型、摘要/正文及端口                    |
+| src/core/storage/business-store.ts        | 跨日志/运行/KV 的有类型同库原子批次              |
+| src/application/runs/execution-driver.ts  | 请求槽、预算、意图 flush、停止和清理             |
+| src/application/workspace/journal.ts      | 项目队列内日志用例与恢复读取                     |
+| src/application/tools/file-read.ts        | 三种来源共用的受限读取工具                       |
+| src/adapters/storage/native、web          | 当前结构初始化、热查询、索引、事务和开发数据重建 |
+| src/bootstrap/storage-init.ts、startup.ts | 当前格式检查与明确启动阶段；不建立历史迁移模块   |
+| src/application/api、features/workbench   | 独立公共接口与窄界面能力                         |
 
 这是目标落点，未实现的职责不提前创建空框架。现有平台入口可以保留为薄组装文件；模块只在相关提交中迁移。
 
@@ -63,20 +63,20 @@ flowchart TD
 
 保留 core/application/adapters/bootstrap/features/shared/app 的层级边界。文件夹表达实际的业务模块、平台实现或路由语义，不机械为每个类型/类/Hook 创建目录；单文件模块优先使用有含义的文件名，形成实际文件簇或确需独立管理后再升为目录。没有“必须三文件才能建目录”的硬规则。
 
-| 当前组织 | 收敛方向 | 判断依据 |
-| --- | --- | --- |
-| src/components、constants、hooks、theme；core/model、prototype；features/prototype 等无文件目录 | 实施时核对后移除本地残留，包括 components/ui | 无当前代码；不以未来可能使用为理由保留 |
-| core/agent 与 core/agents/types.ts | 将角色定义并入 core/agent/definitions.ts | 同一 Agent 模块，没有第二个独立职责边界 |
-| core/projects/types.ts、preferences/types.ts、events/signal.ts | 优先改为 core/projects.ts、preferences.ts、signal.ts | 小型单文件模块可保留命名与依赖边界，无须多套一层 |
-| core/trace/index.ts | core/trace.ts；后续形成多个真实 trace 模块再分目录 | 当前唯一文件，保留公开模块入口即可 |
-| adapters/agent/pi/engine.ts | adapters/agent/pi-engine.ts | Pi 实现仍在 adapter，专属目录当前只有一个绑定文件 |
-| adapters/lifecycle/runs.ts | adapters/agent/lifecycle.ts | 当前仅负责 Agent 生命周期挂接，合并归属而非合并平台实现到 application |
-| adapters/workspace/service.ts | 明确组装工厂，最终归入 bootstrap 的工作区组装 | 当前只组合具体 Git/codec 与 WorkspaceApplication，不是另一个文件业务实现；随显式 Skills 模式改造处理 |
-| features/git/actions.ts、runs/activity.tsx | 当前可并入 workbench/git-actions.ts、run-activity.tsx | 两者依赖 Workbench/其上下文，尚不是独立可复用 feature；未来有独立页面/契约后再拆 |
-| shared/hooks、state、theme 各单文件 | shared/use-app-services.ts、workbench-state.ts、theme.ts；保留 shared/ui 文件簇 | 保留 Hook/状态/主题职责，用文件名区分即可 |
-| application/models、conversations、skills | 保留业务目录 | 虽只有一个实现文件，但与领域、适配和界面对应，职责清楚且实现并不微小 |
-| app/settings、app/mcp、app/skills | 保留路由结构 | 文件夹参与 Expo Router 路由语义，不按文件数量扁平化 |
-| adapters/git、io、mcp；model/protocols | 保留实现簇及 .web 配对 | Git/MCP/协议/平台差异真实存在，不为减少目录混合职责 |
+| 当前组织                                                                                        | 收敛方向                                                                        | 判断依据                                                                                             |
+| ----------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------- |
+| src/components、constants、hooks、theme；core/model、prototype；features/prototype 等无文件目录 | 实施时核对后移除本地残留，包括 components/ui                                    | 无当前代码；不以未来可能使用为理由保留                                                               |
+| core/agent 与 core/agents/types.ts                                                              | 将角色定义并入 core/agent/definitions.ts                                        | 同一 Agent 模块，没有第二个独立职责边界                                                              |
+| core/projects/types.ts、preferences/types.ts、events/signal.ts                                  | 优先改为 core/projects.ts、preferences.ts、signal.ts                            | 小型单文件模块可保留命名与依赖边界，无须多套一层                                                     |
+| core/trace/index.ts                                                                             | core/trace.ts；后续形成多个真实 trace 模块再分目录                              | 当前唯一文件，保留公开模块入口即可                                                                   |
+| adapters/agent/pi/engine.ts                                                                     | adapters/agent/pi-engine.ts                                                     | Pi 实现仍在 adapter，专属目录当前只有一个绑定文件                                                    |
+| adapters/lifecycle/runs.ts                                                                      | adapters/agent/lifecycle.ts                                                     | 当前仅负责 Agent 生命周期挂接，合并归属而非合并平台实现到 application                                |
+| adapters/workspace/service.ts                                                                   | 明确组装工厂，最终归入 bootstrap 的工作区组装                                   | 当前只组合具体 Git/codec 与 WorkspaceApplication，不是另一个文件业务实现；随显式 Skills 模式改造处理 |
+| features/git/actions.ts、runs/activity.tsx                                                      | 当前可并入 workbench/git-actions.ts、run-activity.tsx                           | 两者依赖 Workbench/其上下文，尚不是独立可复用 feature；未来有独立页面/契约后再拆                     |
+| shared/hooks、state、theme 各单文件                                                             | shared/use-app-services.ts、workbench-state.ts、theme.ts；保留 shared/ui 文件簇 | 保留 Hook/状态/主题职责，用文件名区分即可                                                            |
+| application/models、conversations、skills                                                       | 保留业务目录                                                                    | 虽只有一个实现文件，但与领域、适配和界面对应，职责清楚且实现并不微小                                 |
+| app/settings、app/mcp、app/skills                                                               | 保留路由结构                                                                    | 文件夹参与 Expo Router 路由语义，不按文件数量扁平化                                                  |
+| adapters/git、io、mcp；model/protocols                                                          | 保留实现簇及 .web 配对                                                          | Git/MCP/协议/平台差异真实存在，不为减少目录混合职责                                                  |
 
 这些移动映射已在第一阶段落实，工作区组装使用 bootstrap/workspace.ts。只有类型与参数定义的微型文件（例如 runs 的 persistence/resources/delegation-port）可在共同驱动实施时收敛到明确的 contracts.ts；不是所有短文件都应合并，独立规则和恢复状态机仍单独维护。
 
@@ -92,11 +92,20 @@ flowchart TD
 type StopReason =
   | { kind: 'user_cancel'; originRunId: string; at: string }
   | { kind: 'deadline'; originRunId: string; at: string; deadlineAt: string }
-  | { kind: 'budget_exhausted'; originRunId: string; at: string;
-      scope: 'run' | 'group'; resource: 'requests' | 'tools' }
+  | {
+      kind: 'budget_exhausted';
+      originRunId: string;
+      at: string;
+      scope: 'run' | 'group';
+      resource: 'requests' | 'tools';
+    }
   | { kind: 'engine_error'; originRunId: string; at: string; error: PublicError }
-  | { kind: 'ancestor_stopped'; originRunId: string; at: string;
-      cause: 'user_cancel' | 'deadline' | 'budget_exhausted' | 'engine_error' }
+  | {
+      kind: 'ancestor_stopped';
+      originRunId: string;
+      at: string;
+      cause: 'user_cancel' | 'deadline' | 'budget_exhausted' | 'engine_error';
+    }
   | { kind: 'app_interrupted'; at: string };
 
 interface PublicError {
@@ -108,16 +117,16 @@ interface PublicError {
 
 StopController 每运行一份，首次明确停止原因锁定；AbortSignal 只负责取消派发/网络/引擎，不负责解释终态。祖先停止传递真实来源。组预算停止整组，子配额耗尽只停止该子运行，父运行仍可汇总。
 
-| 情况 | 状态 | 原因 |
-| --- | --- | --- |
-| 正常结束且必要回执成功保存 | completed | 无 |
-| 用户停止或祖先因用户停止取消它 | cancelled | user_cancel / ancestor_stopped(user_cancel) |
-| 本运行/整组截止 | failed | deadline 或祖先的 deadline |
-| 子配额/组额度耗尽 | failed | budget_exhausted，保留 scope/resource |
-| 引擎错误、length、未完整结束 | failed | engine_error；length 明确说明输出上限 |
-| 父失败后停止尚未收束的子运行 | cancelled | ancestor_stopped(engine_error)，不冒充子引擎故障 |
-| 重开后发现未完成运行 | interrupted | app_interrupted 与恢复/unknown 提示 |
-| 必要回执/终态保存失败 | 不宣布已持久化终态 | 服务进入 recovery_required，阻断派发并等待恢复 |
+| 情况                           | 状态               | 原因                                             |
+| ------------------------------ | ------------------ | ------------------------------------------------ |
+| 正常结束且必要回执成功保存     | completed          | 无                                               |
+| 用户停止或祖先因用户停止取消它 | cancelled          | user_cancel / ancestor_stopped(user_cancel)      |
+| 本运行/整组截止                | failed             | deadline 或祖先的 deadline                       |
+| 子配额/组额度耗尽              | failed             | budget_exhausted，保留 scope/resource            |
+| 引擎错误、length、未完整结束   | failed             | engine_error；length 明确说明输出上限            |
+| 父失败后停止尚未收束的子运行   | cancelled          | ancestor_stopped(engine_error)，不冒充子引擎故障 |
+| 重开后发现未完成运行           | interrupted        | app_interrupted 与恢复/unknown 提示              |
+| 必要回执/终态保存失败          | 不宣布已持久化终态 | 服务进入 recovery_required，阻断派发并等待恢复   |
 
 recovery_required 是运行服务的可用性状态，不伪装成已保存的 RunState。存储故障阻止发布完成，可以与已有停止原因同时存在。
 
@@ -149,11 +158,11 @@ UI 不解析 message 决定操作。诊断保存 code、阶段、关联 ID、时
 
 defineTool() 去掉可选 effect、工具名推断和默认 read。每个工具明确效果；allowedEffects 与 mayDelegate 在构建和派发时检查。固定三个子角色继续保留。writer 的 workspace-write 只绑定候选能力，效果声明不授予真实工作区权限；后端再次检查项目、路径、修订号和归属。
 
-| 来源 | 文件读取 | 文件写入 | Git/MCP/委派 |
-| --- | --- | --- | --- |
-| live root | list/read/search；图片开启时 inspect | 版本检查的真实写入 | 按冻结角色及项目授权提供 |
-| snapshot child | 相同读取算法，仅固定授权路径 | 无 | 无 |
-| proposal child | 相同读取算法，搜索候选当前版本 | 候选 write/move/delete | 无 |
+| 来源           | 文件读取                             | 文件写入               | Git/MCP/委派             |
+| -------------- | ------------------------------------ | ---------------------- | ------------------------ |
+| live root      | list/read/search；图片开启时 inspect | 版本检查的真实写入     | 按冻结角色及项目授权提供 |
+| snapshot child | 相同读取算法，仅固定授权路径         | 无                     | 无                       |
+| proposal child | 相同读取算法，搜索候选当前版本       | 候选 write/move/delete | 无                       |
 
 图片关闭时不构建 inspect。Skills 资源是独立能力，不继承项目文件 grant；子输出和提案不能扩大权限。
 
@@ -211,11 +220,11 @@ OperationJournal 提供 prepare、getHeader/getBody、advance、listSummaries、
 
 queryRunEffects 返回已记录路径、最后文件/index 检查点、提交等聚合证据，不取正文；恢复按项目序号逐项读待完成正文。暂保留已验证的 Base64 内容语义，不在同一提交改成新 BlobStore；单项正文峰值仍需测量。
 
-| SQLite 当前目标表 | 主键/索引 | 内容 |
-| --- | --- | --- |
+| SQLite 当前目标表 | 主键/索引                                                     | 内容                       |
+| ----------------- | ------------------------------------------------------------- | -------------------------- |
 | operation_headers | `(namespace,id)`；唯一项目/序号；项目/阶段/序号；rootRun/序号 | 可查询列、紧凑 header JSON |
-| operation_bodies | `(namespace,id)` | 不可变正文/指纹 |
-| project_sequences | `(namespace,project_id)` | 最后已分配序号 |
+| operation_bodies  | `(namespace,id)`                                              | 不可变正文/指纹            |
+| project_sequences | `(namespace,project_id)`                                      | 最后已分配序号             |
 
 records 继续承载低频配置、凭证引用、组预算和既有提案回执。新增 BusinessWriteBatch 只接受指定日志/运行/轨迹变更与 MetadataEntry，适配器检查 revision/终态条件并在同连接/写队列/事务提交，不开放任意 SQL。
 
@@ -351,12 +360,12 @@ Skills 调用者与明确 files_commit 日志在同一变更改好，直接删�
 
 结构改动直接更新当前初始化 DDL/IndexedDB stores 和所有调用者。删除无条件 PRAGMA user_version=1；使用当前格式标记，不能把旧库伪装成新库。IndexedDB versionchange 关闭旧连接并提示刷新；格式不匹配不自动执行旧页面写入。
 
-| 实施步骤 | 当前结构变化 | 开发数据处理 |
-| --- | --- | --- |
-| F1 | 日志 header/body/sequence | 更新当前格式，开发实例可重建 |
-| F2 | run header/input/result 与索引 | 直接使用当前 RunRecord/DTO，不导入旧记录 |
-| F3 | trace nodes/chunks/transcript frames | 仅当前 trace/frame，删除 events/旧 transcript 路径 |
-| F4 | Web 文件内容版本键与轻量 stat 索引 | 当前格式 agent-mobile-f4 / 物理版本 5，开发实例可重建 |
+| 实施步骤 | 当前结构变化                         | 开发数据处理                                          |
+| -------- | ------------------------------------ | ----------------------------------------------------- |
+| F1       | 日志 header/body/sequence            | 更新当前格式，开发实例可重建                          |
+| F2       | run header/input/result 与索引       | 直接使用当前 RunRecord/DTO，不导入旧记录              |
+| F3       | trace nodes/chunks/transcript frames | 仅当前 trace/frame，删除 events/旧 transcript 路径    |
+| F4       | Web 文件内容版本键与轻量 stat 索引   | 当前格式 agent-mobile-f4 / 物理版本 5，开发实例可重建 |
 
 F1/F2/F3/F4 是开发提交顺序，不是启动时执行的迁移链。每次需要变化时更新当前格式和 fixture，测试相同格式初始化/重开/恢复及不匹配处理。不建立 MigrationRecord、legacy snapshot、双写或保留旧来源的机制。
 
@@ -405,33 +414,33 @@ editor/composer 各有唯一 update/replace 入口，ref 只供异步读，不�
 
 每个 PR 是可回归的小交付；编号用于未来实施拆分，本次未创建远程 PR。
 
-| PR | 交付 | 前置 | 验收重点 |
-| --- | --- | --- | --- |
-| 01 | StopReason/共同终态规则，先在现有控制器内使用 | 无 | 根/子 deadline、停止竞态、子配额和回执失败 |
-| 02 | 错误源转换，effect/角色和 ESLint 约束 | 无；按模块拆提交 | 正确错误码，文案独立；缺 effect 编译失败；非法导入拒绝 |
-| 03 | Web bucket 范围扫描、测量工具/基线 | 无 | 不复制无关 bucket；可复现，不调用付费模型 |
-| 04 | BusinessStore、OperationJournal 与 F1 当前结构 | 02、03 | 当前初始化；header/body/序号/回执原子，重试无重复 |
-| 05 | 所有日志调用者有界查询、显式 Skills 保存 | 04 | snapshot/taskFinal/Git归属/恢复不全取正文；技能版本幂等 |
-| 06 | RunRecord v3/DTO、F2/RunsApi，删除旧任务/配置兼容 | 01、02、04 | 当前实体独立，fixture更新，草稿回执恢复，启动不全量 hydrate |
-| 07 | 会话摘要/详情加载、Git/Skills历史分页 | 06 | 首屏有界；完整回答可展开；翻页期间新增不漏重 |
-| 08 | trace/frame 增量、F3/通知合并，删除旧轨迹路径 | 06、07 | 当前frame完整；意图/终态屏障保留，过期异步写不复活任务 |
-| 09 | ExecutionDriver、共用读取工具、单次文件视图 | 01、02、05、08 | 公共规则一致；授权来源不扩大；重复读取下降 |
-| 10 | 窄工作台、唯一编辑入口、公共接口与维护整理 | 06、07；09 可分开 | 保存期间输入/切换、未保存状态与外部修改正确 |
+| PR  | 交付                                              | 前置              | 验收重点                                                    |
+| --- | ------------------------------------------------- | ----------------- | ----------------------------------------------------------- |
+| 01  | StopReason/共同终态规则，先在现有控制器内使用     | 无                | 根/子 deadline、停止竞态、子配额和回执失败                  |
+| 02  | 错误源转换，effect/角色和 ESLint 约束             | 无；按模块拆提交  | 正确错误码，文案独立；缺 effect 编译失败；非法导入拒绝      |
+| 03  | Web bucket 范围扫描、测量工具/基线                | 无                | 不复制无关 bucket；可复现，不调用付费模型                   |
+| 04  | BusinessStore、OperationJournal 与 F1 当前结构    | 02、03            | 当前初始化；header/body/序号/回执原子，重试无重复           |
+| 05  | 所有日志调用者有界查询、显式 Skills 保存          | 04                | snapshot/taskFinal/Git归属/恢复不全取正文；技能版本幂等     |
+| 06  | RunRecord v3/DTO、F2/RunsApi，删除旧任务/配置兼容 | 01、02、04        | 当前实体独立，fixture更新，草稿回执恢复，启动不全量 hydrate |
+| 07  | 会话摘要/详情加载、Git/Skills历史分页             | 06                | 首屏有界；完整回答可展开；翻页期间新增不漏重                |
+| 08  | trace/frame 增量、F3/通知合并，删除旧轨迹路径     | 06、07            | 当前frame完整；意图/终态屏障保留，过期异步写不复活任务      |
+| 09  | ExecutionDriver、共用读取工具、单次文件视图       | 01、02、05、08    | 公共规则一致；授权来源不扩大；重复读取下降                  |
+| 10  | 窄工作台、唯一编辑入口、公共接口与维护整理        | 06、07；09 可分开 | 保存期间输入/切换、未保存状态与外部修改正确                 |
 
 01–03 是近期第一里程碑；04–07 解决存储与有界读取；08–10 收敛持续写入、公共机制与界面。相关排版单独穿插。测量可调整拆分，但同一交付必须更新当前调用者/测试/文档并删除被替换路径，不以旧原型兼容为由保留常驻桥接。
 
 ## 13. 验证矩阵与性能验收
 
-| 范围 | 必须验证 |
-| --- | --- |
-| 终止 | fake clock 根/子先后；终态提交与停止两种事务顺序；预算/用户停止接近；准备/排队/运行取消 |
-| 请求槽 | assistant 后释放；工具失败、汇总、等子任务、后台挂起无泄漏；组间公平 |
-| 日志 | prepare中途失败；文件/index/Git成功但阶段记录失败；同ID重试/冲突；counter中断后单调 |
-| 权限 | snapshot无写端口；writer不能访问live/index/HEAD；根冻结grant；跨项目/根/路径拒绝 |
+| 范围        | 必须验证                                                                                          |
+| ----------- | ------------------------------------------------------------------------------------------------- |
+| 终止        | fake clock 根/子先后；终态提交与停止两种事务顺序；预算/用户停止接近；准备/排队/运行取消           |
+| 请求槽      | assistant 后释放；工具失败、汇总、等子任务、后台挂起无泄漏；组间公平                              |
+| 日志        | prepare中途失败；文件/index/Git成功但阶段记录失败；同ID重试/冲突；counter中断后单调               |
+| 权限        | snapshot无写端口；writer不能访问live/index/HEAD；根冻结grant；跨项目/根/路径拒绝                  |
 | 格式/初始化 | 当前格式创建/重开；初始化事务失败；不匹配阻断；开发重建作用域；Skills scoped batch；IDB旧连接关闭 |
-| 轨迹 | 块重复/乱序/旧revision；终态与尾节点同批；frame含toolResult与取消尾部；unknown重开不重放 |
-| 界面 | 对话/项目隔离；首屏与全文；分页新增；保存期间输入/切换；外部改动不覆盖草稿 |
-| 原生 | Android SQLite当前初始化/事务回滚/恢复、Hermes执行；iOS只有JS导出时明确标注，真机性能单独记录 |
+| 轨迹        | 块重复/乱序/旧revision；终态与尾节点同批；frame含toolResult与取消尾部；unknown重开不重放          |
+| 界面        | 对话/项目隔离；首屏与全文；分页新增；保存期间输入/切换；外部改动不覆盖草稿                        |
+| 原生        | Android SQLite当前初始化/事务回滚/恢复、Hermes执行；iOS只有JS导出时明确标注，真机性能单独记录     |
 
 结构性性能条件先验收：
 
@@ -455,23 +464,22 @@ AgentEnginePort 继续作为替换边界。共同生命周期、停止语义、�
 
 Pi provider/message 类型留在 adapters，业务持有自己的事件/错误/查询 DTO。transcript frame的opaque字段只标识当前格式，不把SDK内部结构承诺为业务实体。未来若替换，文件/Git、MCP、Skills、组预算及当前格式的持久化/恢复应无需重新设计，也不为旧引擎数据增加转换器。
 
-
 ## 16. 本轮完成审计
 
 2026-10-15。以下对应本方案的交付范围，指实现与开发验收完成，不代表发布、真机性能或未纳入本轮的产品功能已经通过。原始外部审计不改写。
 
-| 批次 | 最终实现 | 证据 |
-| --- | --- | --- |
-| 01 | 首因 StopController、根/子共同终态、收尾截止检查、回执失败阻断 | termination/run-kernel/delegation/proposals 测试；Android 取消/中断 |
-| 02 | AppError、effect/角色执行授权、实际路径 ESLint 分层 | 错误/协议/授权与边界正反测试；无错误子类 |
-| 03 | IDB bucket 范围查询、可复现存储/性能脚本 | actual Chrome source adapter；三样本各五次 |
-| 04 | BusinessStore、日志 header/body/counter、当前格式原子初始化 | SQLite 初始化/prepare/CAS 回滚，Chrome IDB；F4 原生重建/恢复 |
-| 05 | owned/pending 有界摘要，Skills 显式 files_commit 固定目标 | Git 后回执失败的原生 trigger、元数据回滚与不重复提交 |
-| 06 | RunRecord v3、独立 DTO、准入序号、精确草稿回执，旧接口删除 | 归属/游标/同时间/时钟回拨/事务测试；原生当前表核对 |
-| 07 | 30 条摘要、可见详情、Git/Skills 固定游标分页，完整回答独立展示 | 44 条浏览器回归；超过 100 Git 提交与 62 步长轨迹 |
-| 08 | trace/chunks/frame 增量、意图/终态屏障、独立帧通知 | 块乱序/重复/代理对/终态尾帧原子测试；Pi 原生帧/unknown |
-| 09 | ExecutionDriver、三来源读取、单次视图、可信文件索引、Git blob 校验复用 | 文件 I/O/失效/冷启动/授权测试；损坏对象阻断；原生三样本 |
-| 10 | 六组能力、范围隔离、唯一编辑入口、显式 AppServices、适用队列/DTO 规则 | 存储阻塞/保存新输入/项目切换回归；187 项检查通过 |
+| 批次 | 最终实现                                                               | 证据                                                                |
+| ---- | ---------------------------------------------------------------------- | ------------------------------------------------------------------- |
+| 01   | 首因 StopController、根/子共同终态、收尾截止检查、回执失败阻断         | termination/run-kernel/delegation/proposals 测试；Android 取消/中断 |
+| 02   | AppError、effect/角色执行授权、实际路径 ESLint 分层                    | 错误/协议/授权与边界正反测试；无错误子类                            |
+| 03   | IDB bucket 范围查询、可复现存储/性能脚本                               | actual Chrome source adapter；三样本各五次                          |
+| 04   | BusinessStore、日志 header/body/counter、当前格式原子初始化            | SQLite 初始化/prepare/CAS 回滚，Chrome IDB；F4 原生重建/恢复        |
+| 05   | owned/pending 有界摘要，Skills 显式 files_commit 固定目标              | Git 后回执失败的原生 trigger、元数据回滚与不重复提交                |
+| 06   | RunRecord v3、独立 DTO、准入序号、精确草稿回执，旧接口删除             | 归属/游标/同时间/时钟回拨/事务测试；原生当前表核对                  |
+| 07   | 30 条摘要、可见详情、Git/Skills 固定游标分页，完整回答独立展示         | 44 条浏览器回归；超过 100 Git 提交与 62 步长轨迹                    |
+| 08   | trace/chunks/frame 增量、意图/终态屏障、独立帧通知                     | 块乱序/重复/代理对/终态尾帧原子测试；Pi 原生帧/unknown              |
+| 09   | ExecutionDriver、三来源读取、单次视图、可信文件索引、Git blob 校验复用 | 文件 I/O/失效/冷启动/授权测试；损坏对象阻断；原生三样本             |
+| 10   | 六组能力、范围隔离、唯一编辑入口、显式 AppServices、适用队列/DTO 规则  | 存储阻塞/保存新输入/项目切换回归；187 项检查通过                    |
 
 当前无空目录、兼容转发、旧任务/配置迁移或平行引擎。必要的 Git/SQLite 协调、操作意图、权限、幂等和进程恢复仍保留。modules 占位文档归入 docs/native-modules.md，真实原生实现产生时再创建模块目录。
 

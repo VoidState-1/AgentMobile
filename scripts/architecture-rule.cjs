@@ -2,10 +2,14 @@ const path = require('node:path');
 
 // Normalize aliases and relative paths; string patterns miss dynamic dependencies.
 module.exports = {
-  meta: { type: 'problem', schema: [], messages: {
-    boundary: '{{layer}} 层不能引用 {{dependency}}；请通过正式领域端口或应用接口访问。',
-    dynamic: '分层源文件的动态模块路径必须是可静态检查的字符串。',
-  } },
+  meta: {
+    type: 'problem',
+    schema: [],
+    messages: {
+      boundary: '{{layer}} 层不能引用 {{dependency}}；请通过正式领域端口或应用接口访问。',
+      dynamic: '分层源文件的动态模块路径必须是可静态检查的字符串。',
+    },
+  },
   create(context) {
     const sourceRoot = path.resolve(context.cwd, 'src');
     const layerOf = file => path.relative(sourceRoot, file).replaceAll('\\', '/').split('/')[0];
@@ -14,10 +18,16 @@ module.exports = {
     if (!['core', 'application', 'features'].includes(layer) && !sharedUi) return {};
     const check = node => {
       if (!node) return;
-      if (typeof node.value !== 'string') { context.report({ node, messageId: 'dynamic' }); return; }
+      if (typeof node.value !== 'string') {
+        context.report({ node, messageId: 'dynamic' });
+        return;
+      }
       const dependency = node.value;
-      const target = dependency.startsWith('@/') ? path.join(sourceRoot, dependency.slice(2)) :
-        dependency.startsWith('.') ? path.resolve(path.dirname(context.filename), dependency) : undefined;
+      const target = dependency.startsWith('@/')
+        ? path.join(sourceRoot, dependency.slice(2))
+        : dependency.startsWith('.')
+          ? path.resolve(path.dirname(context.filename), dependency)
+          : undefined;
       const targetLayer = target && layerOf(target);
       let forbidden = false;
       if (layer === 'core' || layer === 'application') {
@@ -35,7 +45,10 @@ module.exports = {
       ImportExpression: node => check(node.source),
       TSImportType: node => check(node.source),
       TSExternalModuleReference: node => check(node.expression),
-      CallExpression: node => { if (node.callee.type === 'Identifier' && node.callee.name === 'require') check(node.arguments[0]); },
+      CallExpression: node => {
+        if (node.callee.type === 'Identifier' && node.callee.name === 'require')
+          check(node.arguments[0]);
+      },
     };
   },
 };

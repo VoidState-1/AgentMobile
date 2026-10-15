@@ -1,1 +1,6 @@
-export const skillSource = (name = 'note-workflow', version = 'VERSION_ONE') => '---\nname: ' + name + '\ndescription: 整理文字资料并按指定流程保存笔记。\nmetadata:\n  version: "1.0"\n---\n\n# 资料整理\n\n' + version + '\n先读取 references/template.md，再保存为项目 Markdown 文件。\n';
+export const skillSource = (name = 'note-workflow', version = 'VERSION_ONE') =>
+  '---\nname: ' +
+  name +
+  '\ndescription: 整理文字资料并按指定流程保存笔记。\nmetadata:\n  version: "1.0"\n---\n\n# 资料整理\n\n' +
+  version +
+  '\n先读取 references/template.md，再保存为项目 Markdown 文件。\n';

@@ -1,4 +1,12 @@
-export type AppErrorCode = 'VALIDATION' | 'CONFLICT' | 'CANCELLED' | 'LIMIT' | 'STORAGE' | 'REMOTE' | 'UNKNOWN' | 'DATA_FORMAT';
+export type AppErrorCode =
+  | 'VALIDATION'
+  | 'CONFLICT'
+  | 'CANCELLED'
+  | 'LIMIT'
+  | 'STORAGE'
+  | 'REMOTE'
+  | 'UNKNOWN'
+  | 'DATA_FORMAT';
 
 /** Structured dispatch failure; host control never parses a public message. */
 export interface LimitFailure {
@@ -10,8 +18,14 @@ export interface LimitFailure {
 
 /** Only these public fields cross the application boundary. No native cause is retained. */
 export class AppError extends Error {
-  constructor(readonly code: AppErrorCode, message: string, readonly uncertain = false, readonly limit?: LimitFailure) {
-    super(message); this.name = 'AppError';
+  constructor(
+    readonly code: AppErrorCode,
+    message: string,
+    readonly uncertain = false,
+    readonly limit?: LimitFailure,
+  ) {
+    super(message);
+    this.name = 'AppError';
   }
 }
 

@@ -1,4 +1,5 @@
-export type TraceState = 'running' | 'completed' | 'error' | 'cancelled' | 'interrupted' | 'unknown';
+export type TraceState =
+  'running' | 'completed' | 'error' | 'cancelled' | 'interrupted' | 'unknown';
 interface TraceBase {
   id: string;
   round: number;
@@ -32,20 +33,57 @@ export interface ToolTrace extends TraceBase {
 export type TraceItem = ContentTrace | ToolTrace;
 
 /** Upsert by provider content index, preserving first-observed order. */
-export function recordContent(trace: TraceItem[], item: Omit<ContentTrace, 'startedAt' | 'state'>,
-  now: string, ended = false): void {
-  const previous = trace.find((entry): entry is ContentTrace => entry.kind !== 'tool' && entry.id === item.id);
+export function recordContent(
+  trace: TraceItem[],
+  item: Omit<ContentTrace, 'startedAt' | 'state'>,
+  now: string,
+  ended = false,
+): void {
+  const previous = trace.find(
+    (entry): entry is ContentTrace => entry.kind !== 'tool' && entry.id === item.id,
+  );
   if (previous) {
     previous.text = item.text;
     previous.visibility = item.visibility;
-    if (ended) { previous.state = 'completed'; previous.endedAt = now; }
-  } else trace.push({ ...item, startedAt: now, state: ended ? 'completed' : 'running', ...(ended ? { endedAt: now } : {}) });
+    if (ended) {
+      previous.state = 'completed';
+      previous.endedAt = now;
+    }
+  } else
+    trace.push({
+      ...item,
+      startedAt: now,
+      state: ended ? 'completed' : 'running',
+      ...(ended ? { endedAt: now } : {}),
+    });
 }
-export function finishTool(trace: TraceItem[], round: number, callId: string, output: string, error: boolean, now: string, durationMs?: number): void {
-  const item = trace.find((entry): entry is ToolTrace => entry.kind === 'tool' && entry.round === round && entry.callId === callId);
-  if (item) { item.output = output; item.state = error ? 'error' : 'completed'; item.endedAt = now; item.durationMs = durationMs; }
+export function finishTool(
+  trace: TraceItem[],
+  round: number,
+  callId: string,
+  output: string,
+  error: boolean,
+  now: string,
+  durationMs?: number,
+): void {
+  const item = trace.find(
+    (entry): entry is ToolTrace =>
+      entry.kind === 'tool' && entry.round === round && entry.callId === callId,
+  );
+  if (item) {
+    item.output = output;
+    item.state = error ? 'error' : 'completed';
+    item.endedAt = now;
+    item.durationMs = durationMs;
+  }
 }
 /** Also used during startup recovery; finished steps are never rewritten. */
-export function settleTrace(trace: TraceItem[] | undefined, state: Exclude<TraceState, 'running'>, now: string): TraceItem[] | undefined {
-  return trace?.map((item) => item.state === 'running' ? { ...item, state, endedAt: now } : { ...item });
+export function settleTrace(
+  trace: TraceItem[] | undefined,
+  state: Exclude<TraceState, 'running'>,
+  now: string,
+): TraceItem[] | undefined {
+  return trace?.map(item =>
+    item.state === 'running' ? { ...item, state, endedAt: now } : { ...item },
+  );
 }

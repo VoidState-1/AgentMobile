@@ -11,4 +11,8 @@ export interface FileChange {
   after: string | null;
 }
 
-export interface WorkspaceChange { projectId: string; paths: readonly string[]; commit: string }
+export interface WorkspaceChange {
+  projectId: string;
+  paths: readonly string[];
+  commit: string;
+}

@@ -10,6 +10,11 @@ export function modelHttpError(status: number): AppError {
     404: '服务地址或模型不存在（HTTP 404），请检查设置。',
     429: '模型请求过于频繁（HTTP 429），请稍后重试。',
   };
-  return new AppError('REMOTE', messages[status] ?? (status >= 500 ? '模型服务暂不可用（HTTP ' + status + '），请稍后重试。' :
-    '模型服务返回 HTTP ' + status + '，请检查连接设置。'));
+  return new AppError(
+    'REMOTE',
+    messages[status] ??
+      (status >= 500
+        ? '模型服务暂不可用（HTTP ' + status + '），请稍后重试。'
+        : '模型服务返回 HTTP ' + status + '，请检查连接设置。'),
+  );
 }

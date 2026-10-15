@@ -9,8 +9,19 @@ export default function RootLayout() {
   const navigationTheme = theme.dark ? DarkTheme : DefaultTheme;
   return (
     <SafeAreaProvider style={{ backgroundColor: theme.surface }}>
-      <ThemeProvider value={{ ...navigationTheme, colors: { ...navigationTheme.colors,
-        background: theme.surface, card: theme.surface, text: theme.text, border: theme.border, primary: theme.accent } }}>
+      <ThemeProvider
+        value={{
+          ...navigationTheme,
+          colors: {
+            ...navigationTheme.colors,
+            background: theme.surface,
+            card: theme.surface,
+            text: theme.text,
+            border: theme.border,
+            primary: theme.accent,
+          },
+        }}
+      >
         <StatusBar style={theme.dark ? 'light' : 'dark'} />
         <Stack
           screenOptions={{

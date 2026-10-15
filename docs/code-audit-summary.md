@@ -7,6 +7,7 @@
 ---
 
 ## 目录
+
 1. [执行摘要与审计综述](#一执行摘要与审计综述)
 2. [架构设计与分层规范评估](#二架构设计与分层规范评估)
 3. [安全性、沙箱防护与凭证隔离审计](#三安全性沙箱防护与凭证隔离审计)
@@ -28,11 +29,13 @@
 **Agent Mobile** 定位为“手机端本地 Agent Harness”，将应用私有文件工作区、受控 Git 版本控制、SQLite 业务元数据、Pi Agent Core 执行引擎、远程 MCP 工具以及多角色子 Agent 委派系统深度结合。
 
 经过全面深入的代码审计，本项目展现出**出色的软件工程架构水准与防御性设计意识**：
+
 - **边界清晰**：严格执行洋葱架构/六边形架构，`src/core` 纯逻辑零外部依赖，`src/bootstrap` 通过真实裁剪的 Facade 隔离平台能力，静态边界由 ESLint AST 与自动化测试强制保障。
 - **安全完备**：路径规范化与遍历拦截（`safePath`）、Zip Slip 防护、YAML 实体爆炸防御、凭证短期租约与子 Agent 隔离候选树（Proposal Tree）均达到工业级水准。
 - **容灾健壮**：清醒认识到文件、Git 与 SQLite 之间不具备分布式事务，通过可重入的操作日志（Operation Journal）实现启动自愈。
 
 但在高强度的多轮原型演进（R0–R5）中，系统也累积了明显的**重构债务与代码坏味道**：
+
 1. **性能地雷**：`metadata.all('operations')` 在计算序列号与恢复时全量反序列化大文件 Base64，极易引发移动端 OOM 崩溃。
 2. **重复造轮子**：9 处独立手写的排他异步队列、5 处深拷贝与冻结逻辑。
 3. **特化反噬**：在关系型 SQLite 上硬造单表 KV，导致业务层手写倒排“软索引”；子 Agent 与三个写死角色二元强绑定。
@@ -97,6 +100,7 @@ flowchart TD
 ## 三、安全性、沙箱防护与凭证隔离审计
 
 ### 3.1 路径穿越防御 (Path Traversal)
+
 - **实现位置**：[`src/core/workspace/path.ts`](file:///f:/ReactProject/AgentMobile/src/core/workspace/path.ts) 中的 `safePath`。
 - **安全检查点**：
   - `input.normalize('NFC')`：统一 Unicode 字符，防止规范化绕过。
@@ -107,6 +111,7 @@ flowchart TD
   - 防御 Windows 保留设备名（`CON`, `PRN`, `AUX`, `NUL`, `COM1-9`, `LPT1-9`）及结尾点/空格溢出。
 
 ### 3.2 Zip Slip 与压缩包炸弹防护
+
 - **实现位置**：[`src/adapters/skills/package.ts`](file:///f:/ReactProject/AgentMobile/src/adapters/skills/package.ts) 中的 `importSkillPackage`。
 - **安全检查点**：
   - **Zip Slip 阻断**：解压流中直接对 entry 名称进行深度验证，拒绝 `..`、`\`、`:` 及绝对路径。
@@ -114,6 +119,7 @@ flowchart TD
   - **YAML 实体膨胀攻击（Billion Laughs）防御**：解析 `SKILL.md` 时配置 `{ maxAliasCount: 0, schema: 'core', merge: false }`，彻底阻断别名递归展开漏洞，并将元数据严格限制在 8 KB 内。
 
 ### 3.3 凭证隔离与租约模式 (Lease Pattern)
+
 - **实现位置**：[`src/application/models/configuration.ts`](file:///f:/ReactProject/AgentMobile/src/application/models/configuration.ts)、[`src/adapters/storage/platform.ts`](file:///f:/ReactProject/AgentMobile/src/adapters/storage/platform.ts)。
 - **安全检查点**：
   - API Key 仅存入底层原生 `SecureStore`，SQLite 仅持久化随机 UUID 引用 `credentialRef`。
@@ -122,6 +128,7 @@ flowchart TD
   - Web 端降级为纯内存 `Map`（`sessionKeys`），刷新即焚，不在 IndexedDB 留存凭证。
 
 ### 3.4 子 Agent 沙箱与写作提案树 (Proposal Tree)
+
 - **实现位置**：[`src/application/runs/delegation.ts`](file:///f:/ReactProject/AgentMobile/src/application/runs/delegation.ts)、[`src/application/runs/proposals.ts`](file:///f:/ReactProject/AgentMobile/src/application/runs/proposals.ts)。
 - **安全检查点**：
   - `reader` 与 `reviewer` 子 Agent 仅被注入固定不可变的 Git 输入快照（`inputSnapshotRef`），无写工具、无 Git 工具、无 MCP 工具。
@@ -133,6 +140,7 @@ flowchart TD
 ## 四、并发、存储事务与崩溃恢复机制
 
 ### 4.1 异构存储一致性（操作日志状态机）
+
 - **实现位置**：[`src/application/workspace/mutations.ts`](file:///f:/ReactProject/AgentMobile/src/application/workspace/mutations.ts) 的 `MutationCoordinator`。
 - **状态流转**：
   $$\text{prepared} \longrightarrow \text{applied} \longrightarrow \text{checkpointed} \longrightarrow \text{recorded}$$
@@ -144,6 +152,7 @@ flowchart TD
 - **自愈保障**：进程中断重启时，`recover()` 会按操作序列号重放未完成项；若实际磁盘文件与日志指纹不符，工作区立即阻断写入（`this.blocked`），绝不盲目覆盖破坏数据。
 
 ### 4.2 模型请求并发调度与死锁防御
+
 - **实现位置**：[`src/application/runs/request-scheduler.ts`](file:///f:/ReactProject/AgentMobile/src/application/runs/request-scheduler.ts)。
 - **调度机制**：
   - 全局限制最多并发 2 个模型请求，单连接最多 2 个请求，使用 Round-Robin 轮转保证任务组间公平。
@@ -151,6 +160,7 @@ flowchart TD
   - `AbortSignal` 监听与 `finally` 块双重兜底调用 `releaseRequest`，彻底杜绝槽位泄漏。
 
 ### 4.3 移动端生命周期挂接
+
 - **实现位置**：[`src/adapters/lifecycle/runs.ts`](file:///f:/ReactProject/AgentMobile/src/adapters/lifecycle/runs.ts)、[`src/application/runs/recovery.ts`](file:///f:/ReactProject/AgentMobile/src/application/runs/recovery.ts)。
 - **行为保障**：
   - 挂接 `AppState.addEventListener` 与 `visibilitychange`，切后台立即暂停派发新模型请求，并强制落盘当前任务树状态。
@@ -161,7 +171,9 @@ flowchart TD
 ## 五、关键性能隐患与资源瓶颈（重点关注）
 
 > [!CAUTION]
+>
 > ### 隐患 1 (高危性能地雷)：`metadata.all('operations')` 引起的大对象全量反序列化与 OOM
+>
 > - **位置**：[`src/application/workspace/mutations.ts` 行 112、102](file:///f:/ReactProject/AgentMobile/src/application/workspace/mutations.ts#L112)
 > - **机制**：
 >   ```ts
@@ -177,7 +189,9 @@ flowchart TD
 >   维护专门的独立序列号记录（如 `metadata.get('sequences', projectId)`），原子递增；或在 SQLite 中规范化 `sequence` 列，执行 `SELECT MAX(sequence)`。
 
 > [!WARNING]
+>
 > ### 隐患 2 (中危性能瓶颈)：`isomorphic-git` 的 `git.log` 缺乏深度分页
+>
 > - **位置**：[`src/adapters/git/repository.ts` 行 37、43](file:///f:/ReactProject/AgentMobile/src/adapters/git/repository.ts#L37)
 > - **机制**：
 >   `git.log(options(projectId))` 未传 `depth` 参数，导致每次查看版本历史或查找 `operationId` 时遍历整个 commit 链。在移动端 JS 线程进行深层对象解压遍历会导致明显掉帧与卡顿。
@@ -248,25 +262,25 @@ flowchart TD
 ```mermaid
 flowchart LR
     P0["P0: 紧急稳定性修复"] --> P1["P1: 通用下沉与消除重复"] --> P2["P2: 架构解耦与多态强化"] --> P3["P3: 存储规范化重构"]
-    
+
     subgraph S0 ["P0 阶段"]
         M1["重构 nextSequence 避免大 Base64 全表扫描"]
         M2["添加 migration-done 标记停止启动扫描"]
         M3["重构 publicError 废除中文文案大正则"]
     end
-    
+
     subgraph S1 ["P1 阶段"]
         M4["提炼通用 AsyncQueue / Mutex 消除9处重复"]
         M5["下沉统一深拷贝与文件扩展名常量"]
         M6["清理单行分号压缩，恢复标准排版格式"]
     end
-    
+
     subgraph S2 ["P2 阶段"]
         M7["ProviderProtocol 策略模式彻底内聚"]
         M8["子 Agent 拆分解耦为角色定义与沙箱策略"]
         M9["拆解 useWorkbench 上帝 Hook"]
     end
-    
+
     subgraph S3 ["P3 阶段"]
         M10["SQLite 规范化表结构设计取代软索引"]
         M11["引入结构化 RecoveryOrchestrator 管道"]
@@ -298,14 +312,14 @@ flowchart LR
 
 ## 八、综合评分与最终结论
 
-| 评价维度 | 得分 (百分制) | 核心评价 |
-| :--- | :---: | :--- |
-| **架构分层与依赖隔离** | **98** | 架构设计优秀典范，ESLint 强制依赖倒置，领域层完全平台无关。 |
-| **安全沙箱与防御性设计** | **96** | 路径遍历、Zip Slip、凭证租约与子 Agent 隔离候选树防御严密。 |
-| **崩溃恢复与故障容灾** | **94** | 操作日志状态机健全，深刻解决异构存储无分布式事务的难题。 |
-| **工程质量与代码规范** | **78** | 存在中文正则过滤、单行分号语句压缩、多处空 catch 与非空断言。 |
-| **性能与存储伸缩性** | **75** | 存在 SQLite 大 Base64 全表扫描隐患、Git log 缺乏深度分页与软索引。 |
-| **模块通用性与解耦度** | **72** | 存在 9 处排他队列重复、子 Agent 三角色硬编码与协议伪多态。 |
+| 评价维度                 | 得分 (百分制) | 核心评价                                                           |
+| :----------------------- | :-----------: | :----------------------------------------------------------------- |
+| **架构分层与依赖隔离**   |    **98**     | 架构设计优秀典范，ESLint 强制依赖倒置，领域层完全平台无关。        |
+| **安全沙箱与防御性设计** |    **96**     | 路径遍历、Zip Slip、凭证租约与子 Agent 隔离候选树防御严密。        |
+| **崩溃恢复与故障容灾**   |    **94**     | 操作日志状态机健全，深刻解决异构存储无分布式事务的难题。           |
+| **工程质量与代码规范**   |    **78**     | 存在中文正则过滤、单行分号语句压缩、多处空 catch 与非空断言。      |
+| **性能与存储伸缩性**     |    **75**     | 存在 SQLite 大 Base64 全表扫描隐患、Git log 缺乏深度分页与软索引。 |
+| **模块通用性与解耦度**   |    **72**     | 存在 9 处排他队列重复、子 Agent 三角色硬编码与协议伪多态。         |
 
 **总体评价**：  
 Agent Mobile 拥有**极具前瞻性与扎实理论基础的顶层架构**。当前暴露的坏味道与性能隐患，大多是快速突破原型（从 R0 单任务快速演进至 R5 多 Agent）过程中的典型工程副产物。只需针对上述 P0、P1 优先级进行针对性重构，即可将该系统打造成一个兼具极高安全度、卓越性能与优良可维护性的标杆级移动端 Agent 基础设施。

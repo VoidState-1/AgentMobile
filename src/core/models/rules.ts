@@ -4,63 +4,160 @@ import { contentLimits } from '../agent/settings';
 
 export function normalizedServiceAddress(value: string): string {
   let address: URL;
-  try { address = new URL(value.trim()); } catch { throw new AppError('VALIDATION', '请输入有效的服务基础地址。'); }
-  if (address.protocol !== 'https:' && !(address.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(address.hostname))) {
+  try {
+    address = new URL(value.trim());
+  } catch {
+    throw new AppError('VALIDATION', '请输入有效的服务基础地址。');
+  }
+  if (
+    address.protocol !== 'https:' &&
+    !(
+      address.protocol === 'http:' && ['localhost', '127.0.0.1', '[::1]'].includes(address.hostname)
+    )
+  ) {
     throw new AppError('VALIDATION', '服务地址需要 HTTPS；本机开发地址可使用 HTTP。');
   }
-  if (address.username || address.password || address.search || address.hash) throw new AppError('VALIDATION', '服务地址不能包含凭证、查询参数或片段。');
+  if (address.username || address.password || address.search || address.hash)
+    throw new AppError('VALIDATION', '服务地址不能包含凭证、查询参数或片段。');
   return address.href.replace(/\/+$/, '');
 }
-export function serviceOrigin(value: string): string { return new URL(normalizedServiceAddress(value)).origin; }
+export function serviceOrigin(value: string): string {
+  return new URL(normalizedServiceAddress(value)).origin;
+}
 export function validateConnectionEntity(value: ProviderConnection): void {
-  if (!value.name.trim() || value.name.trim().length > 80) throw new AppError('VALIDATION', '连接名称需要 1–80 个字符。');
+  if (!value.name.trim() || value.name.trim().length > 80)
+    throw new AppError('VALIDATION', '连接名称需要 1–80 个字符。');
   normalizedServiceAddress(value.baseUrl);
-  if (!['chat-completions', 'anthropic-messages', 'gemini'].includes(value.protocol)) throw new AppError('VALIDATION', '当前版本不支持此协议。');
-  if (value.auth === 'none' && value.protocol !== 'chat-completions') throw new AppError('VALIDATION', '此原生协议需要 API Key。');
-  if (value.protocol === 'anthropic-messages' && !/^\d{4}-\d{2}-\d{2}$/.test(value.apiVersion)) throw new AppError('VALIDATION', 'Anthropic API 版本请使用 YYYY-MM-DD 格式。');
-  if (value.compatibility === 'deepseek' && value.protocol !== 'chat-completions') throw new AppError('VALIDATION', 'DeepSeek 兼容特性适用于 Chat Completions。');
+  if (!['chat-completions', 'anthropic-messages', 'gemini'].includes(value.protocol))
+    throw new AppError('VALIDATION', '当前版本不支持此协议。');
+  if (value.auth === 'none' && value.protocol !== 'chat-completions')
+    throw new AppError('VALIDATION', '此原生协议需要 API Key。');
+  if (value.protocol === 'anthropic-messages' && !/^\d{4}-\d{2}-\d{2}$/.test(value.apiVersion))
+    throw new AppError('VALIDATION', 'Anthropic API 版本请使用 YYYY-MM-DD 格式。');
+  if (value.compatibility === 'deepseek' && value.protocol !== 'chat-completions')
+    throw new AppError('VALIDATION', 'DeepSeek 兼容特性适用于 Chat Completions。');
 }
 export function validateModelEntity(model: ModelEntry): void {
-  if (!model.name.trim() || model.name.trim().length > 100) throw new AppError('VALIDATION', '模型显示名称需要 1–100 个字符。');
-  if (!model.apiId.trim() || model.apiId.trim().length > 180 || /[\s?#\\\u0000-\u001f]/.test(model.apiId)) throw new AppError('VALIDATION', '请输入有效的请求模型 ID。');
+  if (!model.name.trim() || model.name.trim().length > 100)
+    throw new AppError('VALIDATION', '模型显示名称需要 1–100 个字符。');
+  if (
+    !model.apiId.trim() ||
+    model.apiId.trim().length > 180 ||
+    /[\s?#\\\u0000-\u001f]/.test(model.apiId)
+  )
+    throw new AppError('VALIDATION', '请输入有效的请求模型 ID。');
   const p = model.parameters;
-  if (!Number.isInteger(p.maxOutputTokens) || p.maxOutputTokens < 16 || p.maxOutputTokens > contentLimits.outputTokens) throw new AppError('VALIDATION', '输出上限应为 16–65,536 tokens。');
-  if (model.limits?.outputTokens && p.maxOutputTokens > model.limits.outputTokens) throw new AppError('LIMIT', '输出上限超过模型公布的限制。');
-  if (p.temperature !== undefined && (!Number.isFinite(p.temperature) || p.temperature < 0 || p.temperature > (model.limits?.maxTemperature ?? 2))) throw new AppError('VALIDATION', '温度超出此模型支持的范围。');
-  if (!['off', 'provider-default', 'on'].includes(p.reasoning)) throw new AppError('VALIDATION', '推理模式无效。');
-  if (p.reasoning === 'on' && model.capabilities.reasoning.support === 'unsupported') throw new AppError('VALIDATION', '此模型明确不支持推理，请关闭推理。');
-  if (p.reasoningBudget !== undefined && (!Number.isInteger(p.reasoningBudget) || p.reasoningBudget < 1024 || p.reasoningBudget >= p.maxOutputTokens)) throw new AppError('VALIDATION', '推理预算至少为 1,024 tokens，且必须小于最大输出 tokens。');
-  if (p.reasoningStrategy !== undefined && !['budget', 'adaptive', 'level'].includes(p.reasoningStrategy)) throw new AppError('VALIDATION', '推理参数格式无效。');
-  if (p.reasoningEffort !== undefined && !['low', 'medium', 'high'].includes(p.reasoningEffort)) throw new AppError('VALIDATION', '推理强度无效。');
-  if (p.reasoningDisplay !== undefined && !['reasoning', 'summary'].includes(p.reasoningDisplay)) throw new AppError('VALIDATION', '推理展示类型无效。');
-  if (p.allowImages && model.capabilities.images.support === 'unsupported') throw new AppError('VALIDATION', '此模型明确不支持图片，请关闭图片输入。');
+  if (
+    !Number.isInteger(p.maxOutputTokens) ||
+    p.maxOutputTokens < 16 ||
+    p.maxOutputTokens > contentLimits.outputTokens
+  )
+    throw new AppError('VALIDATION', '输出上限应为 16–65,536 tokens。');
+  if (model.limits?.outputTokens && p.maxOutputTokens > model.limits.outputTokens)
+    throw new AppError('LIMIT', '输出上限超过模型公布的限制。');
+  if (
+    p.temperature !== undefined &&
+    (!Number.isFinite(p.temperature) ||
+      p.temperature < 0 ||
+      p.temperature > (model.limits?.maxTemperature ?? 2))
+  )
+    throw new AppError('VALIDATION', '温度超出此模型支持的范围。');
+  if (!['off', 'provider-default', 'on'].includes(p.reasoning))
+    throw new AppError('VALIDATION', '推理模式无效。');
+  if (p.reasoning === 'on' && model.capabilities.reasoning.support === 'unsupported')
+    throw new AppError('VALIDATION', '此模型明确不支持推理，请关闭推理。');
+  if (
+    p.reasoningBudget !== undefined &&
+    (!Number.isInteger(p.reasoningBudget) ||
+      p.reasoningBudget < 1024 ||
+      p.reasoningBudget >= p.maxOutputTokens)
+  )
+    throw new AppError('VALIDATION', '推理预算至少为 1,024 tokens，且必须小于最大输出 tokens。');
+  if (
+    p.reasoningStrategy !== undefined &&
+    !['budget', 'adaptive', 'level'].includes(p.reasoningStrategy)
+  )
+    throw new AppError('VALIDATION', '推理参数格式无效。');
+  if (p.reasoningEffort !== undefined && !['low', 'medium', 'high'].includes(p.reasoningEffort))
+    throw new AppError('VALIDATION', '推理强度无效。');
+  if (p.reasoningDisplay !== undefined && !['reasoning', 'summary'].includes(p.reasoningDisplay))
+    throw new AppError('VALIDATION', '推理展示类型无效。');
+  if (p.allowImages && model.capabilities.images.support === 'unsupported')
+    throw new AppError('VALIDATION', '此模型明确不支持图片，请关闭图片输入。');
 }
-export function selectedModelId(state: ModelConfiguration, projectId?: string, sessionId?: string): string | undefined {
-  return (sessionId && state.defaults.sessions[sessionId]) || (projectId && state.defaults.projects[projectId]) || state.defaults.global;
+export function selectedModelId(
+  state: ModelConfiguration,
+  projectId?: string,
+  sessionId?: string,
+): string | undefined {
+  return (
+    (sessionId && state.defaults.sessions[sessionId]) ||
+    (projectId && state.defaults.projects[projectId]) ||
+    state.defaults.global
+  );
 }
-export function selectedModelMode(state: ModelConfiguration, sessionId?: string): ModelConfiguration['mode'] {
+export function selectedModelMode(
+  state: ModelConfiguration,
+  sessionId?: string,
+): ModelConfiguration['mode'] {
   return (sessionId && state.sessionModes?.[sessionId]) || state.mode;
 }
-export function configurationFingerprint(connection: ProviderConnection, model?: ModelEntry): string {
-  return JSON.stringify([connection.protocol, connection.baseUrl, connection.auth, connection.credentialRef ?? '',
-    connection.compatibility, connection.apiVersion, model?.apiId, model?.parameters]);
+export function configurationFingerprint(
+  connection: ProviderConnection,
+  model?: ModelEntry,
+): string {
+  return JSON.stringify([
+    connection.protocol,
+    connection.baseUrl,
+    connection.auth,
+    connection.credentialRef ?? '',
+    connection.compatibility,
+    connection.apiVersion,
+    model?.apiId,
+    model?.parameters,
+  ]);
 }
 export function runSnapshot(connection: ProviderConnection, model: ModelEntry): ModelRunSnapshot {
-  return { connectionId: connection.id, connectionName: connection.name, connectionRevision: connection.revision,
-    modelEntryId: model.id, modelName: model.name, modelRevision: model.revision, apiModelId: model.apiId,
-    protocol: connection.protocol, baseUrl: connection.baseUrl, compatibility: connection.compatibility,
-    apiVersion: connection.apiVersion, auth: connection.auth, parameters: { ...model.parameters },
-    contextTokens: model.limits?.contextTokens ?? 32000 };
+  return {
+    connectionId: connection.id,
+    connectionName: connection.name,
+    connectionRevision: connection.revision,
+    modelEntryId: model.id,
+    modelName: model.name,
+    modelRevision: model.revision,
+    apiModelId: model.apiId,
+    protocol: connection.protocol,
+    baseUrl: connection.baseUrl,
+    compatibility: connection.compatibility,
+    apiVersion: connection.apiVersion,
+    auth: connection.auth,
+    parameters: { ...model.parameters },
+    contextTokens: model.limits?.contextTokens ?? 32000,
+  };
 }
 
-export function validateReasoningParameters(connection: ProviderConnection, model: ModelEntry): void {
+export function validateReasoningParameters(
+  connection: ProviderConnection,
+  model: ModelEntry,
+): void {
   const p = model.parameters;
   if (p.reasoning !== 'on') return;
-  if (connection.protocol === 'chat-completions' && connection.compatibility !== 'deepseek') throw new AppError('VALIDATION', '通用 Chat Completions 没有统一的推理开关，请选择服务默认；返回的公开推理仍会显示。');
+  if (connection.protocol === 'chat-completions' && connection.compatibility !== 'deepseek')
+    throw new AppError(
+      'VALIDATION',
+      '通用 Chat Completions 没有统一的推理开关，请选择服务默认；返回的公开推理仍会显示。',
+    );
   if (connection.protocol === 'anthropic-messages') {
-    if (p.reasoningStrategy === 'level') throw new AppError('VALIDATION', 'Anthropic 请使用预算或自适应推理格式。');
-    if (p.temperature !== undefined) throw new AppError('VALIDATION', '开启 Anthropic 推理时请将温度留空。');
-    if ((p.reasoningStrategy ?? 'budget') === 'budget' && (p.reasoningBudget ?? 1024) >= p.maxOutputTokens) throw new AppError('VALIDATION', 'Anthropic 推理预算必须小于最大输出 tokens。');
+    if (p.reasoningStrategy === 'level')
+      throw new AppError('VALIDATION', 'Anthropic 请使用预算或自适应推理格式。');
+    if (p.temperature !== undefined)
+      throw new AppError('VALIDATION', '开启 Anthropic 推理时请将温度留空。');
+    if (
+      (p.reasoningStrategy ?? 'budget') === 'budget' &&
+      (p.reasoningBudget ?? 1024) >= p.maxOutputTokens
+    )
+      throw new AppError('VALIDATION', 'Anthropic 推理预算必须小于最大输出 tokens。');
   }
-  if (connection.protocol === 'gemini' && p.reasoningStrategy === 'adaptive') throw new AppError('VALIDATION', 'Gemini 请使用预算或等级推理格式。');
+  if (connection.protocol === 'gemini' && p.reasoningStrategy === 'adaptive')
+    throw new AppError('VALIDATION', 'Gemini 请使用预算或等级推理格式。');
 }

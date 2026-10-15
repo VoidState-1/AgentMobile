@@ -6,11 +6,14 @@ export default defineConfig({
   outputDir: 'work/playwright',
   reporter: 'list',
   use: {
-    baseURL: 'http://127.0.0.1:4180', viewport: { width: 1280, height: 900 },
-    launchOptions: { channel: 'chrome' }, screenshot: 'only-on-failure',
+    baseURL: 'http://127.0.0.1:4180',
+    viewport: { width: 1280, height: 900 },
+    launchOptions: { channel: 'chrome' },
+    screenshot: 'only-on-failure',
   },
   webServer: {
-    command: 'node scripts/preview.mjs', url: 'http://127.0.0.1:4180',
+    command: 'node scripts/preview.mjs',
+    url: 'http://127.0.0.1:4180',
     reuseExistingServer: true,
   },
 });

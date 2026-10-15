@@ -5,10 +5,13 @@ import type { RunKernel } from '@/application/runs/kernel';
 export function bindRunLifecycle(kernel: RunKernel): () => void {
   if (Platform.OS === 'web') {
     const update = () => kernel.setForeground(document.visibilityState !== 'hidden');
-    update(); document.addEventListener('visibilitychange', update);
+    update();
+    document.addEventListener('visibilitychange', update);
     return () => document.removeEventListener('visibilitychange', update);
   }
   kernel.setForeground(AppState.currentState === null || AppState.currentState === 'active');
-  const subscription = AppState.addEventListener('change', (state) => kernel.setForeground(state === 'active'));
+  const subscription = AppState.addEventListener('change', state =>
+    kernel.setForeground(state === 'active'),
+  );
   return () => subscription.remove();
 }

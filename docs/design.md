@@ -53,40 +53,40 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 
 ## 2. 当前原型的交付边界
 
-| 内容 | 状态 |
-| --- | --- |
-| Git 开发仓库、npm 锁文件、忽略规则 | 已初始化 |
-| Expo SDK 57、React Native、TypeScript、Expo Router | 已配置 |
-| Development Build、SQLite、文件、图片、SecureStore 依赖 | 已安装并配置 |
-| 项目创建、文件列表、文本编辑、导入导出、移动删除 | 已实现 |
-| 前端工作台 | 紧凑布局、深浅/系统主题、手机固定输入区、桌面文件侧栏；浏览器和 Android 模拟器操作已验证 |
-| 资料实时更新 | 每次文件操作完成后通知界面，更新资料列表、正在阅读的文档、图片引用与 Git 状态；不再等待整个 Agent 任务结束 |
-| 编辑与版本交互 | Markdown 阅读、全屏/侧栏编辑、原生软键盘避让、未保存保护、逐行差异预览 |
-| 项目下的多对话 | 新建、切换、自动命名/重命名、归档与恢复；消息、草稿、附件引用和明确模型选择独立，项目文件与 Git 历史共享 |
-| 连续对话 | 默认最多带入当前对话、同模式最近 12 次目标与回复，按模型窗口预留空间；数量可配置，不重放其他对话或旧工具调用 |
-| TypeScript、ESLint、Vitest、Playwright | 已配置并验证核心流程 |
-| Pi Agent Core 1.1.0 | 已接入；上游核心未修改，Metro 使用纯工具函数入口 |
-| 架构重构、多 Agent 与子 Agent | [新架构方案](architecture-v2.md) R0–R5 已接入实际执行。两个不同项目根任务并行，同项目排队；每组一层子 Agent 最多并行 2 个、总计 4 个；reader/reviewer 只读、writer 私有候选、父预检合入；快照、预算、MCP 屏障、汇总、轨迹、取消、恢复与整组撤销通过；角色编辑/子独立模型、后台服务、UI/网页沙箱待实现 |
-| SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
-| 模型密钥持久化 | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证 |
-| SQLite schema | 当前物理版本 5 / agent-mobile-f4；日志 header/body/counter、run header/input/result、trace nodes/chunks、transcript frames 与对应索引已规范化；通用配置仍为 records；FTS 未实现 |
-| 本地 Git 工作流 | 已实现真实工作区/index/HEAD 分离、按文件暂存/取消暂存、差异/明确提交、Agent 受控 Git 工具、内部恢复点、任务快照/冲突撤销；[实施设计](git-workflow.md)；分支/合并/远程/逐块暂存待实现 |
-| Android/iOS libgit2 构建与原生桥接 | 待实现 |
-| 模型调用与 Agent 循环 | Chat Completions、Anthropic Messages、Gemini 原生 REST/SSE 已实现；三协议模拟工具闭环与图片输入通过；DeepSeek 前版已做官方实测 |
-| 服务配置与诊断 | 独立连接与凭证、预设/自定义协议、分页发现、手工模型、文本/工具/图片检测；分平台保存检测结果 |
-| 远程 MCP | Streamable HTTP、两代协议协商、Bearer/无需认证、工具发现与项目授权、Pi 执行/进度/轨迹、未知回执与重试限制；[实施设计](remote-mcp.md)；OAuth/Resources/Prompts/Tasks/MCP Apps 尚未实现 |
-| Agent Skills | 标准 SKILL.md/ZIP 导入、本地编辑/资源/历史恢复、项目启用、目录/正文/资源渐进加载、明确调用与任务 Git 版本快照；[实施设计](agent-skills.md)；脚本执行与远程市场尚未实现 |
-| 多供应商/模型配置器 | [实施记录](provider-model-configurator.md)；多连接、多模型、能力依据、参数、收藏、分层默认与运行快照已实现；Anthropic/Gemini 官方实测待凭证 |
-| 任务运行配置 | 启动时冻结服务/模型/参数版本，凭证通过宿主租约使用；界面关闭或切换配置路由不停止任务 |
-| Agent 设置 | 全局系统提示词与执行预算可编辑、恢复默认并持久化；任务保存启动时配置版本，修改只影响新任务 |
-| 工作轨迹 | 所有轮次的文字、公开推理与工具执行按接收顺序交错显示；推理和工具详情可折叠，步骤与正文分页，最终回答独立可见；不读旧原型轨迹 |
-| 推理配置与展示 | DeepSeek 开关、Anthropic 预算/自适应、Gemini 预算/等级已接入；原生公开摘要和兼容协议推理流已模拟验证；新推理路径的官方实测待凭证 |
-| 对话持久化与回执 | conversations/state 保存实体、最后选择和版本化草稿；运行保存 conversationId/draftRevision；启动通过精确接受回执修复草稿，不读取旧历史 |
-| 配置与凭证恢复 | 只读当前连接/模型图；SecureStore 变更意图与运行租约共同保护当前凭证回收，不保留原单配置迁移 |
-| 操作日志与崩溃恢复 | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证 |
-| 任务恢复 | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求 |
-| 图片 | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现 |
-| IntelligentUI、网页沙箱 | 后续阶段 |
+| 内容                                                    | 状态                                                                                                                                                                                                                                                                                                  |
+| ------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Git 开发仓库、npm 锁文件、忽略规则                      | 已初始化                                                                                                                                                                                                                                                                                              |
+| Expo SDK 57、React Native、TypeScript、Expo Router      | 已配置                                                                                                                                                                                                                                                                                                |
+| Development Build、SQLite、文件、图片、SecureStore 依赖 | 已安装并配置                                                                                                                                                                                                                                                                                          |
+| 项目创建、文件列表、文本编辑、导入导出、移动删除        | 已实现                                                                                                                                                                                                                                                                                                |
+| 前端工作台                                              | 紧凑布局、深浅/系统主题、手机固定输入区、桌面文件侧栏；浏览器和 Android 模拟器操作已验证                                                                                                                                                                                                              |
+| 资料实时更新                                            | 每次文件操作完成后通知界面，更新资料列表、正在阅读的文档、图片引用与 Git 状态；不再等待整个 Agent 任务结束                                                                                                                                                                                            |
+| 编辑与版本交互                                          | Markdown 阅读、全屏/侧栏编辑、原生软键盘避让、未保存保护、逐行差异预览                                                                                                                                                                                                                                |
+| 项目下的多对话                                          | 新建、切换、自动命名/重命名、归档与恢复；消息、草稿、附件引用和明确模型选择独立，项目文件与 Git 历史共享                                                                                                                                                                                              |
+| 连续对话                                                | 默认最多带入当前对话、同模式最近 12 次目标与回复，按模型窗口预留空间；数量可配置，不重放其他对话或旧工具调用                                                                                                                                                                                          |
+| TypeScript、ESLint、Vitest、Playwright                  | 已配置并验证核心流程                                                                                                                                                                                                                                                                                  |
+| Pi Agent Core 1.1.0                                     | 已接入；上游核心未修改，Metro 使用纯工具函数入口                                                                                                                                                                                                                                                      |
+| 架构重构、多 Agent 与子 Agent                           | [新架构方案](architecture-v2.md) R0–R5 已接入实际执行。两个不同项目根任务并行，同项目排队；每组一层子 Agent 最多并行 2 个、总计 4 个；reader/reviewer 只读、writer 私有候选、父预检合入；快照、预算、MCP 屏障、汇总、轨迹、取消、恢复与整组撤销通过；角色编辑/子独立模型、后台服务、UI/网页沙箱待实现 |
+| SQLite 与文件持久化                                     | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证                                                                                                                                                                                                                                     |
+| 模型密钥持久化                                          | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证                                                                                                                                                                                                                                            |
+| SQLite schema                                           | 当前物理版本 5 / agent-mobile-f4；日志 header/body/counter、run header/input/result、trace nodes/chunks、transcript frames 与对应索引已规范化；通用配置仍为 records；FTS 未实现                                                                                                                       |
+| 本地 Git 工作流                                         | 已实现真实工作区/index/HEAD 分离、按文件暂存/取消暂存、差异/明确提交、Agent 受控 Git 工具、内部恢复点、任务快照/冲突撤销；[实施设计](git-workflow.md)；分支/合并/远程/逐块暂存待实现                                                                                                                  |
+| Android/iOS libgit2 构建与原生桥接                      | 待实现                                                                                                                                                                                                                                                                                                |
+| 模型调用与 Agent 循环                                   | Chat Completions、Anthropic Messages、Gemini 原生 REST/SSE 已实现；三协议模拟工具闭环与图片输入通过；DeepSeek 前版已做官方实测                                                                                                                                                                        |
+| 服务配置与诊断                                          | 独立连接与凭证、预设/自定义协议、分页发现、手工模型、文本/工具/图片检测；分平台保存检测结果                                                                                                                                                                                                           |
+| 远程 MCP                                                | Streamable HTTP、两代协议协商、Bearer/无需认证、工具发现与项目授权、Pi 执行/进度/轨迹、未知回执与重试限制；[实施设计](remote-mcp.md)；OAuth/Resources/Prompts/Tasks/MCP Apps 尚未实现                                                                                                                 |
+| Agent Skills                                            | 标准 SKILL.md/ZIP 导入、本地编辑/资源/历史恢复、项目启用、目录/正文/资源渐进加载、明确调用与任务 Git 版本快照；[实施设计](agent-skills.md)；脚本执行与远程市场尚未实现                                                                                                                                |
+| 多供应商/模型配置器                                     | [实施记录](provider-model-configurator.md)；多连接、多模型、能力依据、参数、收藏、分层默认与运行快照已实现；Anthropic/Gemini 官方实测待凭证                                                                                                                                                           |
+| 任务运行配置                                            | 启动时冻结服务/模型/参数版本，凭证通过宿主租约使用；界面关闭或切换配置路由不停止任务                                                                                                                                                                                                                  |
+| Agent 设置                                              | 全局系统提示词与执行预算可编辑、恢复默认并持久化；任务保存启动时配置版本，修改只影响新任务                                                                                                                                                                                                            |
+| 工作轨迹                                                | 所有轮次的文字、公开推理与工具执行按接收顺序交错显示；推理和工具详情可折叠，步骤与正文分页，最终回答独立可见；不读旧原型轨迹                                                                                                                                                                          |
+| 推理配置与展示                                          | DeepSeek 开关、Anthropic 预算/自适应、Gemini 预算/等级已接入；原生公开摘要和兼容协议推理流已模拟验证；新推理路径的官方实测待凭证                                                                                                                                                                      |
+| 对话持久化与回执                                        | conversations/state 保存实体、最后选择和版本化草稿；运行保存 conversationId/draftRevision；启动通过精确接受回执修复草稿，不读取旧历史                                                                                                                                                                 |
+| 配置与凭证恢复                                          | 只读当前连接/模型图；SecureStore 变更意图与运行租约共同保护当前凭证回收，不保留原单配置迁移                                                                                                                                                                                                           |
+| 操作日志与崩溃恢复                                      | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证                                                                                                                                                                                                                                      |
+| 任务恢复                                                | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求                                                                                                                                                                                                                            |
+| 图片                                                    | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现                                                                                                                                                                                                                                    |
+| IntelligentUI、网页沙箱                                 | 后续阶段                                                                                                                                                                                                                                                                                              |
 
 演示模式使用显式预设传输，不进行语义理解；它经过真实 Pi 工具循环和工作区写入，结果保持未提交。真实模型模式由用户配置地址、模型和密钥，只有明确要求提交才使用 Git 工具。详细使用与限制见 [prototype.md](prototype.md)，验证见 [validation.md](validation.md)。
 
@@ -136,22 +136,22 @@ Opaque thinkingSignature/thoughtSignature 仅保留在宿主 transcript/协议�
 
 ## 3. 已选技术栈与架构决策
 
-| 层 | 选择 | 理由 |
-| --- | --- | --- |
-| 客户端 | React Native + Expo Development Build | 双平台、快速开发，可接入自定义原生模块 |
-| 语言 | TypeScript strict | 共享协议与领域类型 |
-| 路由 | Expo Router | 文件路由与页面组织 |
-| UI 状态 | Zustand | 当前选择、输入草稿、显示进度 |
-| 图标和差异显示 | Lucide / react-native-svg、diff | 按需导入 SVG 图标；展示文本逐行变化 |
-| 数据库 | expo-sqlite，WAL，FTS5 | 任务状态、会话、元数据、全文搜索 |
-| 工作区磁盘访问 | expo-file-system | 私有目录内真实文件 |
-| 文件历史 | 原型 isomorphic-git；目标 libgit2 原生模块 | 原型先验证 Git 格式及恢复；后续替换 Git 适配器 |
-| 输入校验 | Pi 工具采用 TypeBox，MCP 使用 SDK 校验 | 不预装尚未使用的业务/UI schema 库 |
-| 模型通信 | expo/fetch + 自有兼容 SSE 传输 | 作为 Pi streamFn 注入，避开 Node 供应商 SDK |
-| 图片 | expo-image 显示；expo-document-picker 导入 | 图片变换未实现，接入时再选择依赖 |
-| 文件导入和分享 | expo-document-picker、expo-sharing | 使用系统授权入口 |
-| 凭证 | expo-secure-store | Keychain/Keystore 支持 |
-| 网页 | 后续 react-native-webview | 分阶段开放网页交互 |
+| 层             | 选择                                       | 理由                                           |
+| -------------- | ------------------------------------------ | ---------------------------------------------- |
+| 客户端         | React Native + Expo Development Build      | 双平台、快速开发，可接入自定义原生模块         |
+| 语言           | TypeScript strict                          | 共享协议与领域类型                             |
+| 路由           | Expo Router                                | 文件路由与页面组织                             |
+| UI 状态        | Zustand                                    | 当前选择、输入草稿、显示进度                   |
+| 图标和差异显示 | Lucide / react-native-svg、diff            | 按需导入 SVG 图标；展示文本逐行变化            |
+| 数据库         | expo-sqlite，WAL，FTS5                     | 任务状态、会话、元数据、全文搜索               |
+| 工作区磁盘访问 | expo-file-system                           | 私有目录内真实文件                             |
+| 文件历史       | 原型 isomorphic-git；目标 libgit2 原生模块 | 原型先验证 Git 格式及恢复；后续替换 Git 适配器 |
+| 输入校验       | Pi 工具采用 TypeBox，MCP 使用 SDK 校验     | 不预装尚未使用的业务/UI schema 库              |
+| 模型通信       | expo/fetch + 自有兼容 SSE 传输             | 作为 Pi streamFn 注入，避开 Node 供应商 SDK    |
+| 图片           | expo-image 显示；expo-document-picker 导入 | 图片变换未实现，接入时再选择依赖               |
+| 文件导入和分享 | expo-document-picker、expo-sharing         | 使用系统授权入口                               |
+| 凭证           | expo-secure-store                          | Keychain/Keystore 支持                         |
+| 网页           | 后续 react-native-webview                  | 分阶段开放网页交互                             |
 
 Router 所需的 Reanimated、Worklets 和 Gesture Handler 采用 Expo SDK 兼容版本显式锁定；避免传递依赖自动解析到不兼容的 Worklets。初始化的实际检查结果见 [validation.md](validation.md)。
 
@@ -276,17 +276,17 @@ Git 历史不是备份。当前可导出单文件；完整项目/仓库包和会
 
 开发期直接初始化当前 schema，格式不匹配时重建指定开发数据，不维护递增历史迁移链。启用 foreign_keys 与 WAL；确认所选构建中 FTS5 可用。数据库内容不纳入工作区 Git。
 
-| 表 | 主要字段 | 责任 |
-| --- | --- | --- |
-| workspaces | id、name、relativeRoot、schemaVersion、createdAt | 工作区注册，根目录为相对位置 |
-| files | workspaceId、path、kind、mimeType、revision、sizeBytes | 当前文件索引；可重建 |
-| assets | id、workspaceId、path、width、height、sourceAssetId | 图片引用和派生关系 |
-| conversations / messages | id、workspaceId、role、parts、toolCalls | 用户可见会话与模型协议记录 |
-| runs | id、workspaceId、state、baseCommit、checkpointCommit、limits | 持久化任务状态 |
-| tool_executions | operationId、runId、modelCallId、toolName、state、result | 幂等执行与恢复 |
-| operations | operationId、phase、beforeHash、afterHash、recoveryPath | 跨文件/Git/DB 操作记录 |
-| versions | workspaceId、commitOid、runId、kind、createdAt | Git 版本的业务关联 |
-| file_search | workspaceId、path、text | FTS5 搜索索引；可重建 |
+| 表                       | 主要字段                                                     | 责任                         |
+| ------------------------ | ------------------------------------------------------------ | ---------------------------- |
+| workspaces               | id、name、relativeRoot、schemaVersion、createdAt             | 工作区注册，根目录为相对位置 |
+| files                    | workspaceId、path、kind、mimeType、revision、sizeBytes       | 当前文件索引；可重建         |
+| assets                   | id、workspaceId、path、width、height、sourceAssetId          | 图片引用和派生关系           |
+| conversations / messages | id、workspaceId、role、parts、toolCalls                      | 用户可见会话与模型协议记录   |
+| runs                     | id、workspaceId、state、baseCommit、checkpointCommit、limits | 持久化任务状态               |
+| tool_executions          | operationId、runId、modelCallId、toolName、state、result     | 幂等执行与恢复               |
+| operations               | operationId、phase、beforeHash、afterHash、recoveryPath      | 跨文件/Git/DB 操作记录       |
+| versions                 | workspaceId、commitOid、runId、kind、createdAt               | Git 版本的业务关联           |
+| file_search              | workspaceId、path、text                                      | FTS5 搜索索引；可重建        |
 
 凭证仅存 SecureStore，SQLite 保存供应商配置和凭证引用。数据库保存的是可解释的执行摘要、工具参数和结果，不依赖供应商私有思考内容。
 
@@ -310,12 +310,12 @@ Git 历史不是备份。当前可导出单文件；完整项目/仓库包和会
 
 恢复时先冻结该工作区，检查实际文件摘要、Git HEAD、提交标记和数据库记录：
 
-| 中断位置 | 恢复行为 |
-| --- | --- |
-| prepared 后、文件尚未改 | 丢弃未应用内容，或验证后继续 |
+| 中断位置                              | 恢复行为                                                                           |
+| ------------------------------------- | ---------------------------------------------------------------------------------- |
+| prepared 后、文件尚未改               | 丢弃未应用内容，或验证后继续                                                       |
 | 文件或 index 已改、内部检查点尚未记录 | 验证 before/after 后完成原操作与检查点；不再次调用模型生成修改，不自动创建用户提交 |
-| Git 已提交、SQLite 尚未记录 | 按 operationId 查到提交并补记结果，禁止重复提交 |
-| 日志与磁盘无法对应 | 标记待处理，保留恢复数据并提示用户，不盲目覆盖 |
+| Git 已提交、SQLite 尚未记录           | 按 operationId 查到提交并补记结果，禁止重复提交                                    |
+| 日志与磁盘无法对应                    | 标记待处理，保留恢复数据并提示用户，不盲目覆盖                                     |
 
 如果底层文件 API 无法提供需要的持久化/替换保证，在原生模块补充实现。实现阶段必须做进程终止、磁盘不足和跨存储失败验证。
 
@@ -357,12 +357,12 @@ queued 等待执行资源；waiting_user 等待确认或解决冲突；paused �
 
 最初工具集合：
 
-| 工具 | 行为 |
-| --- | --- |
-| list_files / read_text / search_text | 获取指定内容，支持分页/范围 |
-| create_directory / write_text / apply_text_edit | 受控创建和版本检查写入 |
-| move_file / delete_file | 保留可恢复版本，检查目标冲突 |
-| inspect_image / transform_image | 按 assetId 读取；变换生成新资源 |
+| 工具                                            | 行为                            |
+| ----------------------------------------------- | ------------------------------- |
+| list_files / read_text / search_text            | 获取指定内容，支持分页/范围     |
+| create_directory / write_text / apply_text_edit | 受控创建和版本检查写入          |
+| move_file / delete_file                         | 保留可恢复版本，检查目标冲突    |
+| inspect_image / transform_image                 | 按 assetId 读取；变换生成新资源 |
 
 版本提交、回滚和权限扩展属于宿主动作，不把 reset、checkout、任意 Git 命令交给模型。基础工具不包含任意联网、shell 或代码执行。
 
@@ -473,16 +473,16 @@ Git 是已选方案；若构建验证失败，记录具体问题并评估解决�
 
 ## 14. 待明确的问题
 
-| 问题 | 当前基线 |
-| --- | --- |
-| 最低系统版本与目标机型 | 跟随 Expo SDK 支持范围，发布前按依赖和真机结果固定 |
-| 模型供应商 | DeepSeek 前版已实测；Anthropic/Gemini 原生已实现并模拟验证，官方实测待凭证 |
-| 模型商业模式 | 原型采用用户自带 Key；统一额度后端另行设计 |
-| 大图片和历史容量上限 | 通过真机内存和典型项目测量确定，避免随意设定承诺 |
-| 发布包标识 | 暂用 com.agentmobile.app，上架前替换 |
-| 文本编辑器与 Markdown 渲染库 | M1 按移动端输入、性能和安全预览验证后选择 |
-| 历史清除、备份与同步 | 首版导出；永久清除和同步后续独立设计 |
-| 应用商店许可与第三方声明 | 集成 libgit2 和发布前完成依赖许可记录 |
+| 问题                         | 当前基线                                                                   |
+| ---------------------------- | -------------------------------------------------------------------------- |
+| 最低系统版本与目标机型       | 跟随 Expo SDK 支持范围，发布前按依赖和真机结果固定                         |
+| 模型供应商                   | DeepSeek 前版已实测；Anthropic/Gemini 原生已实现并模拟验证，官方实测待凭证 |
+| 模型商业模式                 | 原型采用用户自带 Key；统一额度后端另行设计                                 |
+| 大图片和历史容量上限         | 通过真机内存和典型项目测量确定，避免随意设定承诺                           |
+| 发布包标识                   | 暂用 com.agentmobile.app，上架前替换                                       |
+| 文本编辑器与 Markdown 渲染库 | M1 按移动端输入、性能和安全预览验证后选择                                  |
+| 历史清除、备份与同步         | 首版导出；永久清除和同步后续独立设计                                       |
+| 应用商店许可与第三方声明     | 集成 libgit2 和发布前完成依赖许可记录                                      |
 
 ## 15. 参考资料
 

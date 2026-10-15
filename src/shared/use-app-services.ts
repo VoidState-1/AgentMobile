@@ -7,9 +7,16 @@ export function useAppServices() {
   const [error, setError] = useState('');
   useEffect(() => {
     let mounted = true;
-    void getAppServices().then((value) => { if (mounted) setRuntime(value); })
-      .catch(() => { if (mounted) setError('本地资料读取失败，请保留数据并重新打开应用。'); });
-    return () => { mounted = false; };
+    void getAppServices()
+      .then(value => {
+        if (mounted) setRuntime(value);
+      })
+      .catch(() => {
+        if (mounted) setError('本地资料读取失败，请保留数据并重新打开应用。');
+      });
+    return () => {
+      mounted = false;
+    };
   }, []);
   return { runtime, error };
 }

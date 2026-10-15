@@ -19,4 +19,10 @@ export interface ConversationState {
   selected: Record<string, string>;
   drafts: Record<string, ConversationDraft>;
 }
-export const emptyConversationState = (): ConversationState => ({ schemaVersion: 1, revision: 0, conversations: [], selected: {}, drafts: {} });
+export const emptyConversationState = (): ConversationState => ({
+  schemaVersion: 1,
+  revision: 0,
+  conversations: [],
+  selected: {},
+  drafts: {},
+});

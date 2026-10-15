@@ -18,7 +18,8 @@ export async function pickFile() {
 }
 
 export async function exportFile(workspace: WorkspaceApplication, projectId: string, path: string) {
-  if (!await Sharing.isAvailableAsync()) throw new AppError('VALIDATION', '当前设备不支持系统分享');
+  if (!(await Sharing.isAvailableAsync()))
+    throw new AppError('VALIDATION', '当前设备不支持系统分享');
   const { bytes } = await workspace.read(projectId, path);
   const file = new File(Paths.cache, path.split('/').pop()!);
   file.write(bytes);

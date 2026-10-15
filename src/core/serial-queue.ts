@@ -4,7 +4,10 @@ export class SerialQueue {
 
   run<T>(work: () => Promise<T>): Promise<T> {
     const result = this.tail.then(work);
-    this.tail = result.then(() => {}, () => {});
+    this.tail = result.then(
+      () => {},
+      () => {},
+    );
     return result;
   }
 }
