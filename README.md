@@ -1,97 +1,61 @@
 # Agent Mobile
 
-手机端本地 Agent harness 原型：文字和图片保存在本地工作区，Pi Agent Core 通过受控工具执行任务，Git 管理明确提交，内部检查点负责修改恢复。
+## 文档更新历史
 
-## 当前可体验
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                           |
+| -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------- |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 重建项目入口，链接稳定技术文档与独立历史设计目录。 |
 
-- 创建项目，导入 Markdown、文本和 PNG/JPEG/WebP 图片。
-- 编辑、移动、删除文字与图片，预览图片，导出单文件。
-- 通过 Pi Agent Core 1.1.0 运行任务，查看工具进度和结果。
-- 默认演示模式无需密钥；支持 Chat Completions、Anthropic Messages、Gemini 原生协议。
-- 多连接与独立密钥、模型发现/手工配置、收藏、参数、分层默认和文本/工具/图片检测。
-- 任务启动时冻结模型配置；进入配置页面、修改密钥或参数不影响当前任务。DeepSeek 前版已实测，Anthropic/Gemini 本轮采用模拟验证。
-- 保存与提交分离；查看未暂存/已暂存差异，按文件暂存、取消暂存和明确提交；任务变化预览、冲突检测撤销和历史恢复。
-- 文件操作日志、版本冲突检测、工作区写锁和启动恢复。
-- 紧凑工作台、跟随系统或手动切换深浅主题、固定会话输入区。
-- 独立编辑器、Markdown 阅读、未保存保护、逐行差异和恢复预览。
-- 项目下多个独立对话，分别保存消息、草稿、附件引用与模型选择，支持归档/恢复；共享项目资料和 Git 历史。
+手机端本地 Agent harness：文字和图片保存在本地工作区，Pi Agent Core 经受控工具执行任务，标准 Git 管理明确提交，内部检查点与业务回执负责中断恢复。
 
-演示使用预设步骤，不进行语义理解。真实模型模式需要用户配置服务、模型和 API Key。
+当前采用 React Native、Expo Development Build、TypeScript。原生使用 FileSystem + SQLite + SecureStore，Web 使用 IndexedDB，密钥只留在当前页面内存。真实模式连接用户提供的远程模型；默认演示模式执行预设步骤，无需 Key。
 
-移动端使用 Expo FileSystem + SQLite + SecureStore；浏览器预览使用 IndexedDB，密钥仅保留在页面会话内。原型 Git 后端为 isomorphic-git，使用标准 Git 格式；libgit2 原生桥接尚未实现。
+## 当前能力
 
-使用说明：[docs/prototype.md](docs/prototype.md)。技术设计：[docs/design.md](docs/design.md)。验证与限制：[docs/validation.md](docs/validation.md)。
+- 项目下多个独立对话，分别保存草稿、历史和模型选择，共享项目文件与 Git。
+- Markdown/文本与 PNG/JPEG/WebP 导入、编辑/管理、预览和单文件导出。
+- Chat Completions、Anthropic Messages、Gemini 原生协议，独立连接/凭证、模型目录、参数与诊断。
+- 内联执行轨迹、服务返回的公开推理/摘要、文件操作后的实时刷新。
+- 跨项目并发、一层 reader/reviewer/writer 子 Agent、共享预算与隔离提案。
+- 远程 MCP 工具发现及项目授权，未知结果核对与重试屏障。
+- Agent Skills 导入、资源、版本冻结、项目授权与按需加载。
+- 显式暂存/提交、工作区差异、任务撤销、历史恢复和启动回执恢复。
 
-重构与多 Agent 设计：[docs/architecture-v2.md](docs/architecture-v2.md)。R0–R5 原型已完成：版本化运行内核、跨项目并发、共享预算/请求池、固定快照、只读子 Agent、writer 隔离提案/冲突预检/可恢复合入、取消/汇总/嵌套轨迹与整组撤销。后台服务、角色编辑器、IntelligentUI 与网页沙箱是后续能力。
+当前未对外发布，允许破坏性接口/存储更新，不维护旧原型兼容层。isomorphic-git 为当前 Git 后端；libgit2、自定义原生桥接、持续后台执行、IntelligentUI、网页沙箱和多层委派尚未实现。平台验收与性能边界见技术文档。
 
-## 开发
+## 快速开发
 
-Node.js 满足 Expo SDK 57 的要求，当前开发环境为 24.11.0；使用 npm 和 package-lock.json。
-
-项目尚未对外发布：开发期允许内部接口和存储格式的破坏性更新，不维护旧原型兼容层或格式迁移链，开发数据可重建。当前格式的事务、幂等、权限和中断恢复仍须验证。具体约定见 AGENTS.md，整改方案见 [docs/architecture-improvement.md](docs/architecture-improvement.md)。
+使用 npm 与锁文件，Node 满足 Expo SDK 57；当前脚本验证环境为 Node 24.11.0。
 
 ```sh
 npm ci
 npm run web
 ```
 
-Android Development Build：
+Android Development Build 使用 `npm run android`，之后仅 JS/TS 修改可用 `npm start`。iOS 本地编译在 macOS/Xcode 上使用 `npm run ios`。
 
-```sh
-npm run android
-```
-
-需要 Android Studio、SDK、兼容的 JDK、NDK 和 CMake。首次编译后，仅修改 TypeScript 可运行 npm start；新增原生依赖后重新编译。本次增加 react-native-svg 和开发菜单配置，旧开发客户端需要重建。
-
-iOS 在 macOS/Xcode 上运行 npm run ios，或配置云构建。
-
-浏览器静态预览：
+静态 Web 预览：
 
 ```sh
 npm run build:web
 npm run preview
 ```
 
-预览地址为 http://127.0.0.1:4180。Web 使用单页模式，适合本地存储驱动的交互应用。
+地址为 `http://127.0.0.1:4180`。检查运行 `npm run check`；Web 流程回归先导出再运行 `npm run test:e2e`。完整平台、模拟服务和故障验证流程见 [开发环境](docs/development.md) 与 [测试与维护](docs/testing-and-operations.md)。
 
-## 验证
+## 技术文档
 
-```sh
-npm run check
-npx expo-doctor
-npx expo export --platform all --output-dir work/prototype-export
-npm run test:e2e
-```
+[docs/README.md](docs/README.md) 是完整文档导航与更新规范。建议先读 [系统设计](docs/design.md)，再读 [应用接口](docs/application-api.md) 和负责的子系统。
 
-check 包含 TypeScript、ESLint 和 Vitest。端到端测试需要本机 Chrome 和已导出的 Web 目录；Playwright 自动启动预览服务。测试产物在 work/，不提交。
+- [存储与恢复](docs/storage-and-recovery.md)、[工作区与 Git](docs/workspace-and-git.md)。
+- [Agent 执行与子任务](docs/agent-runtime.md)、[对话与轨迹](docs/conversations-and-trace.md)。
+- [模型协议](docs/model-providers.md)、[远程 MCP](docs/remote-mcp.md)、[Agent Skills](docs/agent-skills.md)。
+- [前端工作台](docs/frontend.md)、[开发环境](docs/development.md)、[测试与维护](docs/testing-and-operations.md)。
 
-浏览器测试不能替代 Android/iOS 原生测试，尤其是权限、安全存储、后台行为、掉电持久化和 Hermes 运行。
+开发约束见 [AGENTS.md](AGENTS.md)。旧设想、审计、改进计划与阶段验收记录在 [Design](Design/)，作为历史资料保留，当前实现以源码和稳定技术文档为准。
 
-已验证 Android API 36.1 x86_64 模拟器：创建工作区、Pi 任务、Git 写入与强制关闭后的持久化。可用 npm run test:android -- <serial> 重跑操作检查；需要已启动的开发客户端、Metro、ANDROID_HOME 和 adb reverse tcp:8081 tcp:8081。初次开发菜单提示需要关闭。arm64 真机和 iOS 仍需验证。
+## 数据与原生约定
 
-真实服务回归通过环境变量 DEEPSEEK_API_KEY 提供密钥，运行 npm run test:live；Android 运行 npm run test:android:live -- <serial>。这些检查会实际调用模型并产生费用，普通 check/test:e2e 不使用真实密钥。Metro 使用其他端口时设置 AGENT_MOBILE_METRO_PORT 并配置对应 adb reverse。原生操作期间应保持界面源码稳定；ADB 在 Modal 内模拟硬件输入时，连续 R 可能触发调试包的“RR”重载，测试文字需避开这个快捷键。
+不提交凭证、私有资料、临时导出或生成的 android/ios。永久原生配置通过 config plugin；实际原生源码需要时放 modules，当前不预建占位目录。
 
-配置器原生模拟验证：在一个终端运行 npm run test:mock-model，再在已连接开发客户端的模拟器上运行 npm run test:android:config -- <serial>。脚本使用 adb reverse 连接本机 4181 的三协议模拟服务，不调用付费供应商。测试会创建本地测试项目与连接；使用独立模拟器。Mock 脚本使用 Node.js 的 TypeScript 类型剥离，当前验证环境为 Node 24。
-
-多对话原生验证：`node scripts/android-conversations.mjs <serial>`，检查 A/B 消息、草稿、附件隔离、强制停止恢复、归档恢复与主题。使用演示传输，不调用真实模型。
-
-Git 工作流：[docs/git-workflow.md](docs/git-workflow.md)。原生验证运行 `node scripts/android-git.mjs <serial>`，检查真实 index、提交、未提交内容、重启与回执恢复；会对合成测试数据库注入中断，仅在隔离模拟器使用。
-
-## 模块
-
-```text
-src/core/             平台无关类型、路径规则、存储接口
-src/application/     用例、受控工具、日志恢复与根/子运行编排
-src/bootstrap/       依赖组装与显式 AppServices
-src/adapters/agent/   Pi 适配、平台生命周期与演示传输
-src/adapters/model/   三协议 REST/SSE、模型目录与诊断
-src/adapters/storage/ SQLite/私有文件与 Web IndexedDB 适配
-src/adapters/git/     真实 Git 和自定义 fs 适配
-src/features/workbench/ 六组界面能力、会话、文件、编辑器与版本
-plugins/             可重建的原生配置，包括不遮挡界面的开发菜单
-tests/               核心一致性与浏览器流程测试
-```
-
-android/、ios/ 由 Expo Prebuild 生成，不提交。实际原生源码放在 modules，通过 Expo Modules/config plugin 集成；当前未实现原生 Git 桥接，不预建占位目录。原生计划见 docs/native-modules.md。应用标识暂用 com.agentmobile.app，上架前替换。图标暂用 Expo 模板素材。
-
-不把密钥放入源码、EXPO_PUBLIC_*、Git、日志或网页资源。统一模型额度需要后端保管开发者密钥，当前采用用户自带 Key。
+不把 Key 放到源码、日志、网页资源或 EXPO_PUBLIC 环境变量。常规测试使用模拟；`test:live` 和 `test:android:live` 明确配置 DEEPSEEK_API_KEY 后才运行真实请求，可能产生费用。Web 检查不能代替 Android/iOS 原生持久化、权限与进程恢复验收。

@@ -1,0 +1,121 @@
+# 开发环境、构建与依赖维护
+
+## 文档更新历史
+
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                               |
+| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------ |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理安装、各平台启动、Metro 适配、构建和原生维护流程。 |
+
+## 1. 环境要求
+
+使用 npm 与 [package-lock.json](../package-lock.json)，首次检出执行 `npm ci`，不混用其他包管理器生成第二套锁文件。Node 需满足 Expo SDK 57 及锁定依赖的 engines；当前脚本验证环境使用 Node 24.11.0。若使用其他版本，先确认 `.ts` 类型剥离与 `node:sqlite` 支持，一些模拟/测量脚本依赖这两项。
+
+Android 需要 Android Studio、Android SDK、JDK 和构建依赖；具体 Gradle/NDK/CMake 版本由当前 Expo/RN 生成工程决定。脚本使用 `ANDROID_HOME` 或 `ANDROID_SDK_ROOT` 找到 adb，优先设置前者。iOS 本地编译需要 macOS 与 Xcode；Windows 上不能用 `npm run ios` 完成原生验收。
+
+Web E2E 配置使用 Playwright 的本机 `chrome` channel，需安装 Chrome。测试、缓存和导出产物写到被忽略的 `work/`。
+
+## 2. 快速启动
+
+```sh
+npm ci
+npm run web
+```
+
+浏览器开发模式使用 IndexedDB，密钥在当前页面内存。相同 origin 共享业务实例；`localhost` 与 `127.0.0.1` 或不同端口是不同 origin，不能据此判断数据丢失。
+
+静态导出与预览：
+
+```sh
+npm run build:web
+npm run preview
+```
+
+`build:web` 导出到 `work/prototype-export`，preview 固定监听 `http://127.0.0.1:4180`。它提供单页路由回退和 `no-store` 响应。每次源码变化后需要重新 export，刷新旧导出目录不会加载新的 TypeScript。
+
+## 3. Android Development Build
+
+首次构建/安装：
+
+```sh
+npm run android
+```
+
+以后只修改 JS/TS：
+
+```sh
+npm start
+```
+
+设备需要已安装与当前原生依赖匹配的 Development Build。React Native 热更新不会增加原生模块；依赖、config plugin 或原生配置变化后重新执行原生构建。当前应用依赖多个 Expo 模块，按 Development Build 维护和验收，不把 Expo Go 作为原生能力标准。
+
+USB/模拟器运行时可映射 Metro 端口：
+
+```sh
+adb -s <serial> reverse tcp:8081 tcp:8081
+```
+
+Metro 使用其他端口时，设置测试脚本的 `AGENT_MOBILE_METRO_PORT`，并映射同一端口。模型/MCP 模拟服务另用 4181，原生模拟脚本会配置该端口反向映射。应用内 HTTP 地址限制仍是 localhost/loopback，不要通过修改 URL 校验来临时开放任意明文服务。
+
+初次开发菜单弹窗需关闭后再运行 UI 脚本。开发包中 adb 发送连续硬件 `R` 键可能触发 RN 的 RR 重载；现有脚本会避开部分输入模式。测试期间保持源码稳定，避免 Fast Refresh 改变观察结果。
+
+## 4. iOS 与多平台导出
+
+macOS 本地构建：
+
+```sh
+npm run ios
+```
+
+跨平台 JS 打包检查可执行：
+
+```sh
+npx expo export --platform all --output-dir work/prototype-export
+```
+
+Web、Android 或 iOS 的 bundle 导出，只证明当前打包链能处理源码和依赖。它不证明原生编译、设备权限、SecureStore 行为或实际 Hermes 运行通过。仓库目前没有稳定的 iOS 真机验收证据，也没有可直接宣称已配置的云构建发布流水线。
+
+## 5. Metro 的移动端依赖边界
+
+[metro.config.js](../metro.config.js) 有四项关键解析：
+
+| 依赖入口                              | 当前替换                         | 原因                                                      |
+| ------------------------------------- | -------------------------------- | --------------------------------------------------------- |
+| `@earendil-works/pi-ai`               | `adapters/agent/pi-ai-mobile.ts` | 仅公开纯工具；避免 Node auth、供应商 SDK 与目录进入移动包 |
+| `@modelcontextprotocol/client/_shims` | SDK `shimsBrowser.mjs`           | Hermes/Web 使用解释执行 schema 校验路径                   |
+| `pkce-challenge`                      | 浏览器入口                       | Hermes 不使用 Node 条件入口；不表示已实现 OAuth           |
+| `isomorphic-git`                      | 官方 browser UMD bundle          | 避免 Node stream/crypto 依赖链                            |
+
+业务层禁止引用 Pi/MCP SDK 类型。增加上游导出时核对公共入口与目标平台的可打包性，不通过复制第三方源码或全局 Node polyfill 解决全部问题。Vitest 与 Metro 的解析环境不同，单元测试通过后仍需导出/原生验证。
+
+## 6. Expo 配置与原生源码
+
+[app.json](../app.json) 使用 `expo-router/entry`，应用 scheme 为 `agentmobile`，Android package 和 iOS bundle identifier 当前均为 `com.agentmobile.app`，Web `output` 为 `single`，系统深浅色自动适配。
+
+配置插件包括 Router、dev-client、SQLite、SecureStore、Splash、Sharing 与 [with-dev-menu](../plugins/with-dev-menu.js)。SQLite 配置启用 FTS 构建选项，但当前 `search_text` 是受控逐文件搜索，没有 SQLite FTS 索引查询实现。
+
+`android/`、`ios/` 为 Expo Prebuild 生成目录，已经忽略，不作为源码归档。永久原生配置写入 app config/plugin；自定义原生能力实现于 `modules/` 的 Expo Module，再通过 plugin 集成。当前尚无自定义原生 Module，libgit2 桥接也尚未实现。
+
+不要把手工修改仅留在生成工程，下一次 prebuild 会使其丢失。依赖或 Expo 配置变更后运行 `npx expo-doctor` 并重新构建受影响 Development Build。
+
+## 7. 日常检查与提交前工作
+
+```sh
+npm run check
+npx prettier --check docs README.md
+```
+
+`check` 依次运行 TypeScript、ESLint、Vitest。`format:check` 检查整个仓库格式；批量格式化仅适用于明确的格式整理任务，普通变更对本轮文件运行 `npx prettier --write <文件>`，减少无关 diff。
+
+影响接口时更新 [application-api](application-api.md)；影响持久化时更新 [storage-and-recovery](storage-and-recovery.md) 并做相应恢复验证；影响能力范围时更新 [design](design.md)。测试选择见 [测试与维护](testing-and-operations.md)。
+
+## 8. 开发数据和凭证
+
+当前未发布，不维护旧 schema 兼容读取或迁移链。格式不匹配时由应用引导明确重建开发实例；具体删除范围、启动前置条件和中断恢复见存储文档。格式重建不应变成通用“故障时清空数据”的按钮。
+
+凭证不要写入源码、文档、Git、日志、网页资源或 `EXPO_PUBLIC_*`。原生保存在 SecureStore，Web 保存在页面内存。真实模型回归使用 `DEEPSEEK_API_KEY` 环境变量，会产生费用；常规单元/E2E 使用模拟，不需要真实 Key。
+
+## 9. 新能力开发路径
+
+先在 core 定义明确的数据契约和授权规则；application 编排用例、意图和恢复；adapters 实现平台或协议；bootstrap 组装并通过显式 AppServices 暴露最小界面能力；features 增加 UI。只有真正涉及原生桥接时才创建 Module。
+
+变更内部契约时同步删除旧路径、替换测试/文档，不保留过渡重导出或历史 DTO。外部协议兼容属于实际产品功能，不能以“开发期不兼容”为理由删除已支持的供应商/MCP 协议。
