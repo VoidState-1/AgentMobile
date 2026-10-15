@@ -22,6 +22,7 @@ async function open() {
     if (xml.includes('Go home')) { await tap('Close'); continue; } if (xml.includes('content-desc="设置"')) return; await sleep(500); }
   throw new Error('开发客户端未就绪');
 }
+if (!process.argv.includes('--verify')) {
 await adb('reverse', 'tcp:4181', 'tcp:4181'); await open();
 if (!(await dump()).includes('新建项目')) await tap('切换项目'); await tap('新建项目');
 await tap('项目名称'); await adb('shell', 'input', 'text', 'R3Native-' + Date.now()); await tap('创建工作区'); await waitFor('任务目标');
@@ -31,6 +32,8 @@ await stop(); await pull();
   try {
     const read = (bucket, id) => JSON.parse(db.prepare('SELECT payload FROM records WHERE bucket=? AND id=?').get(bucket, id).payload);
     const configuration = read('model-config', 'configuration'); const now = new Date().toISOString();
+    configuration.connections = configuration.connections.filter(connection => connection.id !== 'r3-local');
+    configuration.models = configuration.models.filter(model => model.id !== 'r3-model');
     configuration.revision++; configuration.mode = 'remote'; configuration.sessionModes = {};
     configuration.connections.push({ id: 'r3-local', name: 'R3 Fixture', presetId: 'custom', protocol: 'chat-completions', baseUrl: 'http://127.0.0.1:4181', auth: 'none', compatibility: 'standard', apiVersion: '2023-06-01', enabled: true, revision: 1, createdAt: now, updatedAt: now });
     configuration.models.push({ id: 'r3-model', connectionId: 'r3-local', apiId: 'r3-fixture', name: 'R3 Fixture', enabled: true, favorite: false, revision: 1,
@@ -44,15 +47,27 @@ await adb('push', target, '/data/local/tmp/r3-native-delegation.sqlite');
 await adb('shell', 'run-as', 'com.agentmobile.app', 'rm', '-f', 'files/SQLite/agent-mobile.sqlite-wal', 'files/SQLite/agent-mobile.sqlite-shm');
 await adb('shell', 'run-as', 'com.agentmobile.app', 'cp', '/data/local/tmp/r3-native-delegation.sqlite', 'files/SQLite/agent-mobile.sqlite'); await open();
 async function send(goal) { await tap('任务目标'); await adb('shell', 'input', 'text', goal.replaceAll(' ', '%s')); await tap('发送任务'); }
-async function held() { await waitFor('等待子任务'); const stats = await (await fetch('http://127.0.0.1:4181/stats')).json(); if (stats.waiting !== 2 || stats.maximum > 2) throw new Error('子任务没有并行等待，或请求池超限'); }
+async function held() {
+  await waitFor('等待子任务');
+  // The root publishes waiting_children before both children finish reading.
+  // Wait for the observable server barrier rather than asserting at that tick.
+  for (let attempt = 0; attempt < 40; attempt++) {
+    const stats = await (await fetch('http://127.0.0.1:4181/stats')).json();
+    if (stats.maximum > 2) throw new Error('请求池超限');
+    if (stats.waiting === 2) return;
+    await sleep(500);
+  }
+  throw new Error('子任务没有并行等待');
+}
 await send('Native R3 summary'); await held(); await fetch('http://127.0.0.1:4181/release'); await waitFor('Native root summary complete.');
 await stop(); await open(); await waitFor('Native root summary complete.');
 await tap('新建对话'); await send('Native R3 cancel'); await held(); await tap('停止任务'); await waitFor('已停止');
 await tap('新建对话'); await send('Native R3 interrupt'); await held(); await stop(); await open(); await waitFor('已中断'); await stop(); await pull();
+}
 {
   const db = new DatabaseSync(target, { readOnly: true });
   try {
-    const runs = readRuns(db);
+    const runs = readRuns(db).sort((a, b) => b.admissionSequence - a.admissionSequence);
     for (const [goal, state] of [['Native R3 summary', 'completed'], ['Native R3 cancel', 'cancelled'], ['Native R3 interrupt', 'interrupted']]) {
       const root = runs.find((run) => run.kind === 'root' && run.prompt === goal); const children = runs.filter((run) => run.parentRunId === root?.id);
       if (!root || root.state !== state || children.length !== 2 || children.some((child) => child.state !== state) || new Set(children.map((child) => child.inputSnapshotRef)).size !== 1) throw new Error(goal + ' 的父子终态或快照不一致');
@@ -62,4 +77,4 @@ await tap('新建对话'); await send('Native R3 interrupt'); await held(); awai
     process.stdout.write('R3 native verified: two independent read-only Pi children, shared fixed snapshot, request pool <=2, durable summary, recursive cancel, process interruption recovery.\n');
   } finally { db.close(); }
 }
-await open();
+if (!process.argv.includes('--verify')) await open();

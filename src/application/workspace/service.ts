@@ -4,7 +4,6 @@ import { MutationCoordinator } from './mutations';
 import { FileCommands } from './files';
 import { GitService } from './git';
 import { RunSnapshots } from './run-snapshots';
-import type { Operation } from '@/core/workspace/types';
 
 /** Host facade composed from one shared project mutation coordinator. */
 export class WorkspaceApplication {
@@ -20,6 +19,8 @@ export class WorkspaceApplication {
   }
   get git() { return this.context.git; }
   get metadata() { return this.context.metadata; }
+  get journal() { return this.context.journal; }
+  historyPage = (...args: Parameters<WorkspaceContext['git']['historyPage']>) => this.context.git.historyPage(...args);
   get recoveryIssues() { return this.mutations.recoveryIssues; }
   projects = (...args: Parameters<WorkspaceReader['projects']>) => this.reader.projects(...args);
   files = (...args: Parameters<WorkspaceReader['files']>) => this.reader.files(...args);
@@ -35,7 +36,7 @@ export class WorkspaceApplication {
   write = (...args: Parameters<FileCommands['write']>) => this.commands.write(...args);
   remove = (...args: Parameters<FileCommands['remove']>) => this.commands.remove(...args);
   move = (...args: Parameters<FileCommands['move']>) => this.commands.move(...args);
-  replaceFiles = (...args: Parameters<FileCommands['replaceFiles']>) => this.commands.replaceFiles(...args);
+  saveSkillRevision = (...args: Parameters<FileCommands['saveSkillRevision']>) => this.commands.saveSkillRevision(...args);
   mergeCandidate = (...args: Parameters<FileCommands['mergeCandidate']>) => this.commands.mergeCandidate(...args);
   restore = (...args: Parameters<GitService['restore']>) => this.versions.restore(...args);
   changes = (...args: Parameters<GitService['changes']>) => this.versions.changes(...args);
@@ -53,12 +54,10 @@ export class WorkspaceApplication {
   undoTask = (...args: Parameters<RunSnapshots['undoTask']>) => this.runs.undoTask(...args);
   snapshot(projectId: string, openPath?: string) {
     return this.mutations.query(projectId, async () => {
-      const [files, versions, operations] = await Promise.all([
-        this.reader.files(projectId), this.context.git.log(projectId), this.context.metadata.all<Operation>('operations'),
+      const [view, history, operations] = await Promise.all([
+        this.reader.view(projectId, openPath), this.context.git.historyPage(projectId), this.context.journal.list({ scope: this.context.journal.scope(projectId), limit: 100 }),
       ]);
-      const preview = openPath && files.some((file) => file.path === openPath) ?
-        { path: openPath, ...await this.reader.preview(projectId, openPath) } : undefined;
-      return { files, versions, gitStatus: await this.versions.statusValue(projectId), operations: operations.filter((operation) => operation.projectId === projectId && operation.phase === 'recorded'), preview };
+      return { ...view, versions: history.versions, historyCursor: history.cursor, gitStatus: await this.versions.statusValue(projectId, view.files), operations: operations.filter(operation => operation.phase === 'recorded') };
     });
 
   }

@@ -1,10 +1,11 @@
+import { AppError } from '@/core/errors';
 /** Header checks avoid decoding unexpected formats and oversized images. */
 export function validateImage(path: string, bytes: Uint8Array): void {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);
-  const invalid = () => { throw new Error('图片不是有效的 PNG / JPEG / WebP'); };
+  const invalid = () => { throw new AppError('VALIDATION', '图片不是有效的 PNG / JPEG / WebP'); };
   const size = (width: number, height: number) => {
     if (!width || !height || width > 16000 || height > 16000 || width * height > 24_000_000) {
-      throw new Error('图片尺寸过大，请缩小后导入（最多 2400 万像素）');
+      throw new AppError('LIMIT', '图片尺寸过大，请缩小后导入（最多 2400 万像素）');
     }
   };
   const ascii = (offset: number, length: number) => String.fromCharCode(...bytes.slice(offset, offset + length));

@@ -1,55 +1,49 @@
+import type { BusinessStore } from '@/core/storage/business-store';
+import { createSqliteBusinessStore } from './sqlite-business';
+import { randomUUID } from 'expo-crypto';
+import { AppError } from '@/core/errors';
 import { Directory, File, Paths } from 'expo-file-system';
 import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 
-import type { CredentialStore, HostFileSystem, MetadataStore } from '@/core/storage/contracts';
+import type { CredentialStore, HostFileSystem } from '@/core/storage/contracts';
 import { missing } from './errors';
+
+/** Called only while bootstrap is blocked on a format mismatch, with no kernel. */
+export async function rebuildDevelopmentStorage(): Promise<void> {
+  const root = new Directory(Paths.document, 'agent-mobile');
+  if (root.uri.replace(/\/+$/, '') !== Paths.document.uri.replace(/\/+$/, '') + '/agent-mobile') throw new AppError('STORAGE', '开发实例目录校验失败。');
+  // Outside the deleted tree: interrupted rebuild cannot start a partially reset
+  // instance. Re-entering the same explicit rebuild finishes it idempotently.
+  const marker = new File(Paths.document, 'agent-mobile-rebuild.pending');
+  marker.write('pending');
+  // SQLite exposes a native path; Expo FileSystem constructors require a URI.
+  const databaseDirectory = SQLite.defaultDatabaseDirectory;
+  const database = new File(databaseDirectory.startsWith('file:') ? databaseDirectory : 'file://' + databaseDirectory, 'agent-mobile.sqlite');
+  try {
+    if (database.exists) await SQLite.deleteDatabaseAsync('agent-mobile.sqlite');
+  } catch { throw new AppError('STORAGE', '开发数据库无法删除，请重新打开应用后再次重建。'); }
+  try {
+    if (root.exists) root.delete();
+  } catch { throw new AppError('STORAGE', '开发工作区无法删除，请重新打开应用后再次重建。'); }
+  try { marker.delete(); }
+  catch { throw new AppError('STORAGE', '开发重建标记无法清除，请再次完成重建。'); }
+  // SecureStore is intentionally outside the development data scope.
+}
 
 export async function createStorage(): Promise<{
   fs: HostFileSystem;
-  metadata: MetadataStore;
+  metadata: BusinessStore;
   credentials: CredentialStore;
 }> {
+  if (new File(Paths.document, 'agent-mobile-rebuild.pending').exists) throw new AppError('DATA_FORMAT', '开发数据重建曾中断，请完成重建后再打开应用。');
   const root = new Directory(Paths.document, 'agent-mobile');
   root.create({ intermediates: true, idempotent: true });
-  const uri = (path: string) => root.uri + '/' + path.replace(/^\/+/, '');
+  const uri = (path: string) => root.uri.replace(/\/+$/, '') + '/' + path.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
   const db = await SQLite.openDatabaseAsync('agent-mobile.sqlite');
-  await db.execAsync(
-    'PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;' +
-    'CREATE TABLE IF NOT EXISTS records (bucket TEXT NOT NULL, id TEXT NOT NULL, payload TEXT NOT NULL, PRIMARY KEY (bucket, id));' +
-    'PRAGMA user_version = 1;',
-  );
-  let metadataWrites: Promise<unknown> = Promise.resolve();
-  const serializeWrite = <T>(work: () => Promise<T>): Promise<T> => {
-    const next = metadataWrites.catch(() => {}).then(work); metadataWrites = next; return next;
-  };
-  const metadata: MetadataStore = {
-    async batch(entries) {
-      const rows = entries.map((entry) => ({ ...entry, payload: JSON.stringify(entry.value) }));
-      await serializeWrite(() => db.withExclusiveTransactionAsync(async (transaction) => {
-        for (const row of rows) await transaction.runAsync(
-          'INSERT INTO records (bucket, id, payload) VALUES (?, ?, ?) ON CONFLICT(bucket, id) DO UPDATE SET payload = excluded.payload',
-          row.bucket, row.id, row.payload,
-        );
-      }));
-    },
-    async get<T>(bucket: string, id: string) {
-      const row = await db.getFirstAsync<{ payload: string }>(
-        'SELECT payload FROM records WHERE bucket = ? AND id = ?', bucket, id,
-      );
-      return row ? JSON.parse(row.payload) as T : undefined;
-    },
-    async put(bucket, id, value) {
-      await serializeWrite(() => db.runAsync(
-        'INSERT INTO records (bucket, id, payload) VALUES (?, ?, ?) ON CONFLICT(bucket, id) DO UPDATE SET payload = excluded.payload',
-        bucket, id, JSON.stringify(value),
-      ));
-    },
-    async all<T>(bucket: string) {
-      const rows = await db.getAllAsync<{ payload: string }>('SELECT payload FROM records WHERE bucket = ?', bucket);
-      return rows.map((row) => JSON.parse(row.payload) as T);
-    },
-  };
+  let metadata: BusinessStore;
+  try { metadata = await createSqliteBusinessStore(db, randomUUID); }
+  catch (error) { await db.closeAsync(); throw error; }
   const fs: HostFileSystem = {
     async read(path) {
       const file = new File(uri(path));
@@ -83,6 +77,13 @@ export async function createStorage(): Promise<{
       if (file.exists) return { kind: 'file', size: file.size, mtime: file.modificationTime ?? 0 };
       throw missing(path);
     },
+    async contentStamp(path) {
+      // Native hashing still reads the file. It avoids a JS byte/base64 copy,
+      // and provides content evidence even for equal mtime/size edits.
+      const file = new File(uri(path));
+      if (!file.exists) throw missing(path);
+      return file.md5 ?? undefined;
+    },
   };
   return {
     fs, metadata,
@@ -96,8 +97,7 @@ export async function createStorage(): Promise<{
   };
 }
 
-function credentialName(reference?: string): string {
-  if (!reference) return 'model-api-key';
-  if (!/^[a-zA-Z0-9._-]{1,128}$/.test(reference)) throw new Error('无效的凭证引用。');
+function credentialName(reference: string): string {
+  if (!/^[a-zA-Z0-9._-]{1,128}$/.test(reference)) throw new AppError('VALIDATION', '无效的凭证引用。');
   return 'model-credential.' + reference;
 }

@@ -3,9 +3,10 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext } from '@earendil-works/pi-ai';
 import { contentLimits, defaultAgentSettings, effectiveSystemPrompt, validateAgentSettings } from '@/core/agent/settings';
 import { AgentSettingsService } from '@/application/settings/agent';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { ConversationService } from '@/application/conversations/service';
 import { startTestRun } from './agent-runtime';
+import { RunRepository } from '../src/application/runs/repository';
 import { protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { validateModelEntity } from '../src/core/models/rules';
 import { defaultModelParameters, unknownCapabilities } from '../src/core/models/types';
@@ -16,7 +17,7 @@ const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { vi.useRealTimers(); vi.unstubAllGlobals(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
 async function fixture() {
   const storage = await testStorage(); cleanups.push(storage.cleanup);
-  const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('长任务');
+  const workspace = createWorkspace(storage.files, storage.metadata, randomUUID); const project = await workspace.create('长任务');
   const settings = new AgentSettingsService(storage.metadata); await settings.initialize();
   return { ...storage, workspace, project, settings };
 }
@@ -57,7 +58,7 @@ describe('长任务真实 Pi 循环', () => {
     vi.stubGlobal('fetch', async () => streamed(++rounds <= 35 ? toolEvents('chat-completions', 'list_files') : answerEvents('chat-completions', '长任务已完成。')));
     const run = await startTestRun(f.workspace, f.project.id, '请处理长任务', { model: remote, secret: 'fixture' });
     const task = await run.done; expect(task.state).toBe('completed'); expect(rounds).toBe(36);
-    expect(task.events.filter((event) => event.state === 'done')).toHaveLength(35);
+    expect(task.trace!.filter(item => item.kind === 'tool' && item.state === 'completed')).toHaveLength(35);
     expect(task.agentSettingsSnapshot?.limits.maxToolCalls).toBe(200);
   });
   it('用户设置的轮数与工具次数仍执行，错误明确说明触及的预算', async () => {
@@ -72,8 +73,12 @@ describe('长任务真实 Pi 循环', () => {
   });
   it('历史能携带超过 6 条，设为 0 后不携带旧任务', async () => {
     const f = await fixture(); const requests: any[] = [];
-    for (let index = 0; index < 8; index++) await f.metadata.put('tasks', 'history-' + index, { id: 'history-' + index, projectId: f.project.id,
-      prompt: 'HISTORY_' + index, response: 'REPLY_' + index, mode: 'remote', state: 'completed', events: [], baseCommit: '', createdAt: '2026-10-14T00:00:0' + index + 'Z' });
+    const conversations = new ConversationService(f.metadata, randomUUID); await conversations.initialize([f.project]);
+    const conversation = await conversations.ensureProject(f.project.id); const repository = new RunRepository(f.metadata);
+    for (let index = 0; index < 8; index++) await repository.save({ schemaVersion: 3, id: 'history-' + index, projectId: f.project.id,
+      conversationId: conversation.id, rootRunId: 'history-' + index, launchSnapshotRef: 'history-' + index,
+      agentDefinitionId: 'main', agentDefinitionRevision: 1, depth: 0, kind: 'root',
+      prompt: 'HISTORY_' + index, response: 'REPLY_' + index, mode: 'remote', state: 'completed', createdAt: '2026-10-14T00:00:0' + index + 'Z' });
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { requests.push(JSON.parse(String(init.body))); return streamed(answerEvents('chat-completions', '完成。')); });
     const run = await startTestRun(f.workspace, f.project.id, 'current', { model: remote, secret: 'fixture' }); await run.done;
     expect(requests[0].messages.filter((message: any) => message.role === 'user')).toHaveLength(9);
@@ -99,7 +104,7 @@ describe('长任务真实 Pi 循环', () => {
     for (const request of requests) expect(request.messages[0].content).toContain('INITIAL_PROMPT');
     const next = await startTestRun(f.workspace, f.project.id, 'next', { model: remote, secret: 'fixture', settings: updated });
     await next.done; expect(requests[2].messages[0].content).toContain('UPDATED_PROMPT');
-    expect((await f.metadata.get<any>('runs-v2', task.id)).agentSettingsSnapshot.systemPrompt).toBe('INITIAL_PROMPT');
+    expect((await f.metadata.get<any>('run-launches', task.id)).settings.systemPrompt).toBe('INITIAL_PROMPT');
   });
   it('大文本写入和分页读取保留完整版本，实际响应可超过旧的 512 KB', async () => {
     const f = await fixture(); const text = '资料'.repeat(100_000); const requests: any[] = [];

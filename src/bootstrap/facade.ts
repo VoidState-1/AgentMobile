@@ -3,16 +3,19 @@ import type { ModelConfigurationService } from '@/application/models/configurati
 import type { ConversationService } from '@/application/conversations/service';
 import type { AgentSettingsService } from '@/application/settings/agent';
 import type { SkillService } from '@/application/skills/library';
-import { publicError } from '@/core/errors';
-import type { WorkspaceService } from '@/adapters/workspace/service';
+import { AppError, publicError } from '@/core/errors';
+import type { WorkspaceApplication } from '@/application/workspace/service';
 import type { McpRuntime } from '@/adapters/mcp/runtime';
 import type { PreferencesService } from '@/application/settings/preferences';
 import type { ProposalService } from '@/application/runs/proposals';
+import type { RunKernel } from '@/application/runs/kernel';
+import type { RunRepository } from '@/application/runs/repository';
+import { runView } from './run-view';
 
 export interface AppDependencies {
-  workspace: WorkspaceService; models: ModelConfigurationService; conversations: ConversationService;
-  agentSettings: AgentSettingsService; skills: SkillService; mcp: McpRuntime; agent: AppServices['agent'];
-  preferences: PreferencesService; tasks: AppServices['tasks']; io: AppServices['io'];
+  workspace: WorkspaceApplication; models: ModelConfigurationService; conversations: ConversationService;
+  agentSettings: AgentSettingsService; skills: SkillService; mcp: McpRuntime; agent: RunKernel; runs: RunRepository;
+  preferences: PreferencesService; io: AppServices['io'];
   diagnose: AppServices['models']['diagnose']; skillPackage: Pick<AppServices['skills'], 'decodeText' | 'validateBundle' | 'importPackage'>;
   proposals?: ProposalService;
 }
@@ -34,8 +37,15 @@ function expose<T extends object, K extends keyof T>(service: T, keys: readonly 
 }
 
 export function createAppServices(value: AppDependencies): AppServices {
+  const runRecord = async (id: string) => {
+    const run = await value.runs.get(id);
+    if (!run) throw new AppError('VALIDATION', '运行不存在。');
+    return run;
+  };
   const workspace = {
-    ...expose(value.workspace, ['projects', 'files', 'read', 'preview', 'restore', 'changes', 'taskChanges', 'undoTask', 'status', 'diff', 'discard', 'subscribe']),
+    ...expose(value.workspace, ['projects', 'files', 'read', 'preview', 'restore', 'changes', 'status', 'diff', 'discard', 'subscribe', 'historyPage']),
+    ...expose({ taskChanges: async (id: string) => value.workspace.taskChanges(await runRecord(id)),
+      undoTask: async (id: string) => value.workspace.undoTask(await runRecord(id)) }, ['taskChanges', 'undoTask']),
     ...expose({
       create: (name: string) => value.workspace.create(name),
       write: (id: string, path: string, bytes: Uint8Array, revision: string | null, options?: { message?: string }) => value.workspace.write(id, path, bytes, revision, { message: options?.message }),
@@ -48,8 +58,9 @@ export function createAppServices(value: AppDependencies): AppServices {
     head: expose({ head: (id: string) => value.workspace.git.head(id) }, ['head']).head,
     snapshot: async (id: string, path?: string) => {
       const snapshot = await expose(value.workspace, ['snapshot']).snapshot(id, path);
-      return { files: snapshot.files, versions: snapshot.versions, gitStatus: snapshot.gitStatus, preview: snapshot.preview,
-        operations: snapshot.operations.map(({ id, projectId, runId, ownerRootRunId, actorRunId, proposalId, phase, changes }) => ({ id, projectId, runId, ownerRootRunId, actorRunId, proposalId, phase, changes: changes.map(({ path }) => ({ path })) })) };
+      return { files: snapshot.files, versions: snapshot.versions, historyCursor: snapshot.historyCursor, gitStatus: snapshot.gitStatus, preview: snapshot.preview,
+        operations: snapshot.operations.map(({ id, scope, ownerRootRunId, actorRunId, proposalId, phase, changedPaths }) =>
+          ({ id, projectId: scope.projectId, ownerRootRunId, actorRunId, proposalId, phase, changedPaths })) };
     },
     get recoveryIssues() { return [...value.workspace.recoveryIssues]; },
   };
@@ -60,8 +71,14 @@ export function createAppServices(value: AppDependencies): AppServices {
       ...expose({ diagnose: value.diagnose }, ['diagnose']), get recoveryIssues() { return [...value.models.recoveryIssues]; } }),
     conversations: Object.freeze(expose(value.conversations, ['getSnapshot', 'subscribe', 'ensureProject', 'create', 'select', 'rename', 'archive', 'restore', 'saveDraft'])),
     agentSettings: Object.freeze(expose(value.agentSettings, ['getSnapshot', 'save'])),
-    agent: Object.freeze(expose(value.agent, ['getSnapshot', 'subscribe', 'start', 'cancel'])),
-    preferences: Object.freeze(expose(value.preferences, ['getWorkbench', 'saveWorkbench'])), tasks: expose(value, ['tasks']).tasks,
+    agent: Object.freeze({ ...expose(value.agent, ['subscribe', 'start', 'cancel']), getSnapshot: () => {
+      const snapshot = value.agent.getSnapshot();
+      return { ...snapshot, active: snapshot.active && runView(snapshot.active), completed: snapshot.completed && runView(snapshot.completed), runs: snapshot.runs.map(runView) };
+    } }),
+    runs: Object.freeze({ ...expose(value.runs, ['getDetail', 'listChildren', 'listTrace', 'readTraceText', 'subscribe']),
+      ...expose({ list: (query: Parameters<AppServices['runs']['list']>[0]) => value.runs.list(query.projectId, query.conversationId, query.cursor, query.limit),
+      }, ['list']) }),
+    preferences: Object.freeze(expose(value.preferences, ['getWorkbench', 'saveWorkbench'])),
     io: Object.freeze(expose(value.io, ['pickFile', 'pickSkillPackage', 'exportFile', 'exportSkill'])),
     mcp: Object.freeze({ ...expose(value.mcp, ['discover', 'unknown', 'acknowledge']), configuration: Object.freeze(expose(value.mcp.configuration, ['getSnapshot', 'subscribe', 'saveServer', 'removeServer', 'keyReady', 'grant'])) }),
     skills: Object.freeze({ ...expose(value.skills, ['getSnapshot', 'subscribe', 'install', 'remove', 'grant']),

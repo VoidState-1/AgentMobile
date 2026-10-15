@@ -1,3 +1,4 @@
+import { AppError } from '@/core/errors';
 import { Buffer } from 'buffer';
 import type { HostFileSystem } from '@/core/storage/contracts';
 
@@ -22,8 +23,8 @@ export function gitFileSystem(fs: HostFileSystem) {
         await fs.write(path, typeof data === 'string' ? Buffer.from(data) : data);
       },
       mkdir: fs.mkdir, unlink: fs.remove, rmdir: fs.remove, readdir: fs.list, stat, lstat: stat,
-      async readlink() { throw new Error('不支持符号链接'); },
-      async symlink() { throw new Error('不支持符号链接'); },
+      async readlink() { throw new AppError('VALIDATION', '不支持符号链接'); },
+      async symlink() { throw new AppError('VALIDATION', '不支持符号链接'); },
       async chmod() { /* Private files only; symlinks and executables are not supported. */ },
     },
   };

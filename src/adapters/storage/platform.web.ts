@@ -1,60 +1,37 @@
-import type { CredentialStore, HostFileSystem, MetadataStore, StorageStat } from '@/core/storage/contracts';
+import type { BusinessStore } from '@/core/storage/business-store';
+import { openWebDatabase, createWebBusinessStore } from './indexeddb-business';
+import { AppError } from '@/core/errors';
+import type { CredentialStore, HostFileSystem, StorageStat } from '@/core/storage/contracts';
 import { missing } from './errors';
 
 interface StoredFile extends StorageStat { path: string; bytes?: Uint8Array }
 
+/** Explicit development rebuild of this app's one IndexedDB instance only. */
+export async function rebuildDevelopmentStorage(): Promise<void> {
+  await new Promise<void>((resolve, reject) => {
+    const request = indexedDB.deleteDatabase('agent-mobile-prototype');
+    request.onsuccess = () => resolve();
+    request.onerror = () => reject(new AppError('STORAGE', '开发实例无法重建。'));
+    request.onblocked = () => reject(new AppError('CONFLICT', '请关闭此应用的其他页面，再重建开发数据。'));
+  });
+}
+
 export async function createStorage(): Promise<{
   fs: HostFileSystem;
-  metadata: MetadataStore;
+  metadata: BusinessStore;
   credentials: CredentialStore;
 }> {
-  const db = await new Promise<IDBDatabase>((resolve, reject) => {
-    const request = indexedDB.open('agent-mobile-prototype', 1);
-    request.onupgradeneeded = () => {
-      request.result.createObjectStore('records');
-      request.result.createObjectStore('files', { keyPath: 'path' });
-    };
-    request.onsuccess = () => resolve(request.result);
-    request.onerror = () => reject(request.error);
-  });
+  const db = await openWebDatabase();
   function transact<T>(store: string, mode: IDBTransactionMode, action: (target: IDBObjectStore) => IDBRequest<T>): Promise<T> {
     return new Promise((resolve, reject) => {
       const transaction = db.transaction(store, mode);
       const request = action(transaction.objectStore(store));
       transaction.oncomplete = () => resolve(request.result);
       transaction.onerror = () => reject(transaction.error);
-      transaction.onabort = () => reject(transaction.error ?? new Error('浏览器存储操作中断'));
+      transaction.onabort = () => reject(transaction.error ?? new AppError('STORAGE', '浏览器存储操作中断'));
     });
   }
-  const metadata: MetadataStore = {
-    async batch(entries) {
-      await new Promise<void>((resolve, reject) => {
-        const transaction = db.transaction('records', 'readwrite'); const store = transaction.objectStore('records');
-        transaction.oncomplete = () => resolve();
-        transaction.onerror = () => reject(transaction.error);
-        transaction.onabort = () => reject(transaction.error ?? new Error('浏览器存储操作中断'));
-        try { for (const entry of entries) store.put(entry.value, entry.bucket + '/' + entry.id); }
-        catch (error) { transaction.abort(); reject(error); }
-      });
-    },
-    async get<T>(bucket: string, id: string) {
-      return await transact('records', 'readonly', (store) => store.get(bucket + '/' + id)) as T | undefined;
-    },
-    async put(bucket, id, value) {
-      await transact('records', 'readwrite', (store) => store.put(value, bucket + '/' + id));
-    },
-    async all<T>(bucket: string) {
-      const pairs = await new Promise<{ keys: IDBValidKey[]; values: T[] }>((resolve, reject) => {
-        const transaction = db.transaction('records', 'readonly');
-        const store = transaction.objectStore('records');
-        const keys = store.getAllKeys();
-        const values = store.getAll();
-        transaction.oncomplete = () => resolve({ keys: keys.result, values: values.result });
-        transaction.onerror = () => reject(transaction.error);
-      });
-      return pairs.values.filter((_, index) => String(pairs.keys[index]).startsWith(bucket + '/'));
-    },
-  };
+  const metadata = await createWebBusinessStore(db);
   const getFile = async (path: string): Promise<StoredFile> => {
     const file = await transact('files', 'readonly', (store) => store.get(path)) as StoredFile | undefined;
     if (!file) throw missing(path);
@@ -68,22 +45,22 @@ export async function createStorage(): Promise<{
       try { existing = await getFile(current); } catch (error) {
         if ((error as { code?: string }).code !== 'ENOENT') throw error;
       }
-      if (existing?.kind === 'file') throw new Error('父路径是文件');
+      if (existing?.kind === 'file') throw new AppError('VALIDATION', '父路径是文件');
       if (!existing) await transact('files', 'readwrite', (store) => store.put({
-        path: current, kind: 'directory', size: 0, mtime: Date.now(),
+        path: current, kind: 'directory', size: 0, mtime: Date.now(), contentVersion: crypto.randomUUID(),
       }));
     }
   };
   const fs: HostFileSystem = {
     async read(path) {
       const file = await getFile(path);
-      if (!file.bytes) throw new Error('无法读取目录');
+      if (!file.bytes) throw new AppError('STORAGE', '无法读取目录');
       return new Uint8Array(file.bytes);
     },
     async write(path, bytes) {
       await mkdir(path.slice(0, path.lastIndexOf('/')));
       await transact('files', 'readwrite', (store) => store.put({
-        path, kind: 'file', size: bytes.length, mtime: Date.now(), bytes: new Uint8Array(bytes),
+        path, kind: 'file', size: bytes.length, mtime: Date.now(), contentVersion: crypto.randomUUID(), bytes: new Uint8Array(bytes),
       }));
     },
     mkdir,
@@ -93,20 +70,25 @@ export async function createStorage(): Promise<{
     },
     async list(path) {
       await getFile(path);
-      const keys = await transact('files', 'readonly', (store) => store.getAllKeys());
       const prefix = path === '/' ? '/' : path + '/';
+      const end = prefix.slice(0, -1) + '0';
+      const keys = await transact('files', 'readonly', store => store.getAllKeys(IDBKeyRange.bound(prefix, end, false, true)));
       return keys.map(String).filter((key) => key.startsWith(prefix) && key !== path)
         .map((key) => key.slice(prefix.length)).filter((key) => !key.includes('/'));
     },
     async stat(path) {
-      const { kind, size, mtime } = await getFile(path);
-      return { kind, size, mtime };
+      // Key cursor reads only the index tuple, never clones a large image blob.
+      const cursor = await transact('files', 'readonly', store => store.index('stat')
+        .openKeyCursor(IDBKeyRange.bound([path], [path, []])));
+      if (!cursor) throw missing(path);
+      const [, kind, size, mtime, contentVersion] = cursor.key as [string, StorageStat['kind'], number, number, string];
+      return { kind, size, mtime, contentVersion };
     },
   };
   const sessionKeys = new Map<string, string>();
   return {
     fs, metadata,
-    credentials: { get: async (reference = 'legacy') => sessionKeys.get(reference) ?? '',
-      set: async (value, reference = 'legacy') => { if (value) sessionKeys.set(reference, value); else sessionKeys.delete(reference); } },
+    credentials: { get: async reference => sessionKeys.get(reference) ?? '',
+      set: async (value, reference) => { if (value) sessionKeys.set(reference, value); else sessionKeys.delete(reference); } },
   };
 }

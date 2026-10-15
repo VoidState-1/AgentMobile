@@ -6,7 +6,7 @@ import type { ModelConfiguration } from '@/core/models/types';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
 import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
 import { Check, X } from '@/shared/ui/icons';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { Choices } from './common';
 
 export function ModelPicker({ service, configuration, projectId, conversationId, onClose, onManage }: { service: ModelConfigurationService; configuration: ModelConfiguration; projectId?: string; conversationId?: string;

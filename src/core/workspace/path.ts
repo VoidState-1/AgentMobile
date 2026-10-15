@@ -1,3 +1,4 @@
+import { AppError } from '@/core/errors';
 export function safePath(input: string, allowRoot = false): string {
   if (allowRoot && input === '') return '';
   const path = input.normalize('NFC');
@@ -10,7 +11,7 @@ export function safePath(input: string, allowRoot = false): string {
       /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part),
     )
   ) {
-    throw new Error('INVALID_PATH：请使用工作区内的相对路径。');
+    throw new AppError('VALIDATION', 'INVALID_PATH：请使用工作区内的相对路径。');
   }
   return path;
 }
@@ -23,4 +24,8 @@ export function mimeFor(path: string): string {
 
 export function isImage(path: string): boolean {
   return mimeFor(path).startsWith('image/');
+}
+export const canAgentWriteText = (path: string): boolean => /\.(md|txt)$/i.test(path);
+export function canMoveWithinFormat(from: string, to: string): boolean {
+  return isImage(from) ? isImage(to) && mimeFor(from) === mimeFor(to) : !isImage(to) && canAgentWriteText(to);
 }

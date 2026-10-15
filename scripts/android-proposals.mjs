@@ -1,3 +1,4 @@
+import { readOperations } from './native-journal.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { execFile } from 'node:child_process';
@@ -37,7 +38,7 @@ await stop(); await pull();
   try {
     const runs = readRuns(db); const root = runs.find((run) => run.prompt === normalGoal); const child = runs.find((run) => run.parentRunId === root?.id);
     const proposal = JSON.parse(db.prepare("SELECT payload FROM records WHERE bucket='change-proposals' AND id=?").get(child.proposalId).payload);
-    const operation = db.prepare("SELECT payload FROM records WHERE bucket='operations'").all().map((row) => JSON.parse(row.payload)).find((operation) => operation.proposalId === proposal.id);
+    const operation = readOperations(db).find((operation) => operation.proposalId === proposal.id);
     if (root.state !== 'completed' || child.state !== 'completed' || proposal.state !== 'applied' || operation.ownerRootRunId !== root.id || operation.actorRunId !== child.id || operation.mergedByRunId !== root.id || root.finalCommit !== root.baseCommit || operation.indexChanges?.length) throw new Error('原生提案终态、归属或真实 Git 分离不一致');
     db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   } finally { db.close(); }
@@ -48,7 +49,7 @@ if ((await dump()).includes('打开 documents/proposal.md')) throw new Error('�
 await create('Proposal-fault-' + stamp); await stop(); await pull();
 {
   const db = new DatabaseSync(target); try {
-    db.exec("CREATE TRIGGER r5_merge_failure BEFORE UPDATE ON records WHEN NEW.bucket='operations' AND json_extract(NEW.payload,'$.id') LIKE 'merge-proposal-%' AND json_extract(NEW.payload,'$.phase')='recorded' BEGIN SELECT RAISE(ABORT,'fixture merge receipt failure'); END;"); db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
+    db.exec("CREATE TRIGGER r5_merge_failure BEFORE UPDATE ON operation_headers WHEN NEW.namespace='projects' AND json_extract(NEW.payload,'$.id') LIKE 'merge-proposal-%' AND json_extract(NEW.payload,'$.phase')='recorded' BEGIN SELECT RAISE(ABORT,'fixture merge receipt failure'); END;"); db.exec('PRAGMA wal_checkpoint(TRUNCATE)');
   } finally { db.close(); }
 }
 await install(); await open(); await send(receiptGoal); await held(); await fetch('http://127.0.0.1:4181/release');
@@ -62,7 +63,7 @@ await install(); await open(); await waitFor('已中断'); await tap('资料'); 
     const runs = readRuns(db); const root = runs.find((run) => run.prompt === receiptGoal); const child = runs.find((run) => run.parentRunId === root?.id);
     const proposal = JSON.parse(db.prepare("SELECT payload FROM records WHERE bucket='change-proposals' AND id=?").get(child.proposalId).payload);
     if (root.state !== 'interrupted' || child.state !== 'completed' || proposal.state !== 'applied' || root.changedPaths.length !== 2) throw new Error('合入回执恢复没有保留子结果或汇总根变化');
-    if (db.prepare("SELECT payload FROM records WHERE bucket='operations'").all().map((row) => JSON.parse(row.payload)).some((operation) => operation.proposalId === proposal.id && operation.phase !== 'recorded')) throw new Error('合入恢复日志未收束');
+    if (readOperations(db).some((operation) => operation.proposalId === proposal.id && operation.phase !== 'recorded')) throw new Error('合入恢复日志未收束');
     process.stdout.write('R5 native verified: independent writer Pi, private candidate preview, unchanged real index/HEAD, controlled merge/attribution, root undo, SQLite merge receipt interruption/recovery without replay.\n');
   } finally { db.close(); }
 }

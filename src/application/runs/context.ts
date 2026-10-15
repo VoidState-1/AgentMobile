@@ -1,7 +1,6 @@
 import type { HistoryEntry } from '@/core/agent/engine';
-import type { TaskRecord } from '@/core/runs/types';
 
-export function historyEntries(tasks: TaskRecord[], count: number, characters: number): HistoryEntry[] {
+export function historyEntries(tasks: HistoryEntry[], count: number, characters: number): HistoryEntry[] {
   return (count ? tasks.slice(-count) : []).reverse().filter((task) => {
     const size = Math.min(task.prompt.length, 8000) + Math.min((task.response || '').length, 12_000);
     if (size > characters) return false; characters -= size; return true;

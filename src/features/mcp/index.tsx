@@ -3,8 +3,8 @@ import { Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { ConfigPage, FormScroll, Loading, Section } from '@/shared/ui/forms';
 import { Button, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
-import { useWorkbenchUi } from '@/shared/state/workbench';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { useWorkbenchUi } from '@/shared/workbench-state';
 import { useMcpConfiguration } from './common';
 import { UnknownCalls } from './unknown';
 

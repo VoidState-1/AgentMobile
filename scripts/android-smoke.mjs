@@ -34,7 +34,7 @@ await waitFor('任务目标');
 await tap('任务目标');
 await adb('shell', 'input', 'text', 'Organize%sthe%sproject%snotes.');
 await tap('发送任务');
-await waitFor('已完成');
+await waitFor('发送任务');
 await screenshot('workbench-android-light.png');
 await tap('资料');
 await waitFor('打开 documents/summary.md');

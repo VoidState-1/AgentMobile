@@ -1,15 +1,15 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Check, ChevronRight, GitCommitHorizontal, Plus, RotateCcw, X } from '@/shared/ui/icons';
-import type { Workbench } from './use-workbench';
+import type { GitCapability } from './use-workbench';
 import type { GitFileStatus } from '@/core/git/contracts';
 import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { dateLabel } from '@/shared/format';
 
 const statusLabel = { added: '新增', modified: '修改', deleted: '删除' };
 
-export function HistoryPane({ controller }: { controller: Workbench }) {
+export const HistoryPane = memo(function HistoryPane({ controller }: { controller: GitCapability }) {
   const theme = useWorkbenchTheme();
   const [tab, setTab] = useState<'changes' | 'history'>('changes');
   const status = controller.gitStatus;
@@ -69,5 +69,7 @@ export function HistoryPane({ controller }: { controller: Workbench }) {
       </View>
       <ChevronRight size={16} color={theme.muted} style={{ marginTop: 7 }} />
     </Pressable>)}
+    {tab === 'history' && controller.versionCursor && <Button label="加载更多提交" variant="ghost" busy={controller.versionsBusy}
+      onPress={() => { void controller.loadOlderVersions(); }} />}
   </ScrollView>;
-}
+});

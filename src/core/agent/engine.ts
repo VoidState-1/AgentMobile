@@ -1,13 +1,15 @@
 import type { ControlledTool } from './tools';
 
 export interface HistoryEntry { prompt: string; response: string; createdAt: string }
+export interface NotificationScheduler { schedule(listener: () => void): () => void }
 export type EngineEvent =
   | { type: 'assistant_start'; round: number }
   | { type: 'content'; round: number; index: number; kind: 'text' | 'reasoning'; text: string; visibility?: 'reasoning' | 'summary' | 'unavailable'; ended: boolean; response: string }
   | { type: 'tool_start'; round: number; callId: string; tool: string; args: unknown }
   | { type: 'tool_update'; round: number; callId: string; output: string }
   | { type: 'tool_end'; round: number; callId: string; output: string; error: boolean; unknown: boolean; durationMs?: number }
-  | { type: 'assistant_end'; round: number; response: string; transcript: unknown };
+  | { type: 'assistant_end'; round: number; response: string }
+  | { type: 'transcript_frame'; ordinal: number; schemaVersion: 1; payload: unknown };
 export interface EngineInput { prompt: string; systemPrompt: string; history: HistoryEntry[]; tools: ControlledTool[]; reasoning: boolean }
 export interface EngineControls {
   beforeRequest?(signal?: AbortSignal): void | Promise<void>;

@@ -1,6 +1,7 @@
+import { AppError } from '@/core/errors';
 import { getCurrentSystemPrompt, type Message, type Tool } from '@earendil-works/pi-ai';
 import type { ModelRunSnapshot } from '@/core/models/types';
-import { ProtocolError } from '../http';
+
 import { imageParts, userParts, textOf, number, argsObject, type Wire, type PublicThinking } from './shared';
 import type { ProtocolDecoder } from './decoder';
 
@@ -43,7 +44,7 @@ if (event.type === 'message_start') {
               context.message.usage.cacheRead = number(event.message?.usage?.cache_read_input_tokens);
               context.message.usage.cacheWrite = number(event.message?.usage?.cache_creation_input_tokens);
             } else if (event.type === 'content_block_start') {
-              if (!state.began || !Number.isInteger(event.index) || event.index < 0 || event.index > 127 || state.blocks.has(event.index)) throw new ProtocolError('内容块序号无效。');
+              if (!state.began || !Number.isInteger(event.index) || event.index < 0 || event.index > 127 || state.blocks.has(event.index)) throw new AppError('REMOTE', '内容块序号无效。');
               const block = event.content_block; const index = context.message.content.length;
               if (block.type === 'text') { context.message.content.push({ type: 'text', text: block.text ?? '' }); context.stream.push({ type: 'text_start', contentIndex: index, partial: context.message }); }
               else if (block.type === 'tool_use') context.message.content.push({ type: 'toolCall', id: block.id, name: block.name, arguments: block.input ?? {} });
@@ -53,10 +54,10 @@ if (event.type === 'message_start') {
                   visibility: block.type === 'redacted_thinking' ? 'unavailable' : context.visibility } as PublicThinking);
                 context.stream.push({ type: 'thinking_start', contentIndex: index, partial: context.message });
               }
-              else throw new ProtocolError('服务返回尚未支持的内容块。');
+              else throw new AppError('REMOTE', '服务返回尚未支持的内容块。');
               state.blocks.set(event.index, { type: block.type, index, json: '', closed: false });
             } else if (event.type === 'content_block_delta') {
-              const block = state.blocks.get(event.index); if (!block || block.closed) throw new ProtocolError('内容块分片缺少开始标记。');
+              const block = state.blocks.get(event.index); if (!block || block.closed) throw new AppError('REMOTE', '内容块分片缺少开始标记。');
               const part = context.message.content[block.index]; const delta = event.delta;
               if (delta.type === 'text_delta' && part.type === 'text') { part.text += delta.text; context.stream.push({ type: 'text_delta', contentIndex: block.index, delta: delta.text, partial: context.message }); }
               else if (delta.type === 'input_json_delta' && part.type === 'toolCall') block.json += delta.partial_json;
@@ -64,9 +65,9 @@ if (event.type === 'message_start') {
                 part.thinking += delta.thinking; context.stream.push({ type: 'thinking_delta', contentIndex: block.index, delta: delta.thinking, partial: context.message });
               }
               else if (delta.type === 'signature_delta' && part.type === 'thinking') part.thinkingSignature = (part.thinkingSignature ?? '') + delta.signature;
-              else throw new ProtocolError('内容块分片类型不匹配。');
+              else throw new AppError('REMOTE', '内容块分片类型不匹配。');
             } else if (event.type === 'content_block_stop') {
-              const block = state.blocks.get(event.index); if (!block || block.closed) throw new ProtocolError('内容块结束标记无效。');
+              const block = state.blocks.get(event.index); if (!block || block.closed) throw new AppError('REMOTE', '内容块结束标记无效。');
               block.closed = true; const part = context.message.content[block.index];
               context.closeContent(block.index);
               if (part.type === 'toolCall') part.arguments = argsObject(block.json ? JSON.parse(block.json) : part.arguments);
@@ -75,7 +76,7 @@ if (event.type === 'message_start') {
             } else if (event.type === 'message_stop') { state.terminal = true; return true; }
   },
   finish(context, state) {
-if (!state.began || !state.terminal || !state.reason || [...state.blocks.values()].some((b) => !b.closed) || !['end_turn', 'tool_use', 'max_tokens', 'stop_sequence'].includes(state.reason)) throw new ProtocolError('Anthropic 响应不完整；未执行工具。');
+if (!state.began || !state.terminal || !state.reason || [...state.blocks.values()].some((b) => !b.closed) || !['end_turn', 'tool_use', 'max_tokens', 'stop_sequence'].includes(state.reason)) throw new AppError('REMOTE', 'Anthropic 响应不完整；未执行工具。');
           context.message.stopReason = state.reason === 'max_tokens' ? 'length' : state.reason === 'tool_use' ? 'toolUse' : 'stop';
           context.message.usage.totalTokens = context.message.usage.input + context.message.usage.output + context.message.usage.cacheRead + context.message.usage.cacheWrite;
   },

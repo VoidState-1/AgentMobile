@@ -14,6 +14,68 @@ async function openNote(page: Page) {
   await page.getByRole('button', { name: '编辑', exact: true }).click();
 }
 
+test('切换项目后新查询被阻塞，旧项目的文件和对话也不进入新视图', async ({ page }) => {
+  await page.goto('/'); await createProject(page, '范围 A');
+  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('button', { name: '新建文件', exact: true }).click();
+  await page.getByLabel('文件名称', { exact: true }).fill('alpha-only.md');
+  await page.getByLabel('正文', { exact: true }).fill('仅属于 A');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭文件', exact: true }).click();
+  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByLabel('任务目标', { exact: true }).fill('Alpha 独立任务');
+  await page.getByRole('button', { name: '发送任务', exact: true }).click(); await expect(page.getByText('已完成', { exact: true })).toBeVisible();
+  await createProject(page, '范围 B');
+  await page.getByLabel('任务目标', { exact: true }).fill('Beta 独立任务');
+  await page.getByRole('button', { name: '发送任务', exact: true }).click(); await expect(page.getByText('已完成', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '切换到 范围 A', exact: true }).click();
+  await expect(page.getByTestId('task-trace')).toHaveCount(1);
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); });
+    const transaction = db.transaction(['files', 'run_headers'], 'readwrite'); let held = true;
+    (window as any).releaseScopeQuery = () => { held = false; };
+    const pump = () => { transaction.objectStore('run_headers').get('scope-lock').onsuccess = () => { if (held) pump(); }; };
+    transaction.oncomplete = () => db.close(); pump();
+  });
+  await page.getByRole('button', { name: '切换到 范围 B', exact: true }).click();
+  await expect(page.getByTestId('task-trace')).toHaveCount(0);
+  await expect(page.getByText('Alpha 独立任务', { exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await expect(page.getByRole('button', { name: '打开 documents/alpha-only.md', exact: true })).toHaveCount(0);
+  await page.evaluate(() => (window as any).releaseScopeQuery());
+  await expect(page.getByRole('button', { name: '打开 documents/notes.md', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await expect(page.getByTestId('task-trace')).toHaveCount(1);
+  await expect(page.getByText('Alpha 独立任务', { exact: true })).toHaveCount(0);
+});
+
+test('保存期间继续输入，旧回执只更新保存基线，新输入与未保存状态保留', async ({ page }) => {
+  await page.goto('/'); await createProject(page, '保存竞态'); await openNote(page);
+  await page.getByLabel('正文', { exact: true }).fill('本次保存的内容');
+  await page.evaluate(async () => {
+    const db = await new Promise<IDBDatabase>((resolve, reject) => {
+      const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error);
+    });
+    const transaction = db.transaction(['operation_headers', 'operation_bodies', 'operation_counters'], 'readwrite');
+    let held = true;
+    (window as any).releaseEditorSave = () => { held = false; };
+    const pump = () => { transaction.objectStore('operation_headers').get('fixture-lock').onsuccess = () => { if (held) pump(); }; };
+    transaction.oncomplete = () => db.close(); pump();
+  });
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await page.getByLabel('正文', { exact: true }).fill('保存过程中输入的新内容');
+  await page.evaluate(() => (window as any).releaseEditorSave());
+  await expect(page.getByText('文件已保存，可在 Git 面板暂存并提交。', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存过程中输入的新内容');
+  await expect(page.getByText('未保存的修改', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '保存', exact: true })).toBeEnabled();
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
+  await page.reload(); await openNote(page);
+  await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存过程中输入的新内容');
+});
+
 test('编辑、会话、逐行变化、恢复和刷新持久化', async ({ page }) => {
   const errors: string[] = [];
   page.on('pageerror', (error) => errors.push(error.message));

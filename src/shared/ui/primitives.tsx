@@ -5,7 +5,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Command, type LucideProps } from '@/shared/ui/icons';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 
 export type IconComponent = ComponentType<LucideProps>;
 

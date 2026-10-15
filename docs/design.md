@@ -1,11 +1,30 @@
 # Agent Mobile 产品与技术设计
 
-日期：2026-10-14
+日期：2026-10-15
 状态：可交互原型。第 2 节记录实际实现，其余章节中尚未实现的首版目标仍为设计方案。
 
-新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：R0–R5 原型实施与阶段验证完成。实际执行使用 RunKernel、v2 运行仓库、组预算与请求池；两个不同项目根任务并行，同项目排队；一层 reader/reviewer 只读子 Agent 与 writer 隔离提案、冲突预检/可恢复合入、整组撤销已接入。
+开发约束（2026-10-14 更新）：未对外发布阶段允许内部 API/存储格式破坏性更新，不维护前向/向后兼容、旧 DTO/双写/格式迁移链，开发数据可按当前格式重建。当前格式的权限、事务、幂等和中断恢复继续保留；外部协议支持属于功能需求。此前实现记录中提到的旧原型兼容已删除；保留原记录只用于说明实施历史。
 
-2026-10-14 冗余清理：移除旧 TaskManager/startAgent、旧模型传输/检测接口、旧单任务预算与 tasks/transcripts 写入回退，运行控制器必须由内核提供执行资源；Agent、协议、MCP、Skills 回归统一通过 RunKernel 和 v2 仓库验证。旧模型配置、tasks 和 transcript 的迁移/兼容读取保留。移除无调用的 prototype 类型转发、workbench 转发、旧固定主题、未使用类型和 17 个模板素材；开启 TypeScript 未使用局部声明/参数检查。图片继续由系统文件选择器导入，删除未接入的 image-picker/image-manipulator 依赖和相册权限插件；图片变换仍未实现。Zod 由 MCP SDK 依赖引入，不再作为应用直接依赖。Android 验证脚本覆盖各自功能和故障路径，保留其测试用途。
+新的重构与多 Agent 架构见 [architecture-v2.md](architecture-v2.md)：R0–R5 原型实施与阶段验证完成。实际执行使用 RunKernel、RunRecord v3 规范化运行仓库、组预算与请求池；两个不同项目根任务并行，同项目排队；一层 reader/reviewer 只读子 Agent 与 writer 隔离提案、冲突预检/可恢复合入、整组撤销已接入。
+
+架构质量问题、代码依据和建议整改顺序见 [architecture-review.md](architecture-review.md)；该文档记录待处理问题，不代表相关整改已经实施。
+
+两份外部审计的辩证复核与下一步实施计划见 [improvement-plan.md](improvement-plan.md)：已复核错误/超时分类、边界检查及无界读取，保留必要隔离和恢复。本轮整改已完成，下面记录实际交付范围与限制。
+
+具体改进实施方案见 [architecture-improvement.md](architecture-improvement.md)：定义停止/错误/权限契约、日志与运行存储、增量轨迹、当前格式初始化/开发重置及 10 个实施批次。十个批次已完成；开发验收见 validation.md，发布前真机/iOS 原生和性能仍需单独验证。
+
+2026-10-14 改进执行进度：
+
+- 根/子运行统一使用 StopReason 和首因锁定；截止/预算不再显示为用户取消，终态前重新检查截止，回执失败仍阻断完成发布。
+- 统一 AppError，删除错误子类和 UI 中文前缀判定；工具显式声明 effect，冻结角色的 allowedEffects/mayDelegate 参与构建和派发。ESLint 检查实际路径，包括 alias、相对路径、类型导入、动态 import 和 require。
+- IndexedDB 的通用 bucket 查询改为键范围读取。操作日志使用 BusinessStore 的独立 header/body/counter；准备意图、序号和正文原子保存；摘要分页和归属查询不读正文，阶段更新校验 revision 和不可变意图。
+- Skills 保存明确使用 files_commit，普通项目仍只保存工作区。删除 automaticCommits、缺失 kind 的恢复分支和 WorkspaceService 兼容构造；bootstrap/workspace.ts 组装工作区，技能库使用同库的明确 namespace。
+- 已删除旧模型配置/凭证入口、tasks/transcripts 迁移和旧对话补写；精确 accepted-drafts 回执与运行准入同批保存，启动只核对非空草稿，不再为它全量 hydrate 运行历史。运行实体/列表已在后续批次规范化并分页。
+- 已合并 core/agent 定义，扁平化 projects/preferences/signal/trace、Pi adapter、共享主题/状态/Hook；工作台专属 Git actions/活动栏回到 workbench。无旧路径转发文件，本地空目录已删除。
+
+当前数据格式为 agent-mobile-f4（SQLite/IndexedDB 物理版本 5）；空实例创建当前 SQLite/IndexedDB 结构，同格式重开，不匹配阻断而不自动清空。开发重建入口只在格式不匹配且服务未建立时可用，明确确认后删除此应用的 DB/工作区/Git 数据，保留设备凭证；不调用模型/MCP。RunRecord v3 已独立于界面 DTO，并拆分为有索引的 header/input/result；准入序号原子分配、列表只读 header，并使用绑定数据实例/范围/高水位的游标。旧 runs-v2 与 ID 数组索引已从生产路径删除。工作台已接入 RunsApi、30 条摘要分页与可见项详情读取；子正文展开读取，UI 不接收冻结工具/供应商配置。Git/Skills 历史按固定提交链分页，恢复查找逐页精确匹配操作标记。轨迹节点/UTF-16 文本块/版本化 transcript frame 已分表增量写入，意图与终态屏障保留；UI 通知独立按渲染帧合并。根/子已共用 ExecutionDriver，三种来源使用 ScopedFileReader，共享分页/文字/搜索/图片算法；清单/status/preview 单次读取，workingTree 不再双读。AppServices 契约独立于实现类，editor/composer ref 外部只读，保存结果只回写同一文档并保留后来输入。文件描述索引与六组窄工作台能力已接入。Web 索引使用与文件写入原子更新的版本键，Native 使用实际内容指纹；未知内容、冷启动与恢复失败重新验证，写前始终读取实际内容。组件仅接收相关能力组，稳定动作绑定与 memo 隔离无关流式分片；editor 使用独立会话身份核对旧回执。三组 Web 性能样本各五次已测；Android 当前格式 writer、Skills、MCP unknown 与事务故障恢复均通过；三组 Web/Android 性能样本各五次已采集，模拟器大内容成本很高，不能当作发布性能达标。第一阶段的 SQLite 验证使用 Node SQLite 执行实际 adapter SQL，不能代替 Expo/Android 桥接或真机验证。
+
+2026-10-14 冗余清理：移除旧 TaskManager/startAgent、旧模型传输/检测接口、旧单任务预算与 tasks/transcripts 写入回退，运行控制器必须由内核提供执行资源；Agent、协议、MCP、Skills 回归统一通过 RunKernel 和 v2 仓库验证。该阶段曾保留旧数据迁移；后续改进已删除全部旧模型配置、tasks/transcripts 兼容入口。移除无调用的 prototype 类型转发、workbench 转发、旧固定主题、未使用类型和 17 个模板素材；开启 TypeScript 未使用局部声明/参数检查。图片继续由系统文件选择器导入，删除未接入的 image-picker/image-manipulator 依赖和相册权限插件；图片变换仍未实现。Zod 由 MCP SDK 依赖引入，不再作为应用直接依赖。Android 验证脚本覆盖各自功能和故障路径，保留其测试用途。
 
 ## 1. 产品目标与范围
 
@@ -50,7 +69,7 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | 架构重构、多 Agent 与子 Agent | [新架构方案](architecture-v2.md) R0–R5 已接入实际执行。两个不同项目根任务并行，同项目排队；每组一层子 Agent 最多并行 2 个、总计 4 个；reader/reviewer 只读、writer 私有候选、父预检合入；快照、预算、MCP 屏障、汇总、轨迹、取消、恢复与整组撤销通过；角色编辑/子独立模型、后台服务、UI/网页沙箱待实现 |
 | SQLite 与文件持久化 | Android 模拟器已验证；浏览器使用 IndexedDB；arm64 真机/iOS 待验证 |
 | 模型密钥持久化 | Android SecureStore 保存后强制停止重开调用通过；iOS 待验证 |
-| SQLite schema | 原型为版本 1 的 records(bucket,id,payload) 表；第 7 节规范化 schema/FTS 未实现 |
+| SQLite schema | 当前物理版本 5 / agent-mobile-f4；日志 header/body/counter、run header/input/result、trace nodes/chunks、transcript frames 与对应索引已规范化；通用配置仍为 records；FTS 未实现 |
 | 本地 Git 工作流 | 已实现真实工作区/index/HEAD 分离、按文件暂存/取消暂存、差异/明确提交、Agent 受控 Git 工具、内部恢复点、任务快照/冲突撤销；[实施设计](git-workflow.md)；分支/合并/远程/逐块暂存待实现 |
 | Android/iOS libgit2 构建与原生桥接 | 待实现 |
 | 模型调用与 Agent 循环 | Chat Completions、Anthropic Messages、Gemini 原生 REST/SSE 已实现；三协议模拟工具闭环与图片输入通过；DeepSeek 前版已做官方实测 |
@@ -60,10 +79,10 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 | 多供应商/模型配置器 | [实施记录](provider-model-configurator.md)；多连接、多模型、能力依据、参数、收藏、分层默认与运行快照已实现；Anthropic/Gemini 官方实测待凭证 |
 | 任务运行配置 | 启动时冻结服务/模型/参数版本，凭证通过宿主租约使用；界面关闭或切换配置路由不停止任务 |
 | Agent 设置 | 全局系统提示词与执行预算可编辑、恢复默认并持久化；任务保存启动时配置版本，修改只影响新任务 |
-| 工作轨迹 | 所有轮次的文字、公开推理与工具执行按接收顺序交错显示；推理和工具详情可折叠，旧任务保留兼容显示 |
+| 工作轨迹 | 所有轮次的文字、公开推理与工具执行按接收顺序交错显示；推理和工具详情可折叠，步骤与正文分页，最终回答独立可见；不读旧原型轨迹 |
 | 推理配置与展示 | DeepSeek 开关、Anthropic 预算/自适应、Gemini 预算/等级已接入；原生公开摘要和兼容协议推理流已模拟验证；新推理路径的官方实测待凭证 |
-| 对话持久化与迁移 | conversations/state 保存实体、最后选择和版本化草稿；任务保存 conversationId/draftRevision；旧历史迁入原有对话并保留原模型 pin |
-| 配置迁移与恢复 | 原单配置迁移为连接与模型；SecureStore 凭证采用可恢复操作意图，旧凭证待配置提交和运行租约释放后清理 |
+| 对话持久化与回执 | conversations/state 保存实体、最后选择和版本化草稿；运行保存 conversationId/draftRevision；启动通过精确接受回执修复草稿，不读取旧历史 |
+| 配置与凭证恢复 | 只读当前连接/模型图；SecureStore 变更意图与运行租约共同保护当前凭证回收，不保留原单配置迁移 |
 | 操作日志与崩溃恢复 | 文件/Git/元数据协调已实现并做失败注入；原生掉电/fsync 保证待验证 |
 | 任务恢复 | 启动时修复文件一致性并标记 interrupted；不自动续跑模型，不重放未知远程请求 |
 | 图片 | 导入、预览、历史对比、可选模型输入已实现；裁剪、缩放、生成尚未实现 |
@@ -71,11 +90,11 @@ Agent Mobile 是手机端的本地 Agent harness。用户把文字和图片导�
 
 演示模式使用显式预设传输，不进行语义理解；它经过真实 Pi 工具循环和工作区写入，结果保持未提交。真实模型模式由用户配置地址、模型和密钥，只有明确要求提交才使用 Git 工具。详细使用与限制见 [prototype.md](prototype.md)，验证见 [validation.md](validation.md)。
 
-对话与项目是独立实体，通过 projectId 关联。任务与 transcript 归属于具体 conversationId；对话间不隐式带入聊天历史，但可通过受控工具读取同一项目的共享资料。模型按对话选择 → 项目默认 → 全局默认解析，明确选择演示/真实模式也按对话保存。当前仍为一次运行一个任务；其他对话可切换、阅读和准备草稿，文件写锁继续作用于项目。
+对话与项目是独立实体，通过 projectId 关联。任务与 transcript 归属于具体 conversationId；对话间不隐式带入聊天历史，但可通过受控工具读取同一项目的共享资料。模型按对话选择 → 项目默认 → 全局默认解析，明确选择演示/真实模式也按对话保存。两个不同项目根任务可并行，同项目对话排队；其他对话可切换、阅读和准备草稿，文件写锁作用于项目。
 
-旧任务缺失 conversationId 时迁入稳定的 projectId:main 对话，保持既有模型选择 ID。迁移先提交对话图，再逐条补写任务，失败后可重复执行。草稿使用递增版本；任务启动记录对应版本，提交后只清理匹配版本，重启可修复“任务已保存、草稿未清理”的中断，不清除后来编辑的新草稿。草稿显示保存状态，进程中断只能恢复最后成功写入的内容。
+当前实体要求明确 conversationId，不补写旧任务或生成兼容主对话。草稿使用递增版本；任务启动记录对应版本，提交后只清理匹配版本，重启可修复“任务已保存、草稿未清理”的中断，不清除后来编辑的新草稿。草稿显示保存状态，进程中断只能恢复最后成功写入的内容。
 
-归档保留对话、消息、草稿和模型选择，最后一个对话归档时建立新的空对话。运行对话持有宿主租约，归档会被拒绝；切换对话不改变执行对象。永久删除、多任务并发、对话分叉和跨项目移动尚未实现。
+归档保留对话、消息、草稿和模型选择，最后一个对话归档时建立新的空对话。运行对话持有宿主租约，归档会被拒绝；切换对话不改变执行对象。不同项目可并行、同项目排队；永久删除、对话分叉和跨项目移动尚未实现。
 
 ### 工作轨迹与公开推理
 
@@ -255,7 +274,7 @@ Git 历史不是备份。当前可导出单文件；完整项目/仓库包和会
 
 ## 7. SQLite 数据设计
 
-迁移按递增 schema version 执行，启用 foreign_keys 与 WAL；确认所选构建中 FTS5 可用。数据库内容不纳入工作区 Git。
+开发期直接初始化当前 schema，格式不匹配时重建指定开发数据，不维护递增历史迁移链。启用 foreign_keys 与 WAL；确认所选构建中 FTS5 可用。数据库内容不纳入工作区 Git。
 
 | 表 | 主要字段 | 责任 |
 | --- | --- | --- |
@@ -428,7 +447,7 @@ iOS 动态软件方案在进入实现前核对 App Store 规则 2.5.2 和 4.7，
 
 ### M1：本地工作区与 Git 技术验证
 
-实现 SQLite 迁移、文件服务、系统导入和文本编辑；先打通 Android libgit2 的 init/status/commit/diff，再验证 iOS 相同接口。
+实现 SQLite 当前格式初始化、文件服务、系统导入和文本编辑；先打通 Android libgit2 的 init/status/commit/diff，再验证 iOS 相同接口。
 
 验收：创建项目、导入文字/图片、修改并提交、查看差异、恢复后重新提交。路径越界和符号链接被拒绝，版本冲突不覆盖，磁盘不足不损坏原内容。
 

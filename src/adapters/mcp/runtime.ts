@@ -1,10 +1,11 @@
+import { AppError } from '@/core/errors';
 import { Buffer } from 'buffer';
 import type { MetadataStore } from '@/core/storage/contracts';
 import type { McpConfigurationService } from '@/application/mcp/configuration';
 import type { McpAttempt, McpLease } from '@/core/mcp/types';
 import { canonical } from '@/core/mcp/rules';
 import { validateImage } from '@/core/workspace/image';
-import { McpError, McpSession, safeMcpError, sanitizeMcp } from './client';
+import { McpSession, safeMcpError, sanitizeMcp } from './client';
 import { RemoteDispatchCoordinator } from '@/application/mcp/dispatch';
 
 const clippedText = (value: string) => value.length > 100_000 ? value.slice(0, 100_000) + '\n[MCP 内容已截断，请缩小查询范围或分段读取。]' : value;
@@ -16,7 +17,7 @@ export class McpRuntime {
   async discover(id: string, signal?: AbortSignal) {
     const lease = await this.configuration.acquireServer(id); const session = new McpSession(lease);
     try { const result = await session.discover(signal); await this.configuration.recordCatalog(id, lease.snapshot.revision, result.tools, result.info, result.version); }
-    catch (error) { const message = safeMcpError(error, signal?.aborted); await this.configuration.recordFailure(id, lease.snapshot.revision, message); throw new McpError(message); }
+    catch (error) { const message = safeMcpError(error, signal?.aborted); await this.configuration.recordFailure(id, lease.snapshot.revision, message); throw new AppError('REMOTE', message); }
     finally { await session.close(); await lease.release(); }
   }
   async recover() {
@@ -73,7 +74,7 @@ export class McpRuntime {
               await this.metadata.put('mcp-attempts', attempt.id, { ...attempt, state: result.isError ? 'failed' : 'completed', endedAt: new Date().toISOString() });
               return { content, details: { mcpStatus: result.isError ? 'failed' : 'completed' }, isError: !!result.isError };
             } catch (error) {
-              const uncertain = responseReceived || (error instanceof McpError ? error.uncertain : dispatched);
+              const uncertain = responseReceived || (error instanceof AppError && ['REMOTE', 'UNKNOWN'].includes(error.code) ? error.uncertain : dispatched);
               // Never turn a missing receipt into proof that a remote side effect did not happen.
               await this.metadata.put('mcp-attempts', attempt.id, { ...attempt, state: uncertain ? 'unknown' : signal?.aborted ? 'cancelled' : 'failed', endedAt: new Date().toISOString() }).catch(() => {});
               return this.error(uncertain ? '远端结果未知或回执未能保存；可能已执行，请先核对服务器状态。同一参数不会自动重试。' : safeMcpError(error, signal?.aborted), uncertain);

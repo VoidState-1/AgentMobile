@@ -5,7 +5,7 @@ import { protocolBody, protocolModel, protocolTransport } from '../src/adapters/
 import { discoverModels } from '../src/adapters/model/catalog';
 import { diagnosticImage, runDiagnostic } from '../src/adapters/model/diagnostics';
 import { ModelConfigurationService } from '@/application/models/configuration';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { startTestRun } from './agent-runtime';
 import type { CredentialStore } from '../src/core/storage/contracts';
 import type { ModelProtocol, ProviderConnection } from '../src/core/models/types';
@@ -37,7 +37,7 @@ describe.each(protocols)('%s 原生协议模拟', (protocol) => {
     expect(limited.stopReason).toBe('length'); expect(limited.content.some((p) => p.type === 'toolCall')).toBe(false);
   });
   it('Pi 工具循环写入 Git，参数与认证进入正确字段，签名跨轮回传', async () => {
-    const storage = await testStorage(); cleanups.push(storage.cleanup); const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const storage = await testStorage(); cleanups.push(storage.cleanup); const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('协议模拟'); const bodies: Record<string, any>[] = []; const requests: RequestInit[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(String(init.body))); requests.push(init);
@@ -89,7 +89,7 @@ describe.each(protocols)('%s 原生协议模拟', (protocol) => {
   });
   it('分层检测核对宿主随机结果与内置图，不读取工作区', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup); const keys = new Map<string, string>();
-    const credentials: CredentialStore = { get: async (r = 'legacy') => keys.get(r) ?? '', set: async (v, r = 'legacy') => { if (v) keys.set(r, v); else keys.delete(r); } };
+    const credentials: CredentialStore = { get: async (r) => r ? keys.get(r) ?? '' : '', set: async (v, r) => { if (v) keys.set(r, v); else keys.delete(r); } };
     const service = new ModelConfigurationService(storage.metadata, credentials, randomUUID); await service.initialize();
     const connection = await service.saveConnection({ ...connectionFor(protocol), id: undefined }, { value: 'diagnostic-test-key' });
     const model = await service.saveModel({ connectionId: connection.id, name: 'Test', apiId: snapshot(protocol).apiModelId, enabled: true, favorite: false,

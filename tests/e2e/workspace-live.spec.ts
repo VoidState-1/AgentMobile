@@ -99,7 +99,7 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
   const deleting = gate(); const final = gate(); let requests = 0;
   await page.route('https://example.test/v1/chat/completions', async (route) => {
     const body = route.request().postDataJSON(); const round = ++requests; if (round === 2) await deleting.promise; if (round === 3) await final.promise;
-    const files = round === 2 ? JSON.parse(body.messages.filter((message: any) => message.role === 'tool').at(-1).content) : [];
+    const files = round === 2 ? JSON.parse(body.messages.filter((message: any) => message.role === 'tool').at(-1).content).files : [];
     await route.fulfill({ contentType: 'text/event-stream', body: sse(round === 1 ? toolEvents('chat-completions', 'list_files') : round === 2 ?
       toolEvents('chat-completions', 'delete_file', { path: 'assets/sample.png', expectedRevision: files.find((file: any) => file.path === 'assets/sample.png').revision }) : answerEvents('chat-completions', '图片已删除。')) });
   });

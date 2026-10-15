@@ -1,10 +1,11 @@
+import { AppError } from '@/core/errors';
 import { normalizeContext, type Message, type Tool } from '@earendil-works/pi-ai';
 import { Type } from 'typebox';
 import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { CheckKind, DiagnosticResult } from '@/core/models/types';
 import { configurationFingerprint } from '@/core/models/rules';
 import { discoverModels } from './catalog';
-import { ProtocolError, safeModelError, withRequest } from './http';
+import { safeModelError, withRequest } from './http';
 import { protocolModel, protocolTransport } from './protocols';
 
 // Generated 64×64 PNG: red/green upper quadrants, blue/yellow lower quadrants.
@@ -26,10 +27,10 @@ export async function runDiagnostic(service: ModelConfigurationService, connecti
         await service.mergeCatalog(connection.id, catalog, fingerprint);
         return '目录检测通过，发现 ' + catalog.length + ' 个生成模型；尚未验证生成能力。';
       }
-      if (!model || model.connectionId !== connectionId) throw new ProtocolError('请先保存模型再检测。');
+      if (!model || model.connectionId !== connectionId) throw new AppError('REMOTE', '请先保存模型再检测。');
       const lease = await service.acquireModel(model.id, false);
       try {
-        if (lease.snapshot.connectionRevision !== connection.revision || configurationFingerprint(connection, service.getSnapshot().models.find((m) => m.id === model.id)) !== fingerprint) throw new ProtocolError('配置已改变，请重新检测。');
+        if (lease.snapshot.connectionRevision !== connection.revision || configurationFingerprint(connection, service.getSnapshot().models.find((m) => m.id === model.id)) !== fingerprint) throw new AppError('REMOTE', '配置已改变，请重新检测。');
         const snapshot = { ...lease.snapshot, parameters: { ...lease.snapshot.parameters,
           reasoning: 'off' as const, reasoningBudget: undefined,
           maxOutputTokens: Math.min(128, lease.snapshot.parameters.maxOutputTokens, model.limits?.outputTokens ?? 128),
@@ -46,21 +47,21 @@ export async function runDiagnostic(service: ModelConfigurationService, connecti
         const context = normalizeContext({ messages, tools, systemPrompt: '你在进行一个无副作用的连接诊断。严格按要求回答。' });
         requests++;
         const first = await (await transport(piModel, context, { signal: requestSignal })).result(); totalTokens += first.usage.totalTokens;
-        if (first.stopReason === 'error' || first.stopReason === 'aborted' || first.stopReason === 'length') throw new ProtocolError(first.errorMessage ?? '生成未完整结束。');
+        if (first.stopReason === 'error' || first.stopReason === 'aborted' || first.stopReason === 'length') throw new AppError('REMOTE', first.errorMessage ?? '生成未完整结束。');
         let answer = first;
         if (kind === 'tools') {
           const calls = first.content.filter((p) => p.type === 'toolCall');
-          if (first.stopReason !== 'toolUse' || calls.length !== 1 || calls[0].name !== 'diagnostic_echo') throw new ProtocolError('模型没有完成指定的测试工具调用；能力仍保留原声明。');
+          if (first.stopReason !== 'toolUse' || calls.length !== 1 || calls[0].name !== 'diagnostic_echo') throw new AppError('REMOTE', '模型没有完成指定的测试工具调用；能力仍保留原声明。');
           context.messages.push(first, { role: 'toolResult', toolCallId: calls[0].id, toolName: calls[0].name,
             content: [{ type: 'text', text: marker }], isError: false, timestamp: Date.now() });
           requests++;
           answer = await (await transport(piModel, context, { signal: requestSignal })).result(); totalTokens += answer.usage.totalTokens;
         }
         const output = answer.content.filter((p) => p.type === 'text').map((p) => p.text).join('').trim();
-        if (answer.stopReason !== 'stop') throw new ProtocolError(answer.errorMessage ?? '模型未完成测试回答。');
+        if (answer.stopReason !== 'stop') throw new AppError('REMOTE', answer.errorMessage ?? '模型未完成测试回答。');
         const expected = kind === 'tools' ? marker : kind === 'images' ? 'red,green,blue,yellow' : 'MOBILE_OK';
         const actual = kind === 'images' ? output.toLowerCase().replace(/\s/g, '') : output;
-        if (actual !== expected) throw new ProtocolError('回答与验证样本不符；未判定该能力不支持。');
+        if (actual !== expected) throw new AppError('REMOTE', '回答与验证样本不符；未判定该能力不支持。');
         return kind === 'tools' ? '工具调用 → 宿主返回 → 模型继续回答已通过。' : kind === 'images' ? '模型正确识别了内置图片的四个色块。' : '指定模型的完整文本生成通过。';
       } finally { await lease.release(); }
     }, 30_000);

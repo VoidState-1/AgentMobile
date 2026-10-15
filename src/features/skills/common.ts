@@ -2,9 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAppServices as getRuntime } from '@/bootstrap';
 import type { AppServices as Runtime } from '@/application/services';
 import { emptySkillConfiguration } from '@/core/skills/types';
-import { SkillError } from '@/core/skills/rules';
-import type { Project } from '@/core/projects/types';
-import { useWorkbenchUi } from '@/shared/state/workbench';
+import { publicError } from '@/core/errors';
+import type { Project } from '@/core/projects';
+import { useWorkbenchUi } from '@/shared/workbench-state';
 
 export function useSkills() {
   const [runtime, setRuntime] = useState<Runtime>(); const [config, setConfig] = useState(emptySkillConfiguration());
@@ -21,7 +21,7 @@ export function useSkills() {
   }, [selected]);
   const action = useCallback(async (work: () => Promise<void>) => {
     if (working.current) return; working.current = true; setBusy(true); setError('');
-    try { await work(); } catch (reason) { setError(reason instanceof SkillError ? reason.message : '技能操作失败，请重试；保存中断时请重新打开应用恢复。'); }
+    try { await work(); } catch (reason) { setError(publicError(reason).message); }
     finally { working.current = false; setBusy(false); }
   }, []);
   return { runtime, config, error, busy, action, projects, projectId: choice || selected || '', setProjectId: setChoice };

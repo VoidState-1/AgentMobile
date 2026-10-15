@@ -1,20 +1,41 @@
-import { useEffect, useRef, useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { ActivityIndicator, FlatList, Platform, Pressable, TextInput, View, useWindowDimensions, type ViewToken } from 'react-native';
 import {
   ArrowDown, ArrowUp, ChevronDown, ChevronRight, FileText, Image as ImageIcon,
   Layers, Paperclip, PenLine, Sparkles, Square, X,
 } from '@/shared/ui/icons';
-import type { TaskRecord } from '@/core/runs/types';
+import type { RunView, RunSummary } from '@/core/runs/queries';
 import { terminalRun } from '@/core/runs/records';
 import { contentLimits } from '@/core/agent/settings';
-import type { Workbench } from './use-workbench';
+import type { ConversationCapability } from './use-workbench';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { TaskTrace } from './trace';
 import { dateLabel, fileName } from '@/shared/format';
+import { traceView } from './trace-view';
 
-function Exchange({ task, controller }: { task: TaskRecord; controller: Workbench }) {
+interface ExchangeRow { id: string; summary?: RunSummary; live?: RunView }
+function Exchange({ row, visible, controller }: { row: ExchangeRow; visible: boolean; controller: ConversationCapability }) {
+  const [loaded, setLoaded] = useState<RunView>();
+  const [error, setError] = useState('');
+  const task = row.live ?? loaded;
   const theme = useWorkbenchTheme();
+  useEffect(() => {
+    if (!visible || row.live || !controller.runsApi) return;
+    let current = true; const api = controller.runsApi;
+    void Promise.all([api.getDetail(row.id), api.listTrace(row.id), api.listChildren(row.id)]).then(([detail, trace, children]) => {
+      if (!current) return;
+      const childViews: RunView[] = children.runs.reverse().map(child => ({ id: child.id, projectId: child.projectId, conversationId: child.conversationId,
+        kind: 'child', state: child.state, mode: child.mode, prompt: child.promptPreview, response: '', createdAt: child.createdAt,
+        modelName: child.modelName, connectionName: child.connectionName, error: child.error, proposalId: child.proposalId }));
+      setLoaded({ ...detail, trace: trace.nodes.map(traceView), traceCursor: trace.cursor, children: childViews });
+    }).catch(() => { if (current) setError('运行详情读取失败，请重新打开对话。'); });
+    return () => { current = false; };
+  }, [visible, row.id, row.live, row.summary?.revision, controller.runsApi]);
+  if (!task) return <View style={{ paddingVertical: 15, gap: 12 }}>
+    <T style={{ fontSize: 14, lineHeight: 23 }}>{row.summary?.promptPreview}</T>
+    <T tone={error ? 'danger' : 'muted'} style={{ fontSize: 12 }}>{error || '正在读取对话…'}</T>
+  </View>;
   const paths = controller.changedPaths(task);
   return <View style={{ gap: 22, marginBottom: 32 }}>
     <View style={{ alignItems: 'flex-end', gap: 5 }}>
@@ -34,12 +55,13 @@ function Exchange({ task, controller }: { task: TaskRecord; controller: Workbenc
             {{ queued: '等待启动', running: '执行中', waiting_children: '等待子任务', cancelling: '正在停止', completed: '已完成', failed: '执行失败', cancelled: '已停止', interrupted: '已中断' }[task.state]}
           </T>
         </View>
-        <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelSnapshot ?
-          task.modelSnapshot.connectionName + ' · ' + task.modelSnapshot.modelName : '历史模型未知'}</T>
+        <T tone="muted" style={{ fontSize: 10, marginTop: 3 }}>{task.mode === 'demo' ? '演示模式' : task.modelName ?
+          task.connectionName + ' · ' + task.modelName : '模型未记录'}</T>
         <TaskTrace task={task} inspectProposal={(id) => { void controller.reviewProposal(task.id, id); }}
-          cancelChild={(id) => { void Promise.resolve(controller.runtime?.agent.cancel(id)).catch(() => controller.setError('子任务取消状态保存失败，请重新打开应用恢复。')); }} />
+          runsApi={controller.runsApi}
+          cancelChild={(id) => { controller.cancelChild(id); }} />
         {!!task.error && <View style={{ backgroundColor: theme.dangerSoft, borderRadius: 8, padding: 12, marginTop: 8 }}>
-          <T tone="danger" style={{ fontSize: 12 }}>{task.error}</T></View>}
+          <T tone="danger" style={{ fontSize: 12 }}>{task.error.message}</T></View>}
         {terminalRun(task.state) && <Pressable accessibilityRole="button" accessibilityLabel="查看变化" disabled={controller.busy}
           onPress={() => { void controller.reviewTask(task); }} style={({ pressed }) => ({
             marginTop: 13, borderWidth: 1, borderColor: theme.border, borderRadius: 10, padding: 12,
@@ -63,37 +85,41 @@ const suggestions = [
   { title: '自由创作', detail: '从一个想法开始写作', icon: Sparkles, prompt: '请帮我起草一份新文档，主题是：' },
 ];
 
-export function Conversation({ controller }: { controller: Workbench }) {
+export const Conversation = memo(function Conversation({ controller }: { controller: ConversationCapability }) {
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const mobile = width < 700;
-  const scroll = useRef<ScrollView>(null);
+  const scroll = useRef<FlatList<ExchangeRow>>(null);
   const input = useRef<TextInput>(null);
   const stick = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
   const [inputHeight, setInputHeight] = useState(54);
-  const tasks = [...controller.tasks.filter((task) => task.id !== controller.conversationActive?.id)].reverse();
-  if (controller.conversationActive) tasks.push(controller.conversationActive);
-  const latestTaskId = tasks[tasks.length - 1]?.id;
+  const tasks: ExchangeRow[] = controller.tasks.filter(task => task.id !== controller.conversationActive?.id).map(summary => ({ id: summary.id, summary }));
+  if (controller.conversationActive) tasks.unshift({ id: controller.conversationActive.id, live: controller.conversationActive });
+  const latestTaskId = tasks[0]?.id;
+  const [visible, setVisible] = useState<Set<string>>(() => new Set());
+  const viewable = useCallback(({ viewableItems }: { viewableItems: ViewToken<ExchangeRow>[] }) => setVisible(new Set(viewableItems.map(item => item.item.id))), []);
   useEffect(() => {
     stick.current = true;
-    const frame = requestAnimationFrame(() => scroll.current?.scrollToEnd({ animated: false }));
+    const frame = requestAnimationFrame(() => scroll.current?.scrollToOffset({ offset: 0, animated: false }));
     return () => cancelAnimationFrame(frame);
   }, [controller.conversationId, latestTaskId]);
   const otherTask = !!controller.active && !controller.conversationActive;
   const sendDisabled = !controller.selectedConversation || !controller.prompt.trim() || controller.busy || !!controller.conversationActive || controller.projectLoading;
   return <View style={{ flex: 1, minHeight: 0, backgroundColor: theme.surface }}>
-    <ScrollView ref={scroll} testID="conversation-scroll" style={{ flex: 1 }}
+    <FlatList ref={scroll} testID="conversation-scroll" style={{ flex: 1 }} inverted={!!tasks.length} data={tasks} keyExtractor={row => row.id}
+      initialNumToRender={3} maxToRenderPerBatch={3} windowSize={5} extraData={visible} onViewableItemsChanged={viewable}
+      renderItem={({ item }) => <Exchange row={item} visible={visible.has(item.id)} controller={controller} />}
       contentContainerStyle={{ flexGrow: 1, width: '100%', maxWidth: 800, alignSelf: 'center', paddingHorizontal: mobile ? 18 : 30, paddingTop: 22, paddingBottom: 22 }}
       keyboardShouldPersistTaps="handled" scrollEventThrottle={100}
       onScroll={(event) => {
-        const { contentOffset, contentSize, layoutMeasurement } = event.nativeEvent;
-        const bottom = contentSize.height - contentOffset.y - layoutMeasurement.height < 100;
+        const { contentOffset } = event.nativeEvent;
+        const bottom = contentOffset.y < 100;
         stick.current = bottom; setAtBottom(bottom);
       }}
-      onContentSizeChange={() => { if (stick.current && tasks.length) scroll.current?.scrollToEnd({ animated: false }); }}>
-      {controller.projectLoading ? <ActivityIndicator color={theme.accent} style={{ marginTop: 60 }} /> : tasks.length ? tasks.map((task) =>
-        <Exchange key={task.id} task={task} controller={controller} />) :
+      onContentSizeChange={() => { if (stick.current && tasks.length) scroll.current?.scrollToOffset({ offset: 0, animated: false }); }}
+      ListFooterComponent={controller.taskCursor ? <Button label="加载更早对话" variant="ghost" busy={controller.historyBusy} onPress={() => { void controller.loadOlderRuns(); }} /> : null}
+      ListEmptyComponent={controller.projectLoading ? <ActivityIndicator color={theme.accent} style={{ marginTop: 60 }} /> :
         <View style={{ flex: 1, justifyContent: 'center', paddingVertical: 28, maxWidth: 580, width: '100%', alignSelf: 'center' }}>
           <Brand />
           <T accessibilityRole="header" style={{ fontSize: mobile ? 25 : 29, lineHeight: 39, fontWeight: '600', marginTop: 21, marginBottom: 8 }}>今天，想完成什么？</T>
@@ -111,11 +137,10 @@ export function Conversation({ controller }: { controller: Workbench }) {
           {controller.settings.mode === 'demo' && <T tone="muted" style={{ fontSize: 11, lineHeight: 19, marginTop: 18 }}>
             演示模式使用预设流程。连接模型服务后可进行真实创作。
           </T>}
-        </View>}
-    </ScrollView>
+        </View>} />
     {!atBottom && tasks.length > 0 && <View style={{ position: 'absolute', bottom: 150, alignSelf: 'center', backgroundColor: theme.surface,
       borderWidth: 1, borderColor: theme.border, borderRadius: 22 }}>
-      <IconButton icon={ArrowDown} label="回到最新消息" onPress={() => { stick.current = true; scroll.current?.scrollToEnd({ animated: true }); }} />
+      <IconButton icon={ArrowDown} label="回到最新消息" onPress={() => { stick.current = true; scroll.current?.scrollToOffset({ offset: 0, animated: true }); }} />
     </View>}
     <View testID="composer" style={{ paddingHorizontal: mobile ? 14 : 25, paddingTop: 10, paddingBottom: mobile ? 9 : 16,
       width: '100%', maxWidth: 830, alignSelf: 'center', backgroundColor: theme.surface }}>
@@ -165,4 +190,4 @@ export function Conversation({ controller }: { controller: Workbench }) {
       </T>
     </View>
   </View>;
-}
+});

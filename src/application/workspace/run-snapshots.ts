@@ -1,6 +1,6 @@
 import type { WorkspaceContext } from './context';
-import type { Operation } from '@/core/workspace/types';
-import type { TaskRecord } from '@/core/runs/types';
+import type { Operation } from '@/core/workspace/journal';
+import type { ExecutionView } from '@/core/runs/types';
 import type { GitBaseline } from '@/core/git/contracts';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
@@ -23,10 +23,9 @@ export class RunSnapshots {
     });
   }
 
-  async taskFinal(task: TaskRecord, recovering = false): Promise<TaskRecord> {
+  async taskFinal(task: ExecutionView, recovering = false): Promise<ExecutionView> {
     if (!task.baseSnapshot || !task.baseIndexSnapshot) return { ...task, finalCommit: await this.context.git.head(task.projectId) };
-    const own = (await this.context.metadata.all<Operation>('operations')).filter((op) => op.projectId === task.projectId && (op.ownerRootRunId ?? op.runId) === task.id && op.phase === 'recorded')
-      .sort((a, b) => a.sequence !== undefined && b.sequence !== undefined ? a.sequence - b.sequence : a.createdAt.localeCompare(b.createdAt));
+    const own = (await this.context.journal.owned(task.projectId, task.id)).reverse();
     const head = recovering ? [...own].reverse().find((op) => op.kind === 'commit')?.commit ?? task.baseCommit ?? await this.context.git.head(task.projectId) : await this.context.git.head(task.projectId);
     const lastFiles = [...own].reverse().find((op) => op.kind === 'files'); const lastIndex = [...own].reverse().find((op) => op.indexAfter);
     const working = recovering ? await this.context.git.tree(task.projectId, lastFiles?.checkpoint ?? task.baseSnapshot) : await this.reader.workingTree(task.projectId);
@@ -35,7 +34,7 @@ export class RunSnapshots {
     const finalIndexSnapshot = await this.context.git.checkpoint(task.projectId, index, 'tasks/' + task.id + '/final-index', head);
     const changes = await this.versions.changes(task.projectId, task.baseSnapshot, finalSnapshot);
     const indexChanges = await this.versions.changes(task.projectId, task.baseIndexSnapshot, finalIndexSnapshot);
-    const touched = new Set(own.flatMap((op) => op.changes.map((change) => change.path)));
+    const touched = new Set(own.flatMap(op => op.changedPaths));
     const changedPaths = [...new Set([...changes, ...indexChanges].filter((change) => touched.has(change.path)).map((change) => change.path))];
     const uncommitted = await this.versions.changes(task.projectId, head, finalSnapshot);
     const staged = await this.versions.changes(task.projectId, head, finalIndexSnapshot);
@@ -43,7 +42,7 @@ export class RunSnapshots {
       uncommittedPaths: [...new Set([...uncommitted, ...staged].filter((change) => changedPaths.includes(change.path)).map((change) => change.path))] };
   }
 
-  async taskChanges(task: TaskRecord) {
+  async taskChanges(task: ExecutionView) {
     const after = task.finalSnapshot ?? task.finalCommit ?? task.baseCommit;
     if (!after) return [];
     const changes = await this.versions.changes(task.projectId, task.baseSnapshot ?? task.baseCommit, after);
@@ -55,11 +54,11 @@ export class RunSnapshots {
     return task.changedPaths ? changes.filter((file) => task.changedPaths!.includes(file.path)) : changes;
   }
 
-  async undoTask(task: TaskRecord) {
+  async undoTask(task: ExecutionView) {
     if (task.kind === 'child') throw new AppError('VALIDATION', '子任务提案合入后，请撤销所属根任务。');
     return this.mutations.serial(task.projectId, undefined, async () => {
       const beforeRef = task.baseSnapshot ?? task.baseCommit; const afterRef = task.finalSnapshot ?? task.finalCommit;
-      if (!afterRef || !beforeRef) throw new Error('工作区任务尚无可撤销结果');
+      if (!afterRef || !beforeRef) throw new AppError('VALIDATION', '工作区任务尚无可撤销结果');
       const [before, after, working, index] = await Promise.all([this.context.git.tree(task.projectId, beforeRef), this.context.git.tree(task.projectId, afterRef), this.reader.workingTree(task.projectId), this.mutations.indexTree(task.projectId)]);
       const baseIndex = task.baseIndexSnapshot ? await this.context.git.tree(task.projectId, task.baseIndexSnapshot) : before;
       const finalIndex = task.finalIndexSnapshot ? await this.context.git.tree(task.projectId, task.finalIndexSnapshot) : after;
@@ -67,7 +66,7 @@ export class RunSnapshots {
       const files: Operation['changes'] = []; const entries: NonNullable<Operation['indexChanges']> = [];
       for (const path of paths) {
         const value = (tree: Record<string, Uint8Array>) => tree[path] ? this.context.codec.encodeBase64(tree[path]) : null;
-        if (value(working) !== value(after) || value(index) !== value(finalIndex)) throw new Error('VERSION_CONFLICT：任务文件或暂存区已有后续修改，不能撤销：' + path);
+        if (value(working) !== value(after) || value(index) !== value(finalIndex)) throw new AppError('CONFLICT', 'VERSION_CONFLICT：任务文件或暂存区已有后续修改，不能撤销：' + path);
         if (value(before) !== value(working)) files.push({ path, before: value(working), after: value(before) });
         if (value(baseIndex) !== value(index)) entries.push({ path, before: index[path] ? await this.context.git.revision(index[path]) : null, after: baseIndex[path] ? await this.context.git.revision(baseIndex[path]) : null });
       }

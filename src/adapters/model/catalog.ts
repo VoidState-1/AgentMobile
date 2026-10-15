@@ -1,6 +1,7 @@
+import { AppError } from '@/core/errors';
 import type { DiscoveredModel, ProviderConnection } from '@/core/models/types';
 import { validateConnectionEntity } from '@/core/models/rules';
-import { modelEndpoint, modelHeaders, ProtocolError, requestJson, withRequest } from './http';
+import { modelEndpoint, modelHeaders, requestJson, withRequest } from './http';
 
 export async function discoverModels(connection: ProviderConnection, secret: string, signal?: AbortSignal, web = false): Promise<DiscoveredModel[]> {
   validateConnectionEntity(connection);
@@ -12,7 +13,7 @@ export async function discoverModels(connection: ProviderConnection, secret: str
         connection.protocol === 'anthropic-messages' ? 'limit=1000' + (cursor ? '&after_id=' + encodeURIComponent(cursor) : '') : '';
       const body = await requestJson(modelEndpoint(connection, 'models' + (query ? '?' + query : '')), headers, requestSignal);
       const entries = connection.protocol === 'gemini' ? body.models : body.data;
-      if (!Array.isArray(entries)) throw new ProtocolError('服务目录与所选协议不匹配；仍可手工添加模型。');
+      if (!Array.isArray(entries)) throw new AppError('REMOTE', '服务目录与所选协议不匹配；仍可手工添加模型。');
       for (const item of entries) {
         const id = connection.protocol === 'gemini' ? item.name : item.id;
         if (typeof id !== 'string' || !id || id.length > 180) continue;
@@ -27,13 +28,13 @@ export async function discoverModels(connection: ProviderConnection, secret: str
           if (typeof item.thinking === 'boolean') model.capabilities = { reasoning: item.thinking ? 'supported' : 'unsupported' };
         }
         result.set(id, model);
-        if (result.size > 5000) throw new ProtocolError('模型目录超过 5,000 条限制。');
+        if (result.size > 5000) throw new AppError('REMOTE', '模型目录超过 5,000 条限制。');
       }
       const next = connection.protocol === 'gemini' ? body.nextPageToken : connection.protocol === 'anthropic-messages' && body.has_more ? body.last_id : '';
       if (!next) return [...result.values()];
-      if (typeof next !== 'string' || seen.has(next)) throw new ProtocolError('服务目录分页游标无效。');
+      if (typeof next !== 'string' || seen.has(next)) throw new AppError('REMOTE', '服务目录分页游标无效。');
       seen.add(next); cursor = next;
     }
-    throw new ProtocolError('目录分页超过限制，请手工添加所需模型。');
+    throw new AppError('REMOTE', '目录分页超过限制，请手工添加所需模型。');
   }, 20_000);
 }

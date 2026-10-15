@@ -1,6 +1,7 @@
+import { AppError } from '@/core/errors';
 import { getCurrentSystemPrompt, type Message, type Tool, type ThinkingContent } from '@earendil-works/pi-ai';
 import type { ModelRunSnapshot } from '@/core/models/types';
-import { ProtocolError } from '../http';
+
 import { contentLimits } from '@/core/agent/settings';
 import { imageParts, userParts, textOf, number, argsObject, type Wire, type NativeAssistant } from './shared';
 import type { ProtocolDecoder } from './decoder';
@@ -48,7 +49,7 @@ const choice = event.choices?.[0]; const delta = choice?.delta;
             if (typeof delta?.reasoning_summary === 'string' && delta.reasoning_summary) context.append('thinking', delta.reasoning_summary, 'summary');
             if (typeof delta?.content === 'string') context.text(delta.content);
             for (const update of delta?.tool_calls ?? []) {
-              if (!Number.isInteger(update.index) || update.index < 0 || update.index >= contentLimits.toolCallsPerRound) throw new ProtocolError('工具调用序号无效。');
+              if (!Number.isInteger(update.index) || update.index < 0 || update.index >= contentLimits.toolCallsPerRound) throw new AppError('REMOTE', '工具调用序号无效。');
               const call = state.calls.get(update.index) ?? { id: '', name: '', json: '' };
               if (update.id) call.id = update.id;
               call.name += update.function?.name ?? ''; call.json += update.function?.arguments ?? ''; state.calls.set(update.index, call);
@@ -61,12 +62,12 @@ const choice = event.choices?.[0]; const delta = choice?.delta;
             }
   },
   finish(context, state) {
-if (!state.reason || !['stop', 'tool_calls', 'function_call', 'length'].includes(state.reason)) throw new ProtocolError('模型响应不完整；未执行工具。');
+if (!state.reason || !['stop', 'tool_calls', 'function_call', 'length'].includes(state.reason)) throw new AppError('REMOTE', '模型响应不完整；未执行工具。');
           if (state.reason !== 'length') for (const call of state.calls.values()) {
-            if (!call.id || !call.name || !['tool_calls', 'function_call'].includes(state.reason)) throw new ProtocolError('工具调用缺少完整结束标记。');
+            if (!call.id || !call.name || !['tool_calls', 'function_call'].includes(state.reason)) throw new AppError('REMOTE', '工具调用缺少完整结束标记。');
             context.message.content.push({ type: 'toolCall', id: call.id, name: call.name, arguments: argsObject(JSON.parse(call.json)) });
           }
-          if (['tool_calls', 'function_call'].includes(state.reason) && !state.calls.size) throw new ProtocolError('模型未返回声明的工具调用。');
+          if (['tool_calls', 'function_call'].includes(state.reason) && !state.calls.size) throw new AppError('REMOTE', '模型未返回声明的工具调用。');
           context.message.stopReason = state.reason === 'length' ? 'length' : state.calls.size ? 'toolUse' : 'stop';
   },
 };

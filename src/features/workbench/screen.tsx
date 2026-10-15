@@ -3,9 +3,9 @@ import { ActivityIndicator, BackHandler, Keyboard, KeyboardAvoidingView, Platfor
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Check, ChevronDown, Folder, FolderOpen, HardDrive, History, MessageSquare, Pencil, Plus, Settings2, X } from '@/shared/ui/icons';
 import { useWorkbench } from './use-workbench';
-import type { Workbench } from './use-workbench';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
-import { RunActivity } from '@/features/runs/activity';
+import type { DialogsCapability } from './use-workbench';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { RunActivity } from '@/features/workbench/run-activity';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
 import { Conversation } from './conversation';
 import { FilesPane } from './files';
@@ -13,14 +13,29 @@ import { HistoryPane } from './history';
 import { Editor } from './editor';
 import { ReviewSheet } from './review';
 import { WorkbenchSheets } from './sheets';
-import type { WorkbenchTab } from '@/shared/state/workbench';
+import type { WorkbenchTab } from '@/shared/workbench-state';
 import { dateLabel } from '@/shared/format';
 
 const tabs = [
   { id: 'agent', name: '会话', icon: MessageSquare }, { id: 'files', name: '资料', icon: FolderOpen }, { id: 'history', name: '版本', icon: History },
 ] as const;
 
-function Navigation({ controller, mobile }: { controller: Workbench; mobile: boolean }) {
+function DevelopmentRebuild({ controller }: { controller: DialogsCapability }) {
+  const [confirm, setConfirm] = useState(false);
+  return <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 18 }}>
+    <T style={{ fontSize: 20, fontWeight: '600' }}>开发数据需要重建</T>
+    <T tone="secondary" style={{ maxWidth: 440, fontSize: 13, lineHeight: 23 }}>
+      这个开发版本使用新的数据格式。重建将清除当前设备上此应用的项目、对话、资料和文件历史；设备凭证会保留。
+    </T>
+    {confirm ? <View style={{ gap: 12 }}>
+      <T tone="danger" style={{ fontSize: 13 }}>确认清除当前开发数据并重新开始？</T>
+      <Button label="确认重建开发数据" busy={controller.busy} onPress={() => { void controller.action(() => controller.rebuildData()); }} />
+      <Button label="取消" variant="ghost" disabled={controller.busy} onPress={() => setConfirm(false)} />
+    </View> : <Button label="重建开发数据" disabled={controller.busy} onPress={() => setConfirm(true)} />}
+  </View>;
+}
+
+function Navigation({ controller, mobile }: { controller: DialogsCapability; mobile: boolean }) {
   const theme = useWorkbenchTheme();
   return <View style={{ flexDirection: 'row', backgroundColor: theme.surface, borderTopWidth: mobile ? 1 : 0,
     borderBottomWidth: mobile ? 0 : 1, borderColor: theme.border, paddingHorizontal: mobile ? 12 : 22, gap: mobile ? 0 : 16 }}>
@@ -37,7 +52,7 @@ function Navigation({ controller, mobile }: { controller: Workbench; mobile: boo
   </View>;
 }
 
-function Sidebar({ controller }: { controller: Workbench }) {
+function Sidebar({ controller }: { controller: DialogsCapability }) {
   const theme = useWorkbenchTheme();
   return <View style={{ width: 226, backgroundColor: theme.sidebar, borderRightWidth: 1, borderColor: theme.border }}>
     <View style={{ height: 70, paddingHorizontal: 18, flexDirection: 'row', gap: 10, alignItems: 'center' }}>
@@ -82,7 +97,7 @@ function Sidebar({ controller }: { controller: Workbench }) {
   </View>;
 }
 
-function ConversationBar({ controller, wide }: { controller: Workbench; wide: boolean }) {
+function ConversationBar({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
   const theme = useWorkbenchTheme();
   return <View testID="conversation-bar" style={{ paddingHorizontal: wide ? 22 : 12, minHeight: 48, flexDirection: 'row', alignItems: 'center', gap: 8,
     backgroundColor: theme.surface, borderBottomWidth: 1, borderBottomColor: theme.border }}>
@@ -100,7 +115,8 @@ function ConversationBar({ controller, wide }: { controller: Workbench; wide: bo
 }
 
 export function WorkbenchScreen() {
-  const controller = useWorkbench();
+  const capabilities = useWorkbench();
+  const controller = capabilities.dialogs;
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 1100;
@@ -144,7 +160,7 @@ export function WorkbenchScreen() {
             {controller.projectActive && <ActivityIndicator size="small" color={theme.accent} />}
             <IconButton icon={Settings2} label="设置" onPress={() => { void controller.openSettings(); }} />
           </View>
-          {!!controller.error && !controller.editor && <View accessibilityRole="alert" style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8,
+          {!!controller.error && !controller.editorOpen && <View accessibilityRole="alert" style={{ flexDirection: 'row', paddingHorizontal: 16, paddingVertical: 8,
             alignItems: 'center', gap: 8, backgroundColor: theme.dangerSoft }}>
             <T tone="danger" style={{ flex: 1, fontSize: 12, lineHeight: 19 }}>{controller.error}</T>
             <IconButton icon={X} label="关闭提示" size={30} onPress={() => controller.setError('')} />
@@ -152,7 +168,7 @@ export function WorkbenchScreen() {
           {!!controller.notice && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 18, paddingVertical: 8, backgroundColor: theme.successSoft }}>
             <Check size={13} color={theme.success} /><T style={{ fontSize: 12, color: theme.success }}>{controller.notice}</T>
           </View>}
-          {!controller.projectId ? <View style={{ flex: 1, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 16 }}>
+          {controller.formatMismatch ? <DevelopmentRebuild controller={controller} /> : !controller.projectId ? <View style={{ flex: 1, backgroundColor: theme.surface, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 16 }}>
             <View style={{ padding: 20, borderRadius: 16, backgroundColor: theme.inset }}><FolderOpen size={32} color={theme.secondary} strokeWidth={1.5} /></View>
             <T style={{ fontSize: 22, fontWeight: '600', marginTop: 4 }}>创建你的第一个项目</T>
             <T tone="secondary" style={{ fontSize: 13, textAlign: 'center', lineHeight: 23 }}>把文字和图片放在一起，{'\n'}让 Agent 帮你整理与修改。</T>
@@ -161,19 +177,19 @@ export function WorkbenchScreen() {
           </View> : <>
             {wide && <Navigation controller={controller} mobile={false} />}
             {controller.tab === 'agent' && <ConversationBar controller={controller} wide={wide} />}
-            <RunActivity controller={controller} />
+            <RunActivity controller={capabilities.runs} />
             <View style={{ flex: 1, minHeight: 0 }}>
-              {controller.tab === 'agent' ? <Conversation key={controller.conversationId} controller={controller} /> :
-                controller.tab === 'files' ? <FilesPane key={controller.projectId} controller={controller} /> : <HistoryPane controller={controller} />}
+              {controller.tab === 'agent' ? <Conversation key={controller.conversationId} controller={capabilities.conversation} /> :
+                controller.tab === 'files' ? <FilesPane key={controller.projectId} controller={capabilities.files} /> : <HistoryPane controller={capabilities.git} />}
             </View>
             {!wide && !keyboard && <Navigation controller={controller} mobile />}
           </>}
         </View>
-        {wide && controller.editor && <Editor controller={controller} mobile={false} />}
+        {wide && controller.editorOpen && <Editor controller={capabilities.editor} mobile={false} />}
       </View>
     </KeyboardAvoidingView>
-    {!wide && controller.editor && <Editor controller={controller} mobile />}
-    {controller.review && <ReviewSheet controller={controller} />}
-    <WorkbenchSheets controller={controller} />
+    {!wide && controller.editorOpen && <Editor controller={capabilities.editor} mobile />}
+    {controller.reviewOpen && <ReviewSheet controller={capabilities.git} />}
+    <WorkbenchSheets controller={controller} editor={capabilities.editor} files={capabilities.files} conversation={capabilities.conversation} />
   </SafeAreaView>;
 }

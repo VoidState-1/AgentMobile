@@ -4,7 +4,7 @@ import { getAppServices as getRuntime } from '@/bootstrap';
 import type { AppServices as Runtime } from '@/application/services';
 import { emptyModelConfiguration, type DiagnosticResult } from '@/core/models/types';
 import { T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 export { useDraftGuard, ConfigPage, FormScroll, Section, Toggle, Choices, Loading } from '@/shared/ui/forms';
 
 export function useConfiguration() {

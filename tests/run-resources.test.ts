@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { ModelConfigurationService } from '@/application/models/configuration';
 import { createTestRuntime } from './agent-runtime';
 import { testStorage } from './storage';
@@ -9,7 +9,7 @@ import { answerEvents, streamed, toolEvents } from './protocol-fixtures';
 it('界面取消订阅不取消任务，启动时配置跨工具轮次固定，完成后释放凭证', async () => {
   const storage = await testStorage(); const keys = new Map<string, string>();
   try {
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('运行时验证');
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID); const project = await workspace.create('运行时验证');
     const models = new ModelConfigurationService(storage.metadata, { get: async (r = '') => keys.get(r) ?? '', set: async (v, r = '') => { if (v) keys.set(r, v); else keys.delete(r); } }, randomUUID);
     await models.initialize();
     const connection = await models.saveConnection({ name: 'test', baseUrl: 'https://example.test', protocol: 'chat-completions', auth: 'key', compatibility: 'standard', presetId: 'custom', enabled: true, apiVersion: '' }, { value: 'old-fixture' });

@@ -1,15 +1,50 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import type { RunsApi } from '@/application/services';
 import { ActivityIndicator, Pressable, View } from 'react-native';
-import type { TaskRecord } from '@/core/runs/types';
+import type { RunView, DisplayTrace } from '@/core/runs/queries';
 import type { ContentTrace, ToolTrace } from '@/core/trace';
 import { Brain, Check, ChevronDown, ChevronRight, CircleAlert, FileText, Image, Search } from '@/shared/ui/icons';
-import { T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { Button, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { Markdown } from './markdown';
 import { toolLabels } from '@/shared/format';
+import { traceView } from './trace-view';
+import { terminalRun } from '@/core/runs/records';
+import { textEnd, traceLimits } from '@/core/runs/trace-storage';
+
+function FinalResponse({ text }: { text: string }) {
+  const [characters, setCharacters] = useState<number>(traceLimits.textCharacters);
+  const end = textEnd(text, 0, characters);
+  return <View testID="trace-text" style={{ gap: 8, marginTop: 12 }}>
+    <View testID="run-response"><Markdown content={text.slice(0, end)} /></View>
+    {end < text.length && <Button label="展开更多回答" compact variant="ghost" onPress={() => setCharacters(value => value + traceLimits.textCharacters)} />}
+  </View>;
+}
+
+function TraceText({ item, runsApi }: { item: ContentTrace & { textCharacters?: number }; runsApi?: RunsApi }) {
+  const [loaded, setLoaded] = useState<{ text: string; next?: number }>(); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  useEffect(() => {
+    if (!runsApi || item.textCharacters === undefined) return;
+    let current = true;
+    void runsApi.readTraceText(item.id).then(page => { if (current) setLoaded({ text: page.text, next: page.nextOffset }); })
+      .catch(() => { if (current) setError('轨迹正文读取失败。'); });
+    return () => { current = false; };
+  }, [item.id, item.textCharacters, runsApi]);
+  const more = async () => {
+    if (!runsApi || loaded?.next === undefined || busy) return;
+    setBusy(true);
+    try { const page = await runsApi.readTraceText(item.id, loaded.next); setLoaded({ text: loaded.text + page.text, next: page.nextOffset }); }
+    catch { setError('轨迹正文读取失败。'); }
+    finally { setBusy(false); }
+  };
+  return <View style={{ gap: 7 }}><Markdown content={loaded?.text ?? item.text} />
+    {loaded?.next !== undefined && <Button label="展开更多正文" compact variant="ghost" busy={busy} onPress={() => { void more(); }} />}
+    {!!error && <T tone="warning">{error}</T>}
+  </View>;
+}
 
 const duration = (ms: number) => ms < 1000 ? '<1 秒' : ms < 60000 ? Math.floor(ms / 1000) + ' 秒' : Math.floor(ms / 60000) + ' 分 ' + Math.floor(ms % 60000 / 1000) + ' 秒';
-function Reasoning({ item }: { item: ContentTrace }) {
+function Reasoning({ item, runsApi }: { item: ContentTrace & { textCharacters?: number }; runsApi?: RunsApi }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(false);
   const label = item.visibility === 'summary' ? '推理摘要' : item.visibility === 'unavailable' ? '推理内容未公开' : '思考过程';
   const running = item.state === 'running';
@@ -25,11 +60,11 @@ function Reasoning({ item }: { item: ContentTrace }) {
     {!expanded && !!item.text && <T tone="muted" numberOfLines={1} style={{ fontSize: 11, lineHeight: 18, paddingLeft: 22 }}>{item.text.replace(/\s+/g, ' ')}</T>}
     {expanded && <View style={{ borderLeftWidth: 2, borderLeftColor: theme.border, paddingLeft: 12, marginLeft: 6, paddingVertical: 7, gap: 6 }}>
       <T tone="muted" style={{ fontSize: 10 }}>服务返回的{item.visibility === 'summary' ? '摘要' : '公开内容'}{item.state === 'cancelled' || item.state === 'interrupted' || item.state === 'error' ? ' · 未完整结束' : ''}</T>
-      {item.text ? <Markdown content={item.text} /> : <T tone="secondary" style={{ fontSize: 12 }}>{item.visibility === 'unavailable' ? '服务保留了推理签名，但未公开可展示内容。' : running ? '等待推理内容…' : '服务未返回可展示的推理内容。'}</T>}
+      {item.text ? <TraceText item={item} runsApi={runsApi} /> : <T tone="secondary" style={{ fontSize: 12 }}>{item.visibility === 'unavailable' ? '服务保留了推理签名，但未公开可展示内容。' : running ? '等待推理内容…' : '服务未返回可展示的推理内容。'}</T>}
     </View>}
   </View>;
 }
-function ToolStep({ item, childRuns, cancelChild, inspectProposal }: { item: ToolTrace; childRuns?: TaskRecord[]; cancelChild?: (id: string) => void; inspectProposal?: (id: string) => void }) {
+function ToolStep({ item, childRuns, cancelChild, inspectProposal, runsApi }: { item: ToolTrace; childRuns?: RunView[]; cancelChild?: (id: string) => void; inspectProposal?: (id: string) => void; runsApi?: RunsApi }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(false);
   const label = item.label ?? toolLabels[item.tool] ?? item.tool; const running = item.state === 'running';
   const Icon = item.tool === 'inspect_image' ? Image : item.tool === 'search_text' ? Search : FileText;
@@ -47,7 +82,7 @@ function ToolStep({ item, childRuns, cancelChild, inspectProposal }: { item: Too
       {expanded ? <ChevronDown size={13} color={theme.muted} /> : <ChevronRight size={13} color={theme.muted} />}
     </Pressable>
     {!!item.childRunIds?.length && <View style={{ marginLeft: 22, borderLeftWidth: 1, borderLeftColor: theme.border, paddingLeft: 12, gap: 8 }}>
-      {childRuns?.filter((child) => item.childRunIds!.includes(child.id)).map((child) => <ChildTrace key={child.id} task={child} cancel={cancelChild} inspectProposal={inspectProposal} />)}
+      {childRuns?.filter((child) => item.childRunIds!.includes(child.id)).map((child) => <ChildTrace key={child.id} task={child} cancel={cancelChild} inspectProposal={inspectProposal} runsApi={runsApi} />)}
     </View>}
     {expanded && <View style={{ backgroundColor: theme.background, borderColor: theme.border, borderWidth: 1, borderRadius: 8, padding: 10, gap: 7, marginTop: 4 }}>
       <T tone="muted" style={{ fontSize: 10 }}>第 {item.round} 轮 · {item.tool}{item.durationMs !== undefined ? ' · ' + duration(item.durationMs) : ''}</T>
@@ -60,8 +95,17 @@ function ToolStep({ item, childRuns, cancelChild, inspectProposal }: { item: Too
     </View>}
   </View>;
 }
-function ChildTrace({ task, cancel, inspectProposal }: { task: TaskRecord; cancel?: (id: string) => void; inspectProposal?: (id: string) => void }) {
+function ChildTrace({ task, cancel, inspectProposal, runsApi }: { task: RunView; cancel?: (id: string) => void; inspectProposal?: (id: string) => void; runsApi?: RunsApi }) {
   const [expanded, setExpanded] = useState(false); const theme = useWorkbenchTheme();
+  const [detail, setDetail] = useState<RunView>();
+  const [readError, setReadError] = useState('');
+  useEffect(() => {
+    if (!expanded || task.trace || !runsApi) return;
+    let current = true;
+    void Promise.all([runsApi.getDetail(task.id), runsApi.listTrace(task.id)]).then(([value, trace]) => { if (current) setDetail({ ...value, trace: trace.nodes.map(traceView), traceCursor: trace.cursor }); })
+      .catch(() => { if (current) setReadError('子任务详情读取失败。'); });
+    return () => { current = false; };
+  }, [expanded, task.id, task.state, task.trace, runsApi]);
   return <View testID="child-trace">
     <Pressable accessibilityRole="button" accessibilityLabel={'展开子 Agent ' + task.prompt} accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
       style={{ gap: 4, paddingVertical: 7 }}>
@@ -72,19 +116,31 @@ function ChildTrace({ task, cancel, inspectProposal }: { task: TaskRecord; cance
       onPress={() => cancel(task.id)} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}><T tone="muted" style={{ fontSize: 11 }}>停止此子任务</T></Pressable>}
     {task.proposalId && inspectProposal && task.state !== 'queued' && <Pressable accessibilityRole="button" accessibilityLabel={'查看隔离提案 ' + task.prompt}
       onPress={() => inspectProposal(task.proposalId!)} style={{ paddingVertical: 6, alignSelf: 'flex-start' }}><T tone="accent" style={{ fontSize: 11 }}>查看候选变化</T></Pressable>}
-    {expanded && <View style={{ padding: 10, backgroundColor: theme.background, borderRadius: 8 }}><TaskTrace task={task} />{!!task.error && <T tone="warning" style={{ fontSize: 11 }}>{task.error}</T>}</View>}
+    {expanded && <View style={{ padding: 10, backgroundColor: theme.background, borderRadius: 8 }}><TaskTrace task={task.trace ? task : detail ?? task} runsApi={runsApi} />{!!readError && <T tone="warning">{readError}</T>}{!!task.error && <T tone="warning" style={{ fontSize: 11 }}>{task.error.message}</T>}</View>}
   </View>;
 }
-export function TaskTrace({ task, cancelChild, inspectProposal }: { task: TaskRecord; cancelChild?: (id: string) => void; inspectProposal?: (id: string) => void }) {
+export function TaskTrace({ task, cancelChild, inspectProposal, runsApi }: { task: RunView; cancelChild?: (id: string) => void; inspectProposal?: (id: string) => void; runsApi?: RunsApi }) {
   const theme = useWorkbenchTheme(); const [expanded, setExpanded] = useState(true);
+  const [older, setOlder] = useState<DisplayTrace[]>([]); const [cursor, setCursor] = useState<string>(); const [busy, setBusy] = useState(false); const [error, setError] = useState('');
+  const next = cursor ?? task.traceCursor;
+  const more = async () => {
+    if (!runsApi || !next || busy) return;
+    setBusy(true);
+    try { const page = await runsApi.listTrace(task.id, next); setOlder(values => [...values, ...page.nodes.map(traceView)]); setCursor(page.cursor ?? ''); }
+    catch { setError('轨迹步骤读取失败。'); }
+    finally { setBusy(false); }
+  };
   if (!task.trace) return <View style={{ gap: 8, marginTop: 14 }}>
-    {!!task.events.length && <T tone="muted" style={{ fontSize: 10 }}>历史步骤 · 旧任务未保存文字与工具的交错顺序</T>}
-    {task.events.map((event, i) => <T key={i} tone="secondary" style={{ fontSize: 12 }}>{toolLabels[event.tool] ?? event.tool} · {event.description}</T>)}
-    {!!task.response && <Markdown content={task.response} />}
+    {!!task.response && <FinalResponse text={task.response} />}
   </View>;
   const operations = task.trace.filter((item) => item.kind === 'tool').length;
   const end = task.trace.reduce((time, item) => Math.max(time, new Date(item.endedAt ?? item.startedAt).getTime()), new Date(task.createdAt).getTime());
   const hasReasoning = task.trace.some((item) => item.kind === 'reasoning');
+  const items = [...task.trace, ...older];
+  const completed = terminalRun(task.state);
+  // The final answer is independent of step paging. Once all steps are loaded,
+  // render its last text node here only once, with a bounded initial display.
+  const finalNode = completed && !next ? items.filter(item => item.kind === 'text').at(-1)?.id : undefined;
   return <View testID="task-trace" style={{ marginTop: 10 }}>
     <Pressable accessibilityRole="button" accessibilityLabel="查看工作轨迹" accessibilityState={{ expanded }} onPress={() => setExpanded(!expanded)}
       style={{ flexDirection: 'row', alignItems: 'center', gap: 6, minHeight: 30, marginBottom: 5 }}>
@@ -92,13 +148,15 @@ export function TaskTrace({ task, cancelChild, inspectProposal }: { task: TaskRe
       {expanded ? <ChevronDown size={12} color={theme.muted} /> : <ChevronRight size={12} color={theme.muted} />}
     </Pressable>
     {expanded && <View style={{ gap: 9 }}>
-      {task.trace.map((item) => item.kind === 'tool' ? <ToolStep key={item.id} item={item} childRuns={task.children} cancelChild={cancelChild} inspectProposal={inspectProposal} /> : item.kind === 'reasoning' ? <Reasoning key={item.id} item={item} /> :
-        item.text ? <View testID="trace-text" key={item.id} style={{ paddingVertical: 3 }}><Markdown content={item.text} /></View> : null)}
+      {items.filter(item => item.id !== finalNode).map((item) => item.kind === 'tool' ? <ToolStep key={item.id} item={item} childRuns={task.children} cancelChild={cancelChild} inspectProposal={inspectProposal} runsApi={runsApi} /> : item.kind === 'reasoning' ? <Reasoning key={item.id} item={item} runsApi={runsApi} /> :
+        item.text ? <View testID="trace-text" key={item.id} style={{ paddingVertical: 3 }}><TraceText item={item} runsApi={runsApi} /></View> : null)}
+      {!!next && <Button label="加载更多工作步骤" compact variant="ghost" busy={busy} onPress={() => { void more(); }} />}
+      {!!error && <T tone="warning">{error}</T>}
       {['running', 'waiting_children'].includes(task.state) && <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 7 }}>
         <ActivityIndicator size={12} color={theme.accent} /><T tone="muted" style={{ fontSize: 11 }}>{task.state === 'waiting_children' ? '等待子 Agent 收束…' : 'Agent 正在处理…'}</T>
       </View>}
       {!hasReasoning && task.mode === 'remote' && task.state !== 'running' && <T tone="muted" style={{ fontSize: 10 }}>服务未返回可展示的推理内容</T>}
     </View>}
-    {!expanded && !!task.response && <Markdown content={task.response} />}
+    {(completed || !expanded) && !!task.response && <FinalResponse text={task.response} />}
   </View>;
 }

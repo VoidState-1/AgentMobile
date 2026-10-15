@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { Buffer } from 'node:buffer';
-import { answerEvents, toolEvents, sse } from '../tests/protocol-fixtures.ts';
+import { sourceModule } from './source-module.mjs';
+const { answerEvents, toolEvents, sse } = await import(await sourceModule('tests/protocol-fixtures.ts'));
 
 let active = 0; let maximum = 0; const seen = []; const waiting = new Set();
 const server = http.createServer(async (request, response) => {
@@ -18,7 +19,7 @@ const server = http.createServer(async (request, response) => {
       const results = body.messages.filter((message) => message.role === 'tool').map((message) => {
         const content = Array.isArray(message.content) ? message.content.map((part) => part.text ?? '').join('') : message.content; try { return JSON.parse(content); } catch { return {}; }
       });
-      if (!body.tools.every((tool) => ['list_files', 'read_text', 'write_text', 'move_file', 'delete_file'].includes(tool.function.name))) throw new Error('Writer grant leaked');
+      if (!body.tools.every((tool) => ['list_files', 'read_text', 'search_text', 'write_text', 'move_file', 'delete_file'].includes(tool.function.name))) throw new Error('Writer grant leaked');
       if (results.length === 0) events = toolEvents('chat-completions', 'read_text', { path: 'documents/notes.md' });
       else if (results.length === 1) events = toolEvents('chat-completions', 'write_text', { path: 'documents/notes.md', text: 'Native isolated notes.', expectedRevision: results[0].revision });
       else if (results.length === 2) events = toolEvents('chat-completions', 'write_text', { path: 'documents/proposal.md', text: 'Native isolated draft.', expectedRevision: null });

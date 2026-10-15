@@ -1,15 +1,15 @@
-import { useMemo, useState } from 'react';
+import { memo, useMemo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import { Image } from 'expo-image';
 import { diffLines } from 'diff';
 import { ArrowLeftRight, FileText, RotateCcw } from '@/shared/ui/icons';
-import type { Workbench } from './use-workbench';
+import type { GitCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
 import { Button, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { fileName } from '@/shared/format';
 
-export function ReviewSheet({ controller }: { controller: Workbench }) {
+export const ReviewSheet = memo(function ReviewSheet({ controller }: { controller: GitCapability }) {
   const theme = useWorkbenchTheme();
   const value = controller.review!;
   const [index, setIndex] = useState(0);
@@ -77,4 +77,4 @@ export function ReviewSheet({ controller }: { controller: Workbench }) {
       </View>
     </>}
   </Sheet>;
-}
+});

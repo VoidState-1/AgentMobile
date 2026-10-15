@@ -1,3 +1,4 @@
+import { readCurrentRuns } from '../e2e/current-records';
 import fs from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
 import { openModels, returnToWorkbench } from '../e2e/model-helpers';
@@ -126,24 +127,15 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     await page.screenshot({ path: 'work/deepseek-live-conversation.png', fullPage: true });
   } finally {
     await Promise.race([Promise.allSettled(pending), new Promise((resolve) => setTimeout(resolve, 10000))]);
-    const tasks = await page.evaluate(async () => {
-      const db = await new Promise<IDBDatabase>((resolve, reject) => {
-        const open = indexedDB.open('agent-mobile-prototype'); open.onsuccess = () => resolve(open.result); open.onerror = () => reject(open.error);
-      });
-      return new Promise<{ tasks: unknown[]; usage: unknown[] }>((resolve) => {
-        const store = db.transaction('records').objectStore('records');
-        const keys = store.getAllKeys(); const values = store.getAll();
-        values.onsuccess = () => resolve({
-          tasks: values.result.filter((_, i) => String(keys.result[i]).startsWith('runs-v2/')),
-          usage: values.result.filter((_, i) => String(keys.result[i]).startsWith('transcripts/')).flatMap((value) =>
-            value.messages.filter((message: { role: string; usage?: { totalTokens: number } }) => message.role === 'assistant' && message.usage?.totalTokens)
-              .map((message: { usage: unknown }) => message.usage)),
-        });
-      });
-    }).catch(() => ({ tasks: [], usage: [] }));
+    const reportTasks = await readCurrentRuns(page);
+    const usage = await page.evaluate(async () => {
+      const db = await new Promise<IDBDatabase>((resolve, reject) => { const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      const rows = await new Promise<any[]>((resolve, reject) => { const request = db.transaction('transcript_frames').objectStore('transcript_frames').getAll(); request.onsuccess = () => resolve(request.result); request.onerror = () => reject(request.error); });
+      db.close(); return rows.map(frame => frame.payload).filter(message => message.role === 'assistant' && message.usage?.totalTokens).map(message => message.usage);
+    });
     const after = await balance();
     const report = { beforeCny: before, afterCny: after, spentCny: Number((before - after).toFixed(4)), requestCount, calls,
-      tasks: tasks.tasks, usage: tasks.usage };
+      tasks: reportTasks, usage };
     const serialized = JSON.stringify(report, null, 2);
     if (serialized.includes(apiKey)) throw new Error('测试报告包含凭证。');
     await fs.mkdir('work', { recursive: true });

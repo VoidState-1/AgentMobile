@@ -1,31 +1,32 @@
-import { useEffect, useState } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, TextInput, View, useWindowDimensions } from 'react-native';
 import { Image } from 'expo-image';
 import { ChevronRight, FileText, Folder, Image as ImageIcon, Plus, Search, Upload, X } from '@/shared/ui/icons';
 import type { ProjectFile } from '@/core/workspace/types';
-import type { Workbench } from './use-workbench';
+import type { FilesCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
 import { Button, IconButton, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { fileName, sizeLabel } from '@/shared/format';
 
-function Thumbnail({ file, controller }: { file: ProjectFile; controller: Workbench }) {
+function Thumbnail({ file, controller }: { file: ProjectFile; controller: FilesCapability }) {
+  const { preview, projectId } = controller;
   const theme = useWorkbenchTheme();
   const [uri, setUri] = useState<string>();
   useEffect(() => {
     let current = true;
-    if (controller.runtime && controller.projectId) {
-      controller.runtime.workspace.preview(controller.projectId, file.path).then((value) => {
+    if (preview && projectId) {
+      preview(projectId, file.path).then((value) => {
         if (current) setUri(value.content);
       }).catch(() => {});
     }
     return () => { current = false; };
-  }, [controller.runtime, controller.projectId, file.path, file.revision]);
+  }, [preview, projectId, file.path, file.revision]);
   return uri ? <Image source={{ uri }} contentFit="cover" style={{ width: '100%', height: '100%' }} /> :
     <ImageIcon size={22} color={theme.muted} />;
 }
 
-export function FilesPane({ controller }: { controller: Workbench }) {
+export const FilesPane = memo(function FilesPane({ controller }: { controller: FilesCapability }) {
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const compact = width < 700;
@@ -92,7 +93,7 @@ export function FilesPane({ controller }: { controller: Workbench }) {
           {entries.map((file) => <Pressable key={file.path} accessibilityRole="button" accessibilityLabel={'打开 ' + file.path}
             onPress={() => { void controller.openFile(file); }} disabled={controller.busy}
             style={({ pressed }) => ({ flexDirection: 'row', alignItems: 'center', gap: 12, paddingVertical: 12, paddingHorizontal: 8,
-              borderRadius: 8, backgroundColor: controller.editor?.path === file.path ? theme.accentSoft : pressed ? theme.inset : 'transparent',
+              borderRadius: 8, backgroundColor: controller.openPath === file.path ? theme.accentSoft : pressed ? theme.inset : 'transparent',
               borderBottomWidth: 1, borderBottomColor: theme.border })}>
             <View style={{ width: 36, height: 40, borderRadius: 8, backgroundColor: theme.inset, alignItems: 'center', justifyContent: 'center', overflow: 'hidden' }}>
               {isImage(file.path) ? <Thumbnail file={file} controller={controller} /> : <FileText size={19} color={theme.secondary} strokeWidth={1.6} />}
@@ -110,4 +111,4 @@ export function FilesPane({ controller }: { controller: Workbench }) {
       </>}
     </ScrollView>
   </View>;
-}
+});

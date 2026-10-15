@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { getAppServices as getRuntime } from '@/bootstrap';
 import type { AppServices as Runtime } from '@/application/services';
-import { McpError } from '@/core/mcp/errors';
+import { publicError } from '@/core/errors';
 import { emptyMcpConfiguration } from '@/core/mcp/types';
 
 export function useMcpConfiguration() {
@@ -19,8 +19,7 @@ export function useMcpConfiguration() {
   const action = useCallback(async (work: () => Promise<void>) => {
     if (working.current) return; working.current = true; setBusy(true); setError('');
     try { await work(); } catch (reason) {
-      const message = reason instanceof Error ? reason.message : '';
-      setError(reason instanceof McpError || /^(MCP|请输入|端点|当前支持|连接已|工具定义|特殊名称|单个项目|请填写)/.test(message) ? message : '本地配置操作失败，请重试或重开应用恢复。');
+      setError(publicError(reason).message);
     } finally { working.current = false; setBusy(false); }
   }, []);
   return { runtime, config, error, busy, action };

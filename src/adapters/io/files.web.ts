@@ -1,4 +1,5 @@
-import type { WorkspaceService } from '@/adapters/workspace/service';
+import { AppError } from '@/core/errors';
+import type { WorkspaceApplication } from '@/application/workspace/service';
 import { contentLimits } from '@/core/agent/settings';
 
 export async function pickFile(): Promise<{ name: string; bytes: Uint8Array } | undefined> {
@@ -8,16 +9,16 @@ export async function pickFile(): Promise<{ name: string; bytes: Uint8Array } | 
     input.onchange = async () => {
       try {
         const file = input.files?.[0];
-        if (file && file.size > contentLimits.fileBytes) { reject(new Error('导入文件暂限 20 MB')); return; }
+        if (file && file.size > contentLimits.fileBytes) { reject(new AppError('VALIDATION', '导入文件暂限 20 MB')); return; }
         resolve(file ? { name: file.name, bytes: new Uint8Array(await file.arrayBuffer()) } : undefined);
-      } catch { reject(new Error('无法读取选择的文件')); }
+      } catch { reject(new AppError('STORAGE', '无法读取选择的文件')); }
     };
     input.oncancel = () => resolve(undefined);
     input.click();
   });
 }
 
-export async function exportFile(workspace: WorkspaceService, projectId: string, path: string) {
+export async function exportFile(workspace: WorkspaceApplication, projectId: string, path: string) {
   const { bytes } = await workspace.read(projectId, path);
   const buffer = new Uint8Array(bytes).buffer;
   const url = URL.createObjectURL(new Blob([buffer]));

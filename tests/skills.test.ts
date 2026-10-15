@@ -7,7 +7,7 @@ import { explicitSkills, skillPath } from '../src/core/skills/rules';
 import { GitSkillRepository } from '../src/adapters/skills/repository';
 import { createSkillRun } from '../src/adapters/skills/run';
 import { decodeSkillText, exportSkillPackage, importSkillPackage, parseSkill, validateBundle } from '../src/adapters/skills/package';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { startTestRun } from './agent-runtime';
 import { testStorage } from './storage';
 import { chatSnapshot, protocols, snapshot, toolEvents, answerEvents, sse } from './protocol-fixtures';
@@ -18,7 +18,7 @@ const skillBundle = (version = 'VERSION_ONE') => validateBundle([{ path: 'SKILL.
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { vi.unstubAllGlobals(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
 async function setup() {
-  const storage = await testStorage(); cleanups.push(storage.cleanup); const repository = new GitSkillRepository(storage.files, storage.metadata, randomUUID);
+  const storage = await testStorage(); cleanups.push(storage.cleanup); const repository = new GitSkillRepository(createWorkspace(storage.files, storage.metadata, randomUUID, { namespace: 'skills' }));
   const service = new SkillService(storage.metadata, repository); await service.initialize(); return { ...storage, repository, service };
 }
 async function install(f: Awaited<ReturnType<typeof setup>>) {
@@ -70,8 +70,8 @@ describe('Git 技能库、项目启用和恢复', () => {
     await expect(f.service.capture('other', '$note-workflow 整理')).rejects.toThrow('尚未');
     const commit = f.service.getSnapshot().commit; await f.service.install([skillBundle('VERSION_TWO')], commit);
     expect(f.service.getSnapshot().grants.project).toEqual({});
-    const versions = await f.repository.versions(skill.name); expect(versions).toHaveLength(2);
-    await f.service.install([await f.repository.bundle(versions[1].commit, skill.name)], f.service.getSnapshot().commit);
+    const versions = await f.repository.versions(skill.name); expect(versions.versions).toHaveLength(2);
+    await f.service.install([await f.repository.bundle(versions.versions[1].commit, skill.name)], f.service.getSnapshot().commit);
     expect(f.service.getSnapshot().skills[0].revision).toBe(skill.revision);
     expect(decodeSkillText(await f.repository.read(f.service.getSnapshot().commit, skill.name, 'SKILL.md'))).toContain('VERSION_ONE');
     await expect(f.service.install([skillBundle()], commit)).rejects.toThrow('已变化');
@@ -90,11 +90,11 @@ describe('Git 技能库、项目启用和恢复', () => {
     const bundle = skillBundle('VERSION_TWO'); bundle.files.push({ path: 'references/new.md', bytes: Buffer.from('new') });
     await expect(f.service.install([bundle], f.service.getSnapshot().commit)).rejects.toThrow('未完成');
     await expect(f.service.capture('project', '继续')).rejects.toThrow('尚未完成'); f.files.write = write;
-    const restarted = new SkillService(f.metadata, new GitSkillRepository(f.files, f.metadata, randomUUID)); await restarted.initialize();
+    const restarted = new SkillService(f.metadata, new GitSkillRepository(createWorkspace(f.files, f.metadata, randomUUID, { namespace: 'skills' }))); await restarted.initialize();
     expect(restarted.getSnapshot().skills[0].files).toHaveLength(3); expect(restarted.getSnapshot().grants.project).toEqual({});
     const put = f.metadata.put; f.metadata.put = async (bucket, id, value) => { if (bucket === 'skills') throw new Error('配置未保存'); await put(bucket, id, value); };
     await expect(restarted.install([skillBundle('VERSION_THREE')], restarted.getSnapshot().commit)).rejects.toThrow('未完成'); f.metadata.put = put;
-    const again = new SkillService(f.metadata, new GitSkillRepository(f.files, f.metadata, randomUUID)); await again.initialize();
+    const again = new SkillService(f.metadata, new GitSkillRepository(createWorkspace(f.files, f.metadata, randomUUID, { namespace: 'skills' }))); await again.initialize();
     expect(decodeSkillText(await again.repository.read(again.getSnapshot().commit, 'note-workflow', 'SKILL.md'))).toContain('VERSION_THREE');
   });
   it('未激活资源、越界与未启用技能拒绝；分页及去重保持正确', async () => {
@@ -115,7 +115,7 @@ describe('Git 技能库、项目启用和恢复', () => {
 });
 describe('真实 Pi 任务中的技能', () => {
   for (const protocol of protocols) it(`${protocol}：目录 → 正文 → 资源 → Git 保存，只披露启用技能`, async () => {
-    const f = await setup(); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('技能任务');
+    const f = await setup(); const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('技能任务');
     await f.service.install([skillBundle(), validateBundle([{ path: 'SKILL.md', bytes: Buffer.from(skillSource('private-skill', 'DO_NOT_SEND')) }])], f.service.getSnapshot().commit);
     const skill = f.service.getSnapshot().skills.find((skill) => skill.name === 'note-workflow')!; await f.service.grant(project.id, skill.name, true, skill.revision);
     const run = createSkillRun(f.repository, await f.service.capture(project.id, '整理资料')); const requests: any[] = [];
@@ -132,7 +132,7 @@ describe('真实 Pi 任务中的技能', () => {
     expect(JSON.stringify(requests)).not.toContain('DO_NOT_SEND'); expect(JSON.stringify(requests)).not.toContain('/workspaces/'); expect(task.finalCommit).toBe(task.baseCommit); expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
   });
   it('用户 $技能明确调用在首个请求注入并保存轨迹，下一任务不携带旧技能正文', async () => {
-    const f = await setup(); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('明确调用');
+    const f = await setup(); const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('明确调用');
     await f.service.install([skillBundle()], f.service.getSnapshot().commit); const skill = f.service.getSnapshot().skills[0]; await f.service.grant(project.id, skill.name, true, skill.revision);
     const requests: any[] = []; vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => { requests.push(JSON.parse(String(init.body))); return new Response(sse(answerEvents('chat-completions', '已使用技能。')), { headers: { 'Content-Type': 'text/event-stream' } }); });
     const run = createSkillRun(f.repository, await f.service.capture(project.id, '$note-workflow 整理'));

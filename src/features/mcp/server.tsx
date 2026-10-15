@@ -2,11 +2,11 @@ import { useEffect, useRef, useState } from 'react';
 import { Platform, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { McpAttempt, McpServer, McpServerInput } from '@/core/mcp/types';
-import type { Project } from '@/core/projects/types';
+import type { Project } from '@/core/projects';
 import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/shared/ui/forms';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
-import { useWorkbenchUi } from '@/shared/state/workbench';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { useWorkbenchUi } from '@/shared/workbench-state';
 import { useMcpConfiguration } from './common';
 
 const edit = (server: McpServer): McpServerInput => ({ id: server.id, name: server.name, url: server.url, auth: server.auth, enabled: server.enabled, timeoutMs: server.timeoutMs });

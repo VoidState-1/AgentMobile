@@ -1,6 +1,7 @@
+import { testNotifications } from './notifications';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { contentCodec } from '../src/adapters/storage/codec';
 import { ConversationService } from '../src/application/conversations/service';
 import { AgentSettingsService } from '../src/application/settings/agent';
@@ -9,20 +10,19 @@ import { RunKernel } from '../src/application/runs/kernel';
 import { recoverRuns } from '../src/application/runs/recovery';
 import type { RunResourceFactory } from '../src/application/runs/resources';
 import type { AgentEnginePort, EngineInput, EngineControls } from '../src/core/agent/engine';
-import type { RunRecord } from '../src/core/runs/records';
 import { defaultSchedulerLimits } from '../src/core/runs/scheduling';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
+afterEach(async () => { vi.useRealTimers(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
 function gate() { let release!: () => void; const promise = new Promise<void>((resolve) => { release = resolve; }); return { promise, release }; }
 async function fixture(work: (input: EngineInput, controls: EngineControls) => Promise<void> = async () => {}) {
   const f = await testStorage(); cleanups.push(f.cleanup);
-  const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('运行内核');
+  const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('运行内核');
   const conversations = new ConversationService(f.metadata, randomUUID); await conversations.initialize([project]);
   const a = await conversations.ensureProject(project.id); const b = await conversations.create(project.id);
   const settings = new AgentSettingsService(f.metadata); await settings.initialize();
-  const repository = new RunRepository(f.metadata); await repository.initialize();
+  const repository = new RunRepository(f.metadata);
   const executions: string[] = []; const releases: string[] = []; const prepared: string[] = [];
   const factory: RunResourceFactory = { async prepare(request) {
     prepared.push(request.prompt);
@@ -33,15 +33,29 @@ async function fixture(work: (input: EngineInput, controls: EngineControls) => P
       finally { controls.afterRequest?.(); }
       if (cancelled) return { stopReason: 'aborted' };
       receive({ type: 'assistant_start', round: 1 }); receive({ type: 'content', round: 1, index: 0, kind: 'text', ended: true, text: '已完成', response: '已完成' });
-      receive({ type: 'assistant_end', round: 1, response: '已完成', transcript: { messages: [{ role: 'user', content: input.prompt }] } }); return { stopReason: 'stop' };
+      receive({ type: 'transcript_frame', ordinal: 0, schemaVersion: 1, payload: { role: 'user', content: input.prompt } }); receive({ type: 'assistant_end', round: 1, response: '已完成' }); return { stopReason: 'stop' };
     } }; } };
     return { launch: { mode: 'demo', imageInput: false, contextTokens: 32000, outputTokens: 4096 }, engine,
-      resources: { codec: contentCodec }, async release() { releases.push(request.prompt); } };
+      resources: { codec: contentCodec, notifications: testNotifications }, async release() { releases.push(request.prompt); } };
   } };
   const kernel = new RunKernel(workspace, repository, factory, conversations, settings, randomUUID);
   return { ...f, workspace, project, conversations, a, b, settings, repository, kernel, factory, executions, releases, prepared };
 }
 async function idle(kernel: RunKernel) { await vi.waitFor(() => expect(kernel.getSnapshot().runs).toHaveLength(0), { timeout: 5000 }); }
+
+it('模型已结束但最终快照尚未完成时到期，终态提交前复核截止并保留结构化原因', async () => {
+  const f = await fixture(); const finalizing = gate(); const entered = gate();
+  const finalize = f.workspace.taskFinal;
+  f.workspace.taskFinal = async (...args) => { entered.release(); await finalizing.promise; return finalize(...args); };
+  vi.useFakeTimers();
+  await f.kernel.start(f.project.id, '延迟终态', false, f.a.id); await entered.promise;
+  const id = f.kernel.getSnapshot().active!.id;
+  await vi.advanceTimersByTimeAsync(f.settings.getSnapshot().limits.maxRuntimeMs + 1);
+  finalizing.release(); await idle(f.kernel);
+  expect(f.kernel.getSnapshot().completed).toMatchObject({ state: 'failed', stopReason: { kind: 'deadline', originRunId: id } });
+  expect((await f.repository.get(id))?.stopReason?.kind).toBe('deadline');
+  expect(f.kernel.requests.getSnapshot().active).toBe(0);
+});
 
 it('入队冻结配置、消费精确草稿；真实开始时捕获基线，历史只读 v2 且运行不依赖 UI 订阅', async () => {
   const first = gate(); const observed: EngineInput[] = [];
@@ -59,7 +73,7 @@ it('入队冻结配置、消费精确草稿；真实开始时捕获基线，历�
   const firstRun = f.kernel.getSnapshot().active!;
   await f.workspace.write(f.project.id, 'documents/new.md', contentCodec.encodeText('最新基线'), null, { owner: firstRun.id });
   first.release(); await idle(f.kernel);
-  const task = (await f.repository.views(f.project.id)).find((run) => run.id === queued.id)!;
+  const task = (await f.repository.view(queued.id))!;
   expect(queued.state).toBe('queued'); // Published snapshots remain unchanged after execution.
   expect(task.state).toBe('completed'); expect(task.agentSettingsSnapshot!.systemPrompt).toBe(initial.systemPrompt);
   expect(contentCodec.decodeText((await f.workspace.git.tree(f.project.id, task.baseSnapshot!))['documents/new.md'])).toBe('最新基线');
@@ -100,10 +114,10 @@ it('刚取得执行槽但尚未建立文件基线时取消，正常收束而不�
 });
 
 it('completed 在终态事务与资源清理完成后才发布，旧进度不能覆盖终态', async () => {
-  const f = await fixture(); const entered = gate(); const stored = gate(); const batch = f.metadata.batch!;
-  f.metadata.batch = async (entries) => {
-    if (entries.some((entry) => entry.bucket === 'runs-v2' && (entry.value as RunRecord).state === 'completed')) { entered.release(); await stored.promise; }
-    await batch(entries);
+  const f = await fixture(); const entered = gate(); const stored = gate(); const writeBusiness = f.metadata.writeBusiness;
+  f.metadata.writeBusiness = async (batch) => {
+    if (batch.runs?.some(update => update.header.state === 'completed')) { entered.release(); await stored.promise; }
+    await writeBusiness(batch);
   };
   await f.kernel.start(f.project.id, '终态保存', false, f.a.id); const id = f.kernel.getSnapshot().active!.id;
   await entered.promise;
@@ -117,23 +131,23 @@ it('completed 在终态事务与资源清理完成后才发布，旧进度不能
   f.workspace.claim(f.project.id, 'next'); f.workspace.release(f.project.id, 'next');
 });
 
-it('终态保存中断不会发布成功；恢复自己的检查点、不重发请求，v2 草稿回执重启修复', async () => {
-  const f = await fixture(); const batch = f.metadata.batch!;
-  f.metadata.batch = async (entries) => {
-    if (entries.some((entry) => entry.bucket === 'runs-v2' && (entry.value as RunRecord).state === 'completed')) throw new Error('disk interrupted');
-    await batch(entries);
+it('终态保存中断不会发布成功；恢复自己的检查点、不重发请求，当前草稿回执重启修复', async () => {
+  const f = await fixture(); const writeBusiness = f.metadata.writeBusiness;
+  f.metadata.writeBusiness = async (batch) => {
+    if (batch.runs?.some(update => update.header.state === 'completed')) throw new Error('disk interrupted');
+    await writeBusiness(batch);
   };
   const revision = (await f.conversations.saveDraft(f.a.id, { text: '需恢复' })).revision;
   await f.kernel.start(f.project.id, '需恢复', false, f.a.id, revision); const id = f.kernel.getSnapshot().active!.id;
   await vi.waitFor(() => expect(f.kernel.getSnapshot().error).toContain('保存失败'));
   expect(f.kernel.getSnapshot().completed).toBeUndefined(); expect(f.releases).toEqual(['需恢复']);
   expect((await f.repository.get(id))?.state).toBe('running');
-  f.metadata.batch = batch;
+  f.metadata.writeBusiness = writeBusiness;
   // Simulate a crash after queued was committed but before acknowledging draft.
   await f.metadata.put('conversations', 'state', { ...f.conversations.getSnapshot(), drafts: { ...f.conversations.getSnapshot().drafts, [f.a.id]: { text: '需恢复', revision } } });
-  const repository = new RunRepository(f.metadata); await repository.initialize(); await recoverRuns(repository, f.workspace, []);
+  const repository = new RunRepository(f.metadata); await recoverRuns(repository, f.workspace, []);
   expect((await repository.get(id))?.state).toBe('interrupted'); expect(await repository.active()).toEqual([]);
-  const conversations = new ConversationService(f.metadata, randomUUID); await conversations.initialize([f.project], await repository.views(f.project.id));
+  const conversations = new ConversationService(f.metadata, randomUUID); await conversations.initialize([f.project], (projectId, conversationId, revision) => repository.acceptedDraft(projectId, conversationId, revision));
   expect(conversations.getSnapshot().drafts[f.a.id].text).toBe(''); expect(f.executions).toEqual(['需恢复']);
 });
 

@@ -1,20 +1,21 @@
 import { useConversationDraft } from '@/features/conversations/use-draft';
 import { useWorkbenchData } from './use-workbench-data';
-import { useGitActions } from '@/features/git/actions';
+import { useGitActions } from '@/features/workbench/git-actions';
 import { useEditorActions } from './editor-actions';
 import { useEditorSession } from './use-editor-session';
 import type { Confirmation, Review, WorkbenchSheet } from './types';
 import type { AppServices } from '@/application/services';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { Platform } from 'react-native';
 import { useRouter } from 'expo-router';
-import type { TaskRecord } from '@/core/runs/types';
+import type { RunView } from '@/core/runs/queries';
 import { selectedModelId, selectedModelMode } from '@/core/models/rules';
 import type { Conversation } from '@/core/conversations/types';
 import { isImage } from '@/core/workspace/path';
-import { useWorkbenchUi } from '@/shared/state/workbench';
+import { publicError } from '@/core/errors';
+import { useWorkbenchUi } from '@/shared/workbench-state';
 
-export function useWorkbench() {
+function useWorkbenchState() {
   const ui = useWorkbenchUi();
   const router = useRouter();
 
@@ -37,20 +38,20 @@ export function useWorkbench() {
 
   const draft = useConversationDraft(runtimeRef, ui.conversationId, setError);
   const { composer, composerRef, draftSaved, draftSaving, installConversation, setPrompt, setAttachment, flushDraft } = draft;
-  const { runtime, projects, files, versions, gitStatus, tasks, operations, configuration, conversationState, loading, projectLoading, active, runs, refresh } =
+  const { runtime, projects, files, versions, versionCursor, versionsBusy, loadOlderVersions, gitStatus, tasks, taskCursor, historyBusy, loadOlderRuns, operations, configuration, conversationState, loading, projectLoading, active, runs, refresh, formatMismatch, rebuildData } =
     useWorkbenchData({ ui, runtimeRef, editorRef, setEditor, installConversation, setError });
 
   const selectedProject = projects.find((project) => project.id === ui.projectId);
   const projectActive = runs.find((run) => run.projectId === ui.projectId && run.state !== 'queued');
   const selectedConversation = conversationState.conversations.find((item) => item.id === ui.conversationId && item.projectId === ui.projectId && !item.archivedAt);
-  const conversations = conversationState.conversations.filter((item) => item.projectId === ui.projectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+  const conversations = useMemo(() => conversationState.conversations.filter((item) => item.projectId === ui.projectId).sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)), [conversationState.conversations, ui.projectId]);
   const conversationActive = runs.find((run) => run.projectId === ui.projectId && run.conversationId === ui.conversationId);
   const prompt = composer.conversationId === ui.conversationId ? composer.text : '';
   const attachment = composer.conversationId === ui.conversationId ? composer.attachment : undefined;
   const modelId = selectedModelId(configuration, ui.projectId, ui.conversationId);
   const selectedModel = configuration.models.find((model) => model.id === modelId);
   const selectedConnection = configuration.connections.find((connection) => connection.id === selectedModel?.connectionId);
-  const settings = { mode: selectedModelMode(configuration, ui.conversationId), model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false };
+  const settings = useMemo(() => ({ mode: selectedModelMode(configuration, ui.conversationId), model: selectedModel?.name ?? '选择模型', baseUrl: selectedConnection?.baseUrl ?? '', imageInput: selectedModel?.parameters.allowImages ?? false }), [configuration, ui.conversationId, selectedModel, selectedConnection]);
   const modelLabel = settings.mode === 'demo' ? '演示模式' : selectedModel ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name : '选择模型';
 
   useEffect(() => {
@@ -70,7 +71,7 @@ export function useWorkbench() {
     if (busyRef.current) return false;
     busyRef.current = true; setBusy(true); setError('');
     try { await work(); return true; }
-    catch (reason) { setError(reason instanceof Error ? reason.message : '操作失败，请重试。'); return false; }
+    catch (reason) { setError(publicError(reason).message); return false; }
     finally { busyRef.current = false; setBusy(false); }
   }
 
@@ -79,7 +80,7 @@ export function useWorkbench() {
       void action(async () => {
         if (!runtime) return; await flushDraft();
         const conversation = await runtime.conversations.ensureProject(id); installConversation(conversation);
-        setEditor(undefined); editorRef.current = undefined; setSheet(undefined); ui.selectProject(id, conversation.id);
+        setEditor(undefined); setSheet(undefined); ui.selectProject(id, conversation.id);
       });
     });
   }
@@ -128,7 +129,7 @@ export function useWorkbench() {
     guard(() => { void action(async () => {
       if (!runtime || !target.conversationId) return; await flushDraft(); await runtime.conversations.select(target.conversationId, target.projectId);
       const conversation = runtime.conversations.getSnapshot().conversations.find((item) => item.id === target.conversationId)!;
-      installConversation(conversation); setEditor(undefined); editorRef.current = undefined; ui.selectProject(target.projectId, target.conversationId);
+      installConversation(conversation); setEditor(undefined); ui.selectProject(target.projectId, target.conversationId);
     }); });
   }
 
@@ -179,25 +180,25 @@ export function useWorkbench() {
     });
   }
   function openModelConfig() {
-    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+    guard(() => { setEditor(undefined); setSheet(undefined);
       requestAnimationFrame(() => router.push('/models')); });
   }
   function openModels() { setSheet('models'); }
   function openMcpConfig() {
-    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+    guard(() => { setEditor(undefined); setSheet(undefined);
       requestAnimationFrame(() => router.push('/mcp')); });
   }
   function openSkills() {
-    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+    guard(() => { setEditor(undefined); setSheet(undefined);
       requestAnimationFrame(() => router.push('/skills')); });
   }
   function openAgentSettings() {
-    guard(() => { setEditor(undefined); editorRef.current = undefined; setSheet(undefined);
+    guard(() => { setEditor(undefined); setSheet(undefined);
       requestAnimationFrame(() => router.push('/settings/agent')); });
   }
 
-  const changedPaths = (task: TaskRecord) => task.changedPaths ?? [...new Set(operations.filter((operation) => operation.runId === task.id)
-    .flatMap((operation) => operation.changes.map((change) => change.path)))];
+  const changedPaths = (task: RunView) => task.changedPaths ?? [...new Set(operations.filter(operation => operation.ownerRootRunId === task.id)
+    .flatMap(operation => operation.changedPaths))];
 
   const editorActions = useEditorActions({ runtime, ui, action, refresh, setError, setNotice, setConfirmation, ...editorSession, active: projectActive, setSheet, setAttachment });
   const { persistEditor, guard, closeEditor, openFile, newFile, importFile, deleteEditor, renameEditor } = editorActions;
@@ -205,8 +206,9 @@ export function useWorkbench() {
 
   return {
     ...ui, runtime, projects, selectedProject, files, versions, gitStatus, reviewGit, changeStage, commitGit, discardGit,
-    tasks: tasks.filter((task) => task.projectId === ui.projectId && task.conversationId === ui.conversationId),
-    active, runs, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy,
+    tasks,
+    taskCursor, historyBusy, loadOlderRuns, versionCursor, versionsBusy, loadOlderVersions,
+    active, runs, projectActive, conversationActive, conversations, selectedConversation, operations, loading, projectLoading, busy, formatMismatch, rebuildData,
     error, notice, setError, settings, configuration, modelLabel, selectedModel, selectedConnection, editor, setEditor, dirty,
     sheet, setSheet, projectName, setProjectName, prompt, setPrompt, attachment, setAttachment, review, setReview,
     conversationName, setConversationName, draftSaved, draftSaving, newConversation, selectConversation,
@@ -217,14 +219,202 @@ export function useWorkbench() {
     saveEditor: () => action(() => persistEditor()), action,
     saveAndLeave: async () => {
       const next = confirmation;
-      const saved = await action(async () => { await persistEditor(); await next?.perform(); setConfirmation(undefined); });
+      const saved = await action(async () => {
+        await persistEditor();
+        const latest = editorRef.current;
+        if (latest && (latest.text !== latest.savedText || latest.name !== latest.savedName)) throw new Error('保存期间又有新输入，请再次保存后离开。');
+        await next?.perform(); setConfirmation(undefined);
+      });
       if (saved) next?.afterPerform?.();
       return saved;
     },
     confirm: async () => { const next = confirmation; const done = await action(async () => { await next?.perform(); setConfirmation(undefined); }); if (done) next?.afterPerform?.(); },
     exportEditor: () => action(async () => { if (runtime && editor) await runtime.io.exportFile(editor.projectId, editor.path); }),
     changedPaths,
+    cancelChild: (id: string) => { void Promise.resolve(runtime?.agent.cancel(id)).catch(() => setError('子任务取消状态保存失败，请重新打开应用恢复。')); },
   };
 }
 
-export type Workbench = ReturnType<typeof useWorkbench>;
+type WorkbenchState = ReturnType<typeof useWorkbenchState>;
+type CommandKey = { [K in keyof WorkbenchState]-?: WorkbenchState[K] extends (...args: never[]) => unknown ? K : never }[keyof WorkbenchState];
+
+class CommandBindings {
+  readonly commands: Pick<WorkbenchState, CommandKey>;
+  constructor(private current: WorkbenchState) {
+    this.commands = Object.fromEntries(Object.entries(current).filter(([, value]) => typeof value === 'function')
+      .map(([key]) => [key, (...args: unknown[]) => {
+        const command = this.current[key as CommandKey] as (...values: unknown[]) => unknown;
+        return command(...args);
+      }])) as Pick<WorkbenchState, CommandKey>;
+  }
+  update(value: WorkbenchState): void { this.current = value; }
+}
+
+function useCommands(state: WorkbenchState): Pick<WorkbenchState, CommandKey> {
+  const [bindings] = useState(() => new CommandBindings(state));
+  useLayoutEffect(() => { bindings.update(state); }, [bindings, state]);
+  return bindings.commands;
+}
+
+export function useWorkbench() {
+  const state = useWorkbenchState();
+  const commands = useCommands(state);
+  const projectActive = !!state.projectActive;
+  const editorOpen = !!state.editor;
+  const reviewOpen = !!state.review;
+  const activitySignature = JSON.stringify(state.runs.map(run => ({ id: run.id, projectId: run.projectId, conversationId: run.conversationId,
+    kind: run.kind, state: run.state, prompt: run.prompt, mode: run.mode, createdAt: run.createdAt, response: '' })));
+  // The signature contains every selected field. Streaming text/trace does not
+  // change the compact activity indicators or their subscription identity.
+  const activity = useMemo(() => JSON.parse(activitySignature) as RunView[], [activitySignature]);
+  const conversation = useMemo(() => ({
+    active: state.active,
+    attachment: state.attachment,
+    busy: state.busy,
+    cancelChild: commands.cancelChild,
+    changedPaths: commands.changedPaths,
+    conversationActive: state.conversationActive,
+    conversationId: state.conversationId,
+    draftSaved: state.draftSaved,
+    draftSaving: state.draftSaving,
+    historyBusy: state.historyBusy,
+    loadOlderRuns: commands.loadOlderRuns,
+    modelLabel: state.modelLabel,
+    openModels: commands.openModels,
+    projectActive: projectActive,
+    projectLoading: state.projectLoading,
+    prompt: state.prompt,
+    returnToActiveConversation: commands.returnToActiveConversation,
+    reviewProposal: commands.reviewProposal,
+    reviewTask: commands.reviewTask,
+    runsApi: state.runtime?.runs,
+    selectedConversation: state.selectedConversation,
+    setAttachment: commands.setAttachment,
+    setPrompt: commands.setPrompt,
+    setSheet: commands.setSheet,
+    settings: state.settings,
+    stop: commands.stop,
+    submit: commands.submit,
+    taskCursor: state.taskCursor,
+    tasks: state.tasks,
+  }), [state.active, state.attachment, state.busy, commands.cancelChild, commands.changedPaths, state.conversationActive, state.conversationId, state.draftSaved, state.draftSaving, state.historyBusy, commands.loadOlderRuns, state.modelLabel, commands.openModels, projectActive, state.projectLoading, state.prompt, commands.returnToActiveConversation, commands.reviewProposal, commands.reviewTask, state.runtime?.runs, state.selectedConversation, commands.setAttachment, commands.setPrompt, commands.setSheet, state.settings, commands.stop, commands.submit, state.taskCursor, state.tasks]);
+  const editor = useMemo(() => ({
+    busy: state.busy,
+    closeEditor: commands.closeEditor,
+    confirmation: state.confirmation,
+    deleteEditor: commands.deleteEditor,
+    dirty: state.dirty,
+    editor: state.editor,
+    error: state.error,
+    exportEditor: commands.exportEditor,
+    files: state.files,
+    preview: state.runtime?.workspace.preview,
+    projectActive: projectActive,
+    renameEditor: commands.renameEditor,
+    review: state.review,
+    saveEditor: commands.saveEditor,
+    setEditor: commands.setEditor,
+    setSheet: commands.setSheet,
+    sheet: state.sheet,
+  }), [state.busy, commands.closeEditor, state.confirmation, commands.deleteEditor, state.dirty, state.editor, state.error, commands.exportEditor, state.files, state.runtime?.workspace.preview, projectActive, commands.renameEditor, state.review, commands.saveEditor, commands.setEditor, commands.setSheet, state.sheet]);
+  const files = useMemo(() => ({
+    busy: state.busy,
+    files: state.files,
+    importFile: commands.importFile,
+    newFile: commands.newFile,
+    openFile: commands.openFile,
+    openPath: state.editor?.path,
+    preview: state.runtime?.workspace.preview,
+    projectActive: projectActive,
+    projectId: state.projectId,
+    projectLoading: state.projectLoading,
+  }), [state.busy, state.files, commands.importFile, commands.newFile, commands.openFile, state.editor?.path, state.runtime?.workspace.preview, projectActive, state.projectId, state.projectLoading]);
+  const git = useMemo(() => ({
+    busy: state.busy,
+    changeStage: commands.changeStage,
+    commitDrafts: state.commitDrafts,
+    commitGit: commands.commitGit,
+    confirmRestore: commands.confirmRestore,
+    dirty: state.dirty,
+    discardGit: commands.discardGit,
+    error: state.error,
+    gitStatus: state.gitStatus,
+    loadOlderVersions: commands.loadOlderVersions,
+    projectActive: projectActive,
+    projectId: state.projectId,
+    projectLoading: state.projectLoading,
+    review: state.review,
+    reviewGit: commands.reviewGit,
+    reviewVersion: commands.reviewVersion,
+    setCommitDraft: commands.setCommitDraft,
+    setReview: commands.setReview,
+    versionCursor: state.versionCursor,
+    versions: state.versions,
+    versionsBusy: state.versionsBusy,
+  }), [state.busy, commands.changeStage, state.commitDrafts, commands.commitGit, commands.confirmRestore, state.dirty, commands.discardGit, state.error, state.gitStatus, commands.loadOlderVersions, projectActive, state.projectId, state.projectLoading, state.review, commands.reviewGit, commands.reviewVersion, commands.setCommitDraft, commands.setReview, state.versionCursor, state.versions, state.versionsBusy]);
+  const runs = useMemo(() => ({
+    busy: state.busy,
+    conversationId: state.conversationId,
+    projects: state.projects,
+    returnToActiveConversation: commands.returnToActiveConversation,
+    runs: activity,
+  }), [state.busy, state.conversationId, state.projects, commands.returnToActiveConversation, activity]);
+  const dialogs = useMemo(() => ({
+    action: commands.action,
+    appearance: state.appearance,
+    archiveConversation: commands.archiveConversation,
+    busy: state.busy,
+    configuration: state.configuration,
+    confirm: commands.confirm,
+    confirmation: state.confirmation,
+    conversationId: state.conversationId,
+    conversationName: state.conversationName,
+    conversations: state.conversations,
+    createProject: commands.createProject,
+    editorOpen: editorOpen,
+    error: state.error,
+    formatMismatch: state.formatMismatch,
+    loading: state.loading,
+    modelsApi: state.runtime?.models,
+    newConversation: commands.newConversation,
+    newProject: commands.newProject,
+    notice: state.notice,
+    openAgentSettings: commands.openAgentSettings,
+    openMcpConfig: commands.openMcpConfig,
+    openModelConfig: commands.openModelConfig,
+    openSettings: commands.openSettings,
+    openSkills: commands.openSkills,
+    projectActive: projectActive,
+    projectId: state.projectId,
+    projectName: state.projectName,
+    projects: state.projects,
+    rebuildData: commands.rebuildData,
+    renameConversation: commands.renameConversation,
+    restoreConversation: commands.restoreConversation,
+    reviewOpen: reviewOpen,
+    runs: activity,
+    saveAndLeave: commands.saveAndLeave,
+    selectConversation: commands.selectConversation,
+    selectProject: commands.selectProject,
+    selectTab: commands.selectTab,
+    selectedConversation: state.selectedConversation,
+    selectedProject: state.selectedProject,
+    setAppearance: commands.setAppearance,
+    setConfirmation: commands.setConfirmation,
+    setConversationName: commands.setConversationName,
+    setError: commands.setError,
+    setProjectName: commands.setProjectName,
+    setSheet: commands.setSheet,
+    sheet: state.sheet,
+    startRenameConversation: commands.startRenameConversation,
+    tab: state.tab,
+  }), [commands.action, state.appearance, commands.archiveConversation, state.busy, state.configuration, commands.confirm, state.confirmation, state.conversationId, state.conversationName, state.conversations, commands.createProject, editorOpen, state.error, state.formatMismatch, state.loading, state.runtime?.models, commands.newConversation, commands.newProject, state.notice, commands.openAgentSettings, commands.openMcpConfig, commands.openModelConfig, commands.openSettings, commands.openSkills, projectActive, state.projectId, state.projectName, state.projects, commands.rebuildData, commands.renameConversation, commands.restoreConversation, reviewOpen, activity, commands.saveAndLeave, commands.selectConversation, commands.selectProject, commands.selectTab, state.selectedConversation, state.selectedProject, commands.setAppearance, commands.setConfirmation, commands.setConversationName, commands.setError, commands.setProjectName, commands.setSheet, state.sheet, commands.startRenameConversation, state.tab]);
+  return { conversation, editor, files, git, runs, dialogs };
+}
+
+export type ConversationCapability = ReturnType<typeof useWorkbench>['conversation'];
+export type EditorCapability = ReturnType<typeof useWorkbench>['editor'];
+export type FilesCapability = ReturnType<typeof useWorkbench>['files'];
+export type GitCapability = ReturnType<typeof useWorkbench>['git'];
+export type RunsCapability = ReturnType<typeof useWorkbench>['runs'];
+export type DialogsCapability = ReturnType<typeof useWorkbench>['dialogs'];

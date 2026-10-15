@@ -1,6 +1,6 @@
 import { expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
-import { PiEngineAdapter } from '../src/adapters/agent/pi/engine';
+import { PiEngineAdapter } from '../src/adapters/agent/pi-engine';
 import { demoTransport } from '../src/adapters/agent/demo';
 import { RequestScheduler, type RequestPermit } from '../src/application/runs/request-scheduler';
 import { defineTool, result } from '../src/application/tools/common';
@@ -9,7 +9,7 @@ it('Pi 在工具等待前释放模型请求槽，正常结束和传输失败都�
   const scheduler = new RequestScheduler(1, 1); let permit: RequestPermit | undefined;
   const entered = Promise.withResolvers<void>(); const waiting = Promise.withResolvers<void>();
   const transport = demoTransport('request lifecycle');
-  const tools = [defineTool({ name: 'list_files', label: 'list', description: 'list', parameters: Type.Object({}), async execute() {
+  const tools = [defineTool({ effect: 'read', name: 'list_files', label: 'list', description: 'list', parameters: Type.Object({}), async execute() {
     expect(scheduler.getSnapshot().active).toBe(0); entered.resolve(); await waiting.promise; return result([]);
   } })];
   const controls = { beforeRequest: async (signal?: AbortSignal) => { permit = await scheduler.acquire('root', 'provider', signal); },

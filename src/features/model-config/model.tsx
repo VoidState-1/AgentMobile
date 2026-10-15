@@ -5,7 +5,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { defaultModelParameters, unknownCapabilities, type ModelInput, type CapabilityName, type CheckKind, type ModelEntry } from '@/core/models/types';
 import { presetModelEvidence, protocolNames } from '@/core/models/presets';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchUi } from '@/shared/state/workbench';
+import { useWorkbenchUi } from '@/shared/workbench-state';
 import { CheckResult, Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useConfiguration, useDraftGuard, type ConfigurationController } from './common';
 
 const names: Record<CapabilityName, string> = { tools: '工具调用', images: '图片理解', reasoning: '思考能力' };

@@ -1,13 +1,13 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext } from '@earendil-works/pi-ai';
-import type { TaskRecord } from '../src/core/runs/types';
+import type { ExecutionView } from '../src/core/runs/types';
 import type { TraceItem } from '../src/core/trace';
 import { finishTool, settleTrace } from '../src/core/trace';
 import { protocolBody, protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { runSnapshot, validateModelEntity, validateReasoningParameters } from '../src/core/models/rules';
 import type { ModelEntry, ProviderConnection } from '../src/core/models/types';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { startTestRun } from './agent-runtime';
 import { protocols, snapshot, streamed, answerEvents, toolEvents } from './protocol-fixtures';
 import { testStorage } from './storage';
@@ -18,7 +18,7 @@ afterEach(async () => { vi.unstubAllGlobals(); for (const cleanup of cleanups.sp
 describe.each(protocols)('%s 工作轨迹', (protocol) => {
   it('推理逐段传递，文字与工具跨轮交错保存；同名工具按调用 ID 配对', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('轨迹验证');
     await workspace.write(project.id, 'documents/one.md', new TextEncoder().encode('FIRST_NOTE'), null);
     await workspace.write(project.id, 'documents/two.md', new TextEncoder().encode('SECOND_NOTE'), null);
@@ -39,7 +39,7 @@ describe.each(protocols)('%s 工作轨迹', (protocol) => {
       events.splice(5, 0, { type: 'content_block_start', index: 1, content_block: { type: 'text', text: '我先读取两份笔记。' } }, { type: 'content_block_stop', index: 1 });
       events.splice(events.length - 2, 0, { type: 'content_block_start', index: 3, content_block: { type: 'tool_use', id: 'second-call', name: 'read_text', input: { path: 'documents/two.md' } } }, { type: 'content_block_stop', index: 3 });
     }
-    const bodies: any[] = []; const updates: TaskRecord[] = [];
+    const bodies: any[] = []; const updates: ExecutionView[] = [];
     vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
       bodies.push(JSON.parse(String(init.body))); return streamed(bodies.length === 1 ? events : answerEvents(protocol, '两份笔记已核对。'));
     });
@@ -84,7 +84,7 @@ describe('轨迹恢复与推理参数', () => {
     expect(message.content[0]).toMatchObject({ type: 'thinking', thinking: '', redacted: true, visibility: 'unavailable' });
     expect(JSON.stringify(protocolBody(config, [message], []))).toContain('encrypted-only');
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('受保护推理');
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID); const project = await workspace.create('受保护推理');
     const run = await startTestRun(workspace, project.id, 'test', { model: config, secret: 'fixture' });
     const task = await run.done;
     expect(task.trace?.[0]).toMatchObject({ kind: 'reasoning', visibility: 'unavailable', text: '' });
@@ -100,13 +100,13 @@ describe('轨迹恢复与推理参数', () => {
   });
   it('取消保留部分推理，串行检查点最终状态不被旧写入覆盖', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const originalBatch = storage.metadata.batch!; let writing = 0; let maximum = 0;
-    storage.metadata.batch = async (entries) => {
-      const runWrite = entries.some(entry => entry.bucket === 'runs-v2');
+    const writeBusiness = storage.metadata.writeBusiness; let writing = 0; let maximum = 0;
+    storage.metadata.writeBusiness = async batch => {
+      const runWrite = !!batch.runs?.length;
       if (runWrite) { maximum = Math.max(maximum, ++writing); await new Promise((resolve) => setTimeout(resolve, 15)); }
-      try { await originalBatch(entries); } finally { if (runWrite) writing--; }
+      try { await writeBusiness(batch); } finally { if (runWrite) writing--; }
     };
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID); const project = await workspace.create('取消推理');
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID); const project = await workspace.create('取消推理');
     const config = snapshot('chat-completions'); config.compatibility = 'deepseek'; config.parameters.reasoning = 'on';
     vi.stubGlobal('fetch', async () => new Response(new ReadableStream({ start(controller) {
       controller.enqueue(new TextEncoder().encode('data: {"choices":[{"delta":{"reasoning_content":"部分公开推理"}}]}\n\n'));

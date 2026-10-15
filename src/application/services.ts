@@ -1,25 +1,27 @@
-import type { Project } from '@/core/projects/types';
-import type { Operation, ProjectFile } from '@/core/workspace/types';
+import type { Project } from '@/core/projects';
+import type { ProjectFile } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
-import type { TaskRecord } from '@/core/runs/types';
-import type { GitStatus } from '@/core/git/contracts';
-import type { ModelConfigurationService } from '@/application/models/configuration';
-import type { CheckKind, DiagnosticResult } from '@/core/models/types';
-import type { ConversationService } from '@/application/conversations/service';
-import type { AgentSettingsService } from '@/application/settings/agent';
-import type { McpConfigurationService } from '@/application/mcp/configuration';
-import type { McpAttempt } from '@/core/mcp/types';
-import type { SkillService } from '@/application/skills/library';
-import type { SkillBundle, SkillRepository } from '@/core/skills/types';
-import type { PreferencesService } from './settings/preferences';
-import type { ProposalService } from './runs/proposals';
+import type { RunListQuery, RunPage, RunDetail, RunView, RunChange } from '@/core/runs/queries';
+import type { TracePage, TextPage } from '@/core/runs/trace-storage';
+import type { GitStatus, GitHistoryQuery, GitHistoryPage } from '@/core/git/contracts';
+import type { CheckKind, DiagnosticResult, ModelConfiguration, ConnectionInput, ProviderConnection, ModelInput, ModelEntry } from '@/core/models/types';
+import type { McpAttempt, McpConfiguration, McpServerInput, McpServer } from '@/core/mcp/types';
+import type { SkillBundle, SkillConfiguration, SkillVersionPage } from '@/core/skills/types';
+import type { ConversationState, Conversation, ConversationDraft } from '@/core/conversations/types';
+import type { AgentSettings } from '@/core/agent/settings';
+import type { WorkbenchPreferences } from '@/core/preferences';
+import type { ProposalState } from '@/core/runs/proposals';
 
 export interface FilePreview { revision: string; content: string }
 export interface ReviewFile { path: string; kind: string; before: string; after: string }
-export type WorkspaceOperationSummary = Pick<Operation, 'id' | 'projectId' | 'runId' | 'ownerRootRunId' | 'actorRunId' | 'proposalId' | 'phase'> & { changes: { path: string }[] };
+export interface WorkspaceOperationSummary {
+  id: string; projectId: string; ownerRootRunId?: string; actorRunId?: string; proposalId?: string;
+  phase: 'prepared' | 'applied' | 'checkpointed' | 'committed' | 'recorded'; changedPaths: string[];
+}
 export interface WorkspaceSnapshot {
   files: ProjectFile[]; versions: Version[]; gitStatus: GitStatus; operations: WorkspaceOperationSummary[];
   preview?: FilePreview & { path: string };
+  historyCursor?: string;
 }
 export interface WorkspaceApi {
   readonly recoveryIssues: readonly string[];
@@ -30,13 +32,14 @@ export interface WorkspaceApi {
   preview(projectId: string, path: string): Promise<FilePreview>;
   head(projectId: string): Promise<string>;
   snapshot(projectId: string, openPath?: string): Promise<WorkspaceSnapshot>;
+  historyPage(projectId: string, query?: GitHistoryQuery): Promise<GitHistoryPage>;
   write(projectId: string, path: string, bytes: Uint8Array, revision: string | null, options?: { message?: string }): Promise<string>;
   remove(projectId: string, path: string, revision: string): Promise<string>;
   move(projectId: string, from: string, to: string, revision: string): Promise<string>;
   restore(projectId: string, ref: string, expectedHead: string): Promise<string>;
   changes(projectId: string, before: string | undefined, after: string): Promise<ReviewFile[]>;
-  taskChanges(task: TaskRecord): Promise<ReviewFile[]>;
-  undoTask(task: TaskRecord): Promise<void>;
+  taskChanges(runId: string): Promise<ReviewFile[]>;
+  undoTask(runId: string): Promise<void>;
   status(projectId: string): Promise<GitStatus>;
   stage(projectId: string, paths: string[], expected: Pick<GitStatus, 'head' | 'indexRevision'> & { revisions: Record<string, string | null> }): Promise<void>;
   unstage(projectId: string, paths: string[], expected: Pick<GitStatus, 'head' | 'indexRevision'>): Promise<void>;
@@ -45,35 +48,85 @@ export interface WorkspaceApi {
   discard(projectId: string, paths: string[], expected: GitStatus): Promise<void>;
   subscribe(listener: (change: { projectId: string; paths: readonly string[]; commit: string }) => void): () => void;
 }
-export type ModelsApi = Pick<ModelConfigurationService, 'getSnapshot' | 'subscribe' | 'saveConnection' | 'copyConnection' | 'removeConnection' | 'keyReady' |
-  'saveModel' | 'removeModel' | 'setSelection' | 'setMode' | 'affectedDefaults'> & {
+export interface ModelsApi {
   readonly recoveryIssues: readonly string[];
+  getSnapshot(): ModelConfiguration;
+  subscribe(listener: () => void): () => void;
+  saveConnection(input: ConnectionInput, key?: { value?: string; remove?: boolean }, revision?: number): Promise<ProviderConnection>;
+  copyConnection(id: string): Promise<ProviderConnection>;
+  removeConnection(id: string): Promise<void>;
+  keyReady(id: string): Promise<boolean>;
+  saveModel(input: ModelInput, revision?: number): Promise<ModelEntry>;
+  removeModel(id: string): Promise<void>;
+  setSelection(scope: 'global' | 'project' | 'session', modelId: string | undefined, ownerId?: string): Promise<void>;
+  setMode(mode: 'demo' | 'remote', sessionId?: string): Promise<void>;
+  affectedDefaults(connectionId: string): number;
   diagnose(connectionId: string, modelId: string | undefined, kind: CheckKind, signal?: AbortSignal): Promise<DiagnosticResult>;
-};
-export type ConversationsApi = Pick<ConversationService, 'getSnapshot' | 'subscribe' | 'ensureProject' | 'create' | 'select' | 'rename' | 'archive' | 'restore' | 'saveDraft'>;
-export type McpSettingsApi = Pick<McpConfigurationService, 'getSnapshot' | 'subscribe' | 'saveServer' | 'removeServer' | 'keyReady' | 'grant'>;
-export type SkillsApi = Pick<SkillService, 'getSnapshot' | 'subscribe' | 'install' | 'remove' | 'grant'> & Pick<SkillRepository, 'bundle' | 'versions'> & {
+}
+export interface ConversationsApi {
+  getSnapshot(): ConversationState;
+  subscribe(listener: () => void): () => void;
+  ensureProject(projectId: string): Promise<Conversation>;
+  create(projectId: string): Promise<Conversation>;
+  select(id: string, projectId: string): Promise<void>;
+  rename(id: string, title: string): Promise<void>;
+  archive(id: string): Promise<void>;
+  restore(id: string): Promise<void>;
+  saveDraft(id: string, input: Omit<ConversationDraft, 'revision'>): Promise<ConversationDraft>;
+}
+export interface McpSettingsApi {
+  getSnapshot(): McpConfiguration;
+  subscribe(listener: () => void): () => void;
+  saveServer(input: McpServerInput, token: { value?: string; remove?: boolean }, revision?: number): Promise<McpServer>;
+  removeServer(id: string): Promise<void>;
+  keyReady(id: string): Promise<boolean>;
+  grant(projectId: string, serverId: string, name: string, allow: boolean, fingerprint: string): Promise<void>;
+}
+export interface SkillsApi {
+  getSnapshot(): SkillConfiguration;
+  subscribe(listener: () => void): () => void;
+  install(bundles: SkillBundle[], expectedCommit: string): Promise<void>;
+  remove(name: string, expectedCommit: string): Promise<void>;
+  grant(projectId: string, name: string, allow: boolean, revision: string): Promise<void>;
+  bundle(commit: string, name: string): Promise<SkillBundle>;
+  versions(name: string, cursor?: string, limit?: number): Promise<SkillVersionPage>;
   decodeText(bytes: Uint8Array): string;
   validateBundle(files: SkillBundle['files'], folderName?: string): SkillBundle;
   importPackage(name: string, bytes: Uint8Array): SkillBundle[];
-};
+}
+export interface AgentSettingsApi {
+  getSnapshot(): AgentSettings;
+  save(input: Pick<AgentSettings, 'systemPrompt' | 'limits'>, revision: number): Promise<AgentSettings>;
+}
+export interface PreferencesApi {
+  getWorkbench(): Promise<WorkbenchPreferences | undefined>;
+  saveWorkbench(value: WorkbenchPreferences): Promise<void>;
+}
 export interface AgentApi {
-  getSnapshot(): { active?: TaskRecord; completed?: TaskRecord; runs?: readonly TaskRecord[]; error?: string; starting: boolean };
+  getSnapshot(): { active?: RunView; completed?: RunView; runs: readonly RunView[]; error?: string; starting: boolean; availability: 'ready' | 'recovery_required' };
   subscribe(listener: () => void): () => void;
   start(projectId: string, prompt: string, imageAttached?: boolean, conversationId?: string, draftRevision?: number): Promise<void>;
   cancel(runId?: string): void | Promise<void>;
 }
+export interface RunsApi {
+  list(query: RunListQuery): Promise<RunPage>;
+  getDetail(runId: string): Promise<RunDetail>;
+  listChildren(rootRunId: string, cursor?: string): Promise<RunPage>;
+  listTrace(runId: string, cursor?: string): Promise<TracePage>;
+  readTraceText(nodeId: string, offset?: number): Promise<TextPage>;
+  subscribe(listener: (change: RunChange) => void): () => void;
+}
 export interface AppServices {
-  proposals?: Pick<ProposalService, 'preview'>;
+  proposals?: { preview(rootRunId: string, id: string): Promise<{ id: string; state: ProposalState; paths: string[]; conflicts?: string[]; files: ReviewFile[] }> };
   workspace: WorkspaceApi;
   models: ModelsApi;
   conversations: ConversationsApi;
-  agentSettings: Pick<AgentSettingsService, 'getSnapshot' | 'save'>;
+  agentSettings: AgentSettingsApi;
   agent: AgentApi;
   skills: SkillsApi;
   mcp: { configuration: McpSettingsApi; discover(id: string, signal?: AbortSignal): Promise<void>; unknown(serverId?: string): Promise<McpAttempt[]>; acknowledge(id: string): Promise<void> };
-  preferences: Pick<PreferencesService, 'getWorkbench' | 'saveWorkbench'>;
-  tasks(projectId: string, conversationId?: string): Promise<TaskRecord[]>;
+  preferences: PreferencesApi;
+  runs: RunsApi;
   io: {
     pickFile(): Promise<{ name: string; bytes: Uint8Array } | undefined>;
     pickSkillPackage(): Promise<{ name: string; bytes: Uint8Array } | undefined>;

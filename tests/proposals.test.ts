@@ -1,20 +1,20 @@
+import type { WorkspaceApplication } from '../src/application/workspace/service';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it } from 'vitest';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { contentCodec } from '../src/adapters/storage/codec';
 import { defaultAgentSettings } from '../src/core/agent/settings';
-import { builtinAgents } from '../src/core/agents/types';
+import { builtinAgents } from '../src/core/agent/definitions';
 import type { RunRecord } from '../src/core/runs/records';
-import type { Operation } from '../src/core/workspace/types';
 import { RunRepository } from '../src/application/runs/repository';
 import { ProposalService } from '../src/application/runs/proposals';
 import { recoverRuns } from '../src/application/runs/recovery';
-import { testStorage } from './storage';
+import { testStorage, readOperations } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
 afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
-async function fixture(paths = ['documents/notes.md', 'documents/new.md'], dirty = false, setup?: (workspace: WorkspaceService, id: string) => Promise<void>) {
-  const f = await testStorage(); cleanups.push(f.cleanup); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('隔离提案');
+async function fixture(paths = ['documents/notes.md', 'documents/new.md'], dirty = false, setup?: (workspace: WorkspaceApplication, id: string) => Promise<void>) {
+  const f = await testStorage(); cleanups.push(f.cleanup); const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('隔离提案');
   await setup?.(workspace, project.id);
   if (dirty) {
     const path = 'documents/notes.md'; const original = await workspace.readText(project.id, path); await workspace.write(project.id, path, contentCodec.encodeText('user v1'), original.revision);
@@ -22,8 +22,8 @@ async function fixture(paths = ['documents/notes.md', 'documents/new.md'], dirty
     const v1 = await workspace.readText(project.id, path); await workspace.write(project.id, path, contentCodec.encodeText('user v2'), v1.revision);
   }
   workspace.claim(project.id, 'root'); const baseline = await workspace.taskBaseline(project.id, 'root'); const original = await workspace.readText(project.id, 'documents/notes.md');
-  const runs = new RunRepository(f.metadata); const root: RunRecord = { schemaVersion: 2, id: 'root', rootRunId: 'root', kind: 'root', depth: 0, state: 'running', projectId: project.id, conversationId: 'conversation',
-    prompt: '合入提案', response: '', events: [], createdAt: new Date().toISOString(), mode: 'demo', agentDefinitionId: 'main', agentDefinitionRevision: 1, launchSnapshotRef: 'root',
+  const runs = new RunRepository(f.metadata); const root: RunRecord = { schemaVersion: 3, id: 'root', rootRunId: 'root', kind: 'root', depth: 0, state: 'running', projectId: project.id, conversationId: 'conversation',
+    prompt: '合入提案', response: '', createdAt: new Date().toISOString(), mode: 'demo', agentDefinitionId: 'main', agentDefinitionRevision: 1, launchSnapshotRef: 'root',
     agentSettingsSnapshot: defaultAgentSettings(), baseCommit: baseline.head, baseSnapshot: baseline.working, baseIndexSnapshot: baseline.index };
   const child: RunRecord = { ...root, id: 'child', rootRunId: root.id, parentRunId: root.id, kind: 'child', depth: 1, agentDefinitionId: 'writer', agentDefinitionRevision: 1, launchSnapshotRef: 'child',
     inputSnapshotRef: baseline.working, proposalId: 'proposal-child', baseSnapshot: undefined, baseIndexSnapshot: undefined };
@@ -48,12 +48,12 @@ it('候选写入不改变真实文件/index/HEAD，稳定回执不重复；合�
   const result = await f.proposals.apply('root', f.overlay.id); expect(result.applied).toBe(true);
   expect((await f.workspace.readText(f.project.id, 'documents/notes.md')).text).toBe('PRIVATE_CANDIDATE_CONTENT');
   expect((await f.workspace.status(f.project.id)).indexRevision).toBe(status.indexRevision); expect(await f.workspace.git.head(f.project.id)).toBe(status.head);
-  const op = (await f.metadata.all<Operation>('operations')).find((operation) => operation.proposalId === f.overlay.id)!;
-  expect(op).toMatchObject({ runId: 'root', ownerRootRunId: 'root', actorRunId: 'child', mergedByRunId: 'root', phase: 'recorded' });
+  const op = (await readOperations(f.metadata, f.project.id)).find((operation) => operation.proposalId === f.overlay.id)!;
+  expect(op).toMatchObject({ ownerRootRunId: 'root', actorRunId: 'child', mergedByRunId: 'root', phase: 'recorded' });
   const task = await f.workspace.taskFinal({ ...f.root, state: 'completed' }); expect(task.changedPaths!.sort()).toEqual(['documents/new.md', 'documents/notes.md']);
   await expect(f.workspace.stage(f.project.id, ['documents/notes.md'], { head: status.head, indexRevision: status.indexRevision, revisions: {} }, 'root', f.baseline)).rejects.toThrow();
   f.workspace.release(f.project.id, 'root'); await f.workspace.undoTask(task);
-  expect((await f.workspace.readText(f.project.id, 'documents/notes.md')).text).toBe('user v2'); expect(await f.workspace.status(f.project.id)).toEqual(status); expect(await f.workspace.git.log(f.project.id)).toHaveLength(1);
+  expect((await f.workspace.readText(f.project.id, 'documents/notes.md')).text).toBe('user v2'); expect(await f.workspace.status(f.project.id)).toEqual(status); expect((await f.workspace.git.historyPage(f.project.id, { limit: 100 })).versions).toHaveLength(1);
 });
 
 it('多文件全部预检，冲突不合入任何路径，提案保持可检查；候选==基线/当前==候选均不覆盖', async () => {
@@ -86,7 +86,7 @@ it('合入在第二文件写入中断，文件日志恢复整批并补提案回�
   const write = f.files.write; let fail = true;
   f.files.write = async (path, bytes) => { if (path.endsWith('/documents/new.md') && fail) { fail = false; throw new Error('file interrupted'); } await write(path, bytes); };
   await expect(f.proposals.apply('root', f.overlay.id)).rejects.toThrow('interrupted'); expect((await f.proposals.repository.get(f.overlay.id))?.state).toBe('applying');
-  f.files.write = write; f.workspace.release(f.project.id, 'root'); const reopened = new WorkspaceService(f.files, f.metadata, randomUUID); await reopened.recover();
+  f.files.write = write; f.workspace.release(f.project.id, 'root'); const reopened = createWorkspace(f.files, f.metadata, randomUUID); await reopened.recover();
   await new ProposalService(reopened, f.runs, contentCodec).recover(); await recoverRuns(f.runs, reopened, []);
   expect((await f.proposals.repository.get(f.overlay.id))?.state).toBe('applied'); expect((await f.runs.get('child'))?.state).toBe('completed');
   const root = (await f.runs.view('root'))!; expect(root.state).toBe('interrupted'); expect(root.changedPaths!.sort()).toEqual(['documents/new.md', 'documents/notes.md']);

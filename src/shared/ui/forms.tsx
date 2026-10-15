@@ -5,7 +5,7 @@ import { usePreventRemove } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from './icons';
 import { Button, IconButton, Sheet, T } from './primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 
 export function useDraftGuard(dirty: boolean) {
   const navigation = useNavigation(); const [leave, setLeave] = useState<(() => void)>(); const [allowed, setAllowed] = useState(false);

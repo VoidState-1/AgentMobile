@@ -9,15 +9,16 @@ export function useConversationDraft(runtimeRef: { current: AppServices | undefi
   const draftWrites = useRef(new Map<string, Promise<unknown>>());
   const [draftSaved, setDraftSaved] = useState(true);
   const [draftSaving, setDraftSaving] = useState(false);
+  const replaceComposer = useCallback((next: ComposerDraft) => { composerRef.current = next; setComposer(next); }, []);
 
   const installConversation = useCallback((conversation: Conversation) => {
     const draft = runtimeRef.current?.conversations.getSnapshot().drafts[conversation.id];
     const next = { conversationId: conversation.id, text: draft?.text ?? '', attachment: draft?.attachment };
-    composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false);
-  }, [runtimeRef]);
+    replaceComposer(next); setDraftSaved(true); setDraftSaving(false);
+  }, [runtimeRef, replaceComposer]);
 
 function writeComposer(next: ComposerDraft) {
-    composerRef.current = next; setComposer(next); const value = runtimeRef.current;
+    replaceComposer(next); const value = runtimeRef.current;
     if (!value || !next.conversationId) return;
     setDraftSaved(false); setDraftSaving(true);
     const pending = value.conversations.saveDraft(next.conversationId, { text: next.text, attachment: next.attachment });
@@ -46,5 +47,7 @@ async function flushDraft(draft = composerRef.current) {
     if (composerRef.current === draft) { setDraftSaved(true); setDraftSaving(false); }
     return saved;
   }
-  return { composer, composerRef, draftSaved, draftSaving, installConversation, writeComposer, setPrompt, setAttachment, flushDraft, clear: () => { const next = { conversationId, text: '' }; composerRef.current = next; setComposer(next); setDraftSaved(true); setDraftSaving(false); } };
+  const reader: { readonly current: ComposerDraft } = composerRef;
+  return { composer, composerRef: reader, draftSaved, draftSaving, installConversation, writeComposer, setPrompt, setAttachment, flushDraft,
+    clear: () => { replaceComposer({ conversationId, text: '' }); setDraftSaved(true); setDraftSaving(false); } };
 }

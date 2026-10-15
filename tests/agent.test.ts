@@ -1,6 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { startTestRun } from './agent-runtime';
 import { chatSnapshot } from './protocol-fixtures';
 import { SseDecoder } from '../src/adapters/model/sse';
@@ -14,26 +14,26 @@ afterEach(async () => { vi.unstubAllGlobals(); for (const cleanup of cleanups.sp
 describe('Pi Agent 真实执行循环', () => {
   it('演示经过工具读取和写入，产生真实 Git 修改，并可整次撤销', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('原型测试');
     const started = await startTestRun(workspace, project.id, '整理我的资料');
     const task = await started.done;
     expect(task.state).toBe('completed');
-    expect(task.events.map((event) => [event.tool, event.state])).toEqual([
-      ['list_files', 'done'], ['read_text', 'done'], ['write_text', 'done'],
+    expect(task.trace!.filter(item => item.kind === 'tool').map(item => [item.tool, item.state])).toEqual([
+      ['list_files', 'completed'], ['read_text', 'completed'], ['write_text', 'completed'],
     ]);
     expect((await workspace.readText(project.id, 'documents/summary.md')).text).toContain('整理我的资料');
     expect(task.finalCommit).toBe(task.baseCommit);
     expect(task.finalSnapshot).not.toBe(task.baseSnapshot);
     expect(task.uncommittedPaths).toEqual(['documents/summary.md']);
-    expect(await workspace.git.log(project.id)).toHaveLength(1);
+    expect((await workspace.git.historyPage(project.id, { limit: 100 })).versions).toHaveLength(1);
     await workspace.undoTask(task);
     await expect(workspace.readText(project.id, 'documents/summary.md')).rejects.toThrow();
   });
 
   it('取消会停止新的工具动作并释放工作区', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('取消测试');
     const started = await startTestRun(workspace, project.id, '整理资料');
     started.cancel();
@@ -43,7 +43,7 @@ describe('Pi Agent 真实执行循环', () => {
 
   it('下一条消息保留上一次目标和回复，不重放过去的工具调用', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('连续会话');
     const requests: { role: string; content: string }[][] = [];
     vi.stubGlobal('fetch', async (_url: unknown, init: RequestInit) => {
@@ -63,7 +63,7 @@ describe('Pi Agent 真实执行循环', () => {
 
   it('多轮工具执行后回复只保留最终答案，完整过程保存在 transcript', async () => {
     const storage = await testStorage(); cleanups.push(storage.cleanup);
-    const workspace = new WorkspaceService(storage.files, storage.metadata, randomUUID);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
     const project = await workspace.create('回复排版');
     let round = 0;
     vi.stubGlobal('fetch', async () => {
@@ -77,8 +77,8 @@ describe('Pi Agent 真实执行循环', () => {
     const started = await startTestRun(workspace, project.id, '查看资料', { model: settings, secret: 'test-only' });
     const task = await started.done;
     expect(task.response).toBe('已查看项目资料。');
-    expect(task.events).toMatchObject([{ tool: 'list_files', state: 'done' }]);
-    const transcript = await storage.metadata.get<{ messages: unknown[] }>('run-transcripts', task.id);
+    expect(task.trace!.filter(item => item.kind === 'tool')).toMatchObject([{ tool: 'list_files', state: 'completed' }]);
+    const transcript = await storage.metadata.transcriptFrames(task.id, -1, 100);
     expect(JSON.stringify(transcript)).toContain('我先查看项目。');
   });
 });

@@ -26,7 +26,7 @@ export function demoTransport(prompt: string, readOnly = false): { model: Model<
     else {
       const listing = context.messages.find((item) => item.role === 'toolResult' && item.toolName === 'list_files');
       const text = listing?.role === 'toolResult' ? listing.content.filter((part) => part.type === 'text').map((part) => part.text).join('') : '[]';
-      const files = JSON.parse(text) as { path: string; revision: string }[];
+      const files = (JSON.parse(text) as { files: { path: string; revision: string }[] }).files;
       if (round === 2) call('read_text', { path: files.find((file) => /\.md$/.test(file.path))?.path ?? files[0]?.path ?? 'documents/notes.md' });
       else if (round === 3 && !readOnly) {
         const reading = context.messages.find((item) => item.role === 'toolResult' && item.toolName === 'read_text');

@@ -1,10 +1,10 @@
 import { Type } from 'typebox';
-import { AppError, publicError } from '@/core/errors';
-import { builtinAgents } from '@/core/agents/types';
-import { Signal } from '@/core/events/signal';
+import { AppError } from '@/core/errors';
+import { builtinAgents } from '@/core/agent/definitions';
+import { Signal } from '@/core/signal';
 import type { RunRecord } from '@/core/runs/records';
 import { terminalRun } from '@/core/runs/records';
-import type { TaskRecord } from '@/core/runs/types';
+import type { ExecutionView } from '@/core/runs/types';
 import type { ChildResult, SpawnRequest } from '@/core/runs/delegation';
 import type { SchedulerLimits } from '@/core/runs/scheduling';
 import { canonical } from '@/core/mcp/rules';
@@ -20,8 +20,9 @@ import type { RunRecorder } from './recorder';
 import type { DelegationPort } from './delegation-port';
 import { executeChild } from './child-controller';
 import { ProposalService } from './proposals';
+import { RunStopController, type StopReason } from '@/core/runs/termination';
 
-interface Child { record: RunRecord; view: TaskRecord; abort: AbortController; running: boolean; done?: Promise<void>; delivered: boolean }
+interface Child { record: RunRecord; view: ExecutionView; stop: RunStopController; running: boolean; done?: Promise<void>; delivered: boolean }
 /** One-level delegation owned by a root, with a single immutable sibling input. */
 export class DelegationSession implements DelegationPort {
   private readonly children = new Map<string, Child>();
@@ -35,10 +36,12 @@ export class DelegationSession implements DelegationPort {
   private readonly proposals: ProposalService;
   constructor(private readonly parent: RunRecord, private readonly prepared: PreparedRun, private readonly workspace: WorkspaceApplication,
     private readonly repository: RunRepository, private readonly budget: GroupBudget, private readonly requests: RequestScheduler,
-    private readonly limits: SchedulerLimits, private readonly abort: AbortController, private readonly id: () => string,
+    private readonly limits: SchedulerLimits, private readonly groupStop: RunStopController, private readonly id: () => string,
     private readonly nextGroupSequence: () => number = (() => { let value = 0; return () => ++value; })()) {
     this.proposals = new ProposalService(workspace, repository, prepared.resources.codec);
-    abort.signal.addEventListener('abort', () => { for (const child of this.children.values()) child.abort.abort(); }, { once: true });
+    groupStop.signal.addEventListener('abort', () => {
+      for (const child of this.children.values()) if (groupStop.reason) child.stop.inherit(groupStop.reason);
+    }, { once: true });
   }
   private publish() {
     if (this.context && this.recorder) { this.context.task.children = [...this.children.values()].map((child) => child.view); this.recorder.publish(); }
@@ -57,7 +60,7 @@ export class DelegationSession implements DelegationPort {
         parameters: Type.Object({ runIds: Type.Array(Type.String(), { minItems: 1, maxItems: 4 }), timeoutMs: Type.Optional(Type.Integer({ minimum: 1, maximum: 60000 })) }, { additionalProperties: false }),
         execute: async (_, args, signal) => { assertRunning(signal); context.task.state = 'waiting_children'; await recorder.persist(); recorder.publish();
           try { await this.wait(args.runIds, args.timeoutMs ?? 30000, signal); return result({ results: await Promise.all(args.runIds.map((id) => this.getResult(id))) }); }
-          finally { context.task.state = this.abort.signal.aborted ? 'cancelling' : 'running'; await recorder.persist(); recorder.publish(); } } }),
+          finally { context.task.state = this.groupStop.signal.aborted ? 'cancelling' : 'running'; await recorder.persist(); recorder.publish(); } } }),
       defineTool({ name: 'get_agent_result', label: '读取子 Agent 结果', effect: 'delegate', description: '只读取本根任务子 Agent 的持久化公开结果、快照与资料引用。',
         parameters: Type.Object({ runId: Type.String() }, { additionalProperties: false }), execute: async (_, args, signal) => { assertRunning(signal); return result(await this.getResult(args.runId)); } }),
       defineTool({ name: 'cancel_agent', label: '取消子 Agent', effect: 'delegate', description: '取消本根任务指定子 Agent，其他子任务继续运行。', parameters: Type.Object({ runId: Type.String() }, { additionalProperties: false }),
@@ -74,7 +77,9 @@ export class DelegationSession implements DelegationPort {
       const fingerprint = canonical(input);
       const previous = await this.repository.delegation(invocationId);
       if (previous) { if (previous.parentRunId !== this.parent.id || previous.fingerprint !== fingerprint) throw new AppError('CONFLICT', '委派调用参数已变化。'); return previous.childRunId; }
-      if (this.closing || this.abort.signal.aborted || this.fatal) throw new AppError('CANCELLED', '父任务正在收束，不能创建子任务。');
+      const parentLaunch = await this.repository.launch(this.parent.launchSnapshotRef);
+      if (!parentLaunch?.agent?.mayDelegate || !parentLaunch.agent.allowedEffects.includes('delegate')) throw new AppError('VALIDATION', '父角色未获委派权限。');
+      if (this.closing || this.groupStop.signal.aborted || this.fatal) throw new AppError('CANCELLED', '父任务正在收束，不能创建子任务。');
       if (!this.prepared.createChild || this.parent.depth >= this.limits.depth || this.children.size >= this.limits.totalChildren) throw new AppError('LIMIT', '子 Agent 数量、深度或引擎能力已达到限制。');
       const definition = builtinAgents.find((item) => item.id === input.role && ['snapshot', 'proposal'].includes(item.workspace));
       if (!definition || !input.prompt.trim() || input.prompt.length > 8000 || !input.paths.length || input.paths.length > 64) throw new AppError('VALIDATION', '子 Agent 角色、目标或资料范围无效。');
@@ -85,16 +90,16 @@ export class DelegationSession implements DelegationPort {
         throw new AppError('VALIDATION', '子任务资料范围包含不存在或受保护的路径。');
       const id = this.id(); const launch = { id, agent: definition, settings: this.parent.agentSettingsSnapshot, model: this.parent.modelSnapshot,
         skills: this.parent.skillsSnapshot, selectedPaths: paths };
-      const record: RunRecord = { schemaVersion: 2, id, rootRunId: this.parent.rootRunId, parentRunId: this.parent.id, projectId: this.parent.projectId, conversationId: this.parent.conversationId,
-        kind: 'child', depth: this.parent.depth + 1, state: 'queued', prompt: input.prompt, response: '', events: [], createdAt: new Date().toISOString(), mode: this.parent.mode,
+      const record: RunRecord = { schemaVersion: 3, id, rootRunId: this.parent.rootRunId, parentRunId: this.parent.id, projectId: this.parent.projectId, conversationId: this.parent.conversationId,
+        kind: 'child', depth: this.parent.depth + 1, state: 'queued', prompt: input.prompt, response: '', createdAt: new Date().toISOString(), mode: this.parent.mode,
         agentDefinitionId: definition.id, agentDefinitionRevision: definition.revision, launchSnapshotRef: id, inputSnapshotRef: this.snapshotRef,
         agentSettingsSnapshot: this.parent.agentSettingsSnapshot, modelSnapshot: this.parent.modelSnapshot, skillsSnapshot: this.parent.skillsSnapshot, deadlineAt: this.budget.snapshot().deadlineAt,
         proposalId: definition.workspace === 'proposal' ? 'proposal-' + id : undefined };
       await this.budget.allocate(id, input.budget, async (group) => {
         await this.repository.createChild({ id: invocationId, parentRunId: this.parent.id, childRunId: id, fingerprint, parentTraceId }, record, launch, group);
       });
-      const child: Child = { record, view: { ...record, trace: [] }, abort: new AbortController(), running: false, delivered: false }; this.children.set(id, child);
-      if (this.abort.signal.aborted) child.abort.abort();
+      const child: Child = { record, view: { ...record, trace: [] }, stop: new RunStopController(id), running: false, delivered: false }; this.children.set(id, child);
+      if (this.groupStop.reason) child.stop.inherit(this.groupStop.reason);
       const trace = this.context?.task.trace?.find((item) => item.id === parentTraceId);
       if (trace?.kind === 'tool') trace.childRunIds = [...(trace.childRunIds ?? []), id];
       this.publish(); this.pump(); return id;
@@ -113,8 +118,10 @@ export class DelegationSession implements DelegationPort {
       references: entries.filter((entry) => launch?.selectedPaths?.includes(entry.path)), warnings: view.error ? [view.error] : view.state === 'completed' ? [] : ['子任务尚未完成或已中止，请勿声称已经获得完整结果。'],
       proposal: proposal ? await this.proposals.summary(this.parent.id, proposal.id) : undefined };
   }
-  async cancel(id: string) {
-    const child = this.require(id); child.abort.abort(); await this.repository.cancel(id);
+  async cancel(id: string, ancestor?: StopReason) {
+    const child = this.require(id);
+    if (ancestor) child.stop.inherit(ancestor); else child.stop.cancelUser();
+    if (!await this.repository.cancel(id, child.stop.reason!)) return;
     if (!child.running) {
       child.view = (await this.repository.view(id))!; await this.budget.releaseAllocation(id); this.publish();
     } else { child.view = { ...child.view, state: 'cancelling' }; this.publish(); }
@@ -133,7 +140,10 @@ export class DelegationSession implements DelegationPort {
   }
   async settle(cancel: boolean): Promise<ChildResult[]> {
     this.closing = true; await this.queue.catch(() => {});
-    if (cancel || this.abort.signal.aborted || this.fatal) for (const child of this.children.values()) if (!terminalRun(child.view.state)) await this.cancel(child.record.id);
+    if (cancel || this.groupStop.signal.aborted || this.fatal) for (const child of this.children.values()) if (!terminalRun(child.view.state)) {
+      await this.cancel(child.record.id, this.groupStop.reason ?? { kind: 'engine_error', originRunId: this.parent.id, at: new Date().toISOString(),
+        error: { code: 'CANCELLED', message: '父任务已结束，停止未收束的子任务。' } });
+    }
     await Promise.all([...this.children.values()].map((child) => child.done));
     // A parallel queue may have started later children while the first await ran.
     while ([...this.children.values()].some((child) => !terminalRun(child.view.state))) {
@@ -153,17 +163,17 @@ export class DelegationSession implements DelegationPort {
     try {
       const launch = (await this.repository.launch(child.record.launchSnapshotRef))!;
       const definition = launch.agent!;
-      if (child.abort.signal.aborted) { await this.repository.cancel(child.record.id); child.view = (await this.repository.view(child.record.id))!; await this.budget.releaseAllocation(child.record.id); }
-      else child.view = await executeChild(child.record, launch, definition, this.prepared, this.workspace, this.repository, this.budget, this.requests, child.abort, (view) => {
+      if (child.stop.signal.aborted) { await this.repository.cancel(child.record.id, child.stop.reason!); child.view = (await this.repository.view(child.record.id))!; await this.budget.releaseAllocation(child.record.id); }
+      else child.view = await executeChild(child.record, launch, definition, this.prepared, this.workspace, this.repository, this.budget, this.requests, child.stop, this.groupStop, (view) => {
         if (!terminalRun(view.state)) { child.view = view; this.publish(); }
       }, this.nextGroupSequence, this.proposals);
     } catch (error) {
       const run = await this.repository.get(child.record.id).catch(() => undefined);
       if (run?.state === 'queued' || run?.state === 'cancelled') {
-        try { await this.repository.save({ ...run, state: child.abort.signal.aborted ? 'cancelled' : 'failed', error: publicError(error).message }); child.view = (await this.repository.view(run.id))!; await this.budget.releaseAllocation(run.id); }
+        try { child.stop.fail(error); await this.repository.save({ ...run, ...child.stop.resolve({ stopReason: 'error' }, this.prepared.launch.outputTokens) }); child.view = (await this.repository.view(run.id))!; await this.budget.releaseAllocation(run.id); }
         catch { this.fatal = '子任务状态保存失败，请重新打开应用恢复。'; }
       } else this.fatal = '子任务状态保存失败，请重新打开应用恢复。';
-      if (this.fatal) { child.view = { ...child.view, state: 'interrupted', error: this.fatal }; this.abort.abort(); }
+      if (this.fatal) { child.view = { ...child.view, state: 'interrupted', error: this.fatal }; this.groupStop.fail(new AppError('STORAGE', this.fatal)); }
     } finally { child.running = false; this.publish(); this.pump(); }
   }
 }

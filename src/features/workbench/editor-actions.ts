@@ -1,11 +1,12 @@
 import { Buffer } from 'buffer';
-import type { TaskRecord } from '@/core/runs/types';
+import type { RunView } from '@/core/runs/queries';
+import { AppError } from '@/core/errors';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { WorkbenchSheet, ActionContext, EditorSession } from './types';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { fileName } from '@/shared/format';
 
-interface EditorContext extends ActionContext, EditorSession { active?: TaskRecord; setSheet(value?: WorkbenchSheet): void; setAttachment(value?: string): void }
+interface EditorContext extends ActionContext, EditorSession { active?: RunView; setSheet(value?: WorkbenchSheet): void; setAttachment(value?: string): void }
 
 export function useEditorActions(context: EditorContext) {
   const { runtime, ui, action, refresh, setNotice, setConfirmation, editor, editorRef, setEditor, active, setSheet, setAttachment } = context;
@@ -32,7 +33,14 @@ export function useEditorActions(context: EditorContext) {
     const current = await runtime.workspace.preview(document.projectId, target);
     const saved = { ...document, path: target, revision: current.revision, fresh: false,
       savedText: document.text, name: fileName(target), savedName: fileName(target) };
-    editorRef.current = saved; setEditor(close ? undefined : saved);
+    const latest = editorRef.current;
+    if (latest?.identity === document.identity) {
+      if (latest === document) setEditor(close ? undefined : saved);
+      else {
+        setEditor({ ...latest, path: target, revision: current.revision, fresh: false, savedText: document.text, savedName: fileName(target) });
+        if (close) throw new AppError('CONFLICT', '保存期间又有新输入，请保存最新修改后再离开。');
+      }
+    }
     setNotice('文件已保存，可在 Git 面板暂存并提交。');
     await refresh(ui.projectId);
   }
@@ -43,7 +51,7 @@ export function useEditorActions(context: EditorContext) {
       setConfirmation({
         title: '有尚未保存的修改', description: '离开前保存文件，或放弃这次编辑。', label: '放弃修改',
         danger: true, saveFirst: true,
-        perform: async () => { setEditor(undefined); editorRef.current = undefined; }, afterPerform: next,
+        perform: async () => { setEditor(undefined); }, afterPerform: next,
       });
     } else next();
   }
@@ -55,7 +63,7 @@ export function useEditorActions(context: EditorContext) {
       void action(async () => {
         if (!runtime || !ui.projectId) return;
         const value = await runtime.workspace.preview(ui.projectId, file.path);
-        setEditor({ projectId: ui.projectId, path: file.path, name: fileName(file.path), savedName: fileName(file.path),
+        setEditor({ identity: Symbol('editor'), projectId: ui.projectId, path: file.path, name: fileName(file.path), savedName: fileName(file.path),
           text: value.content, savedText: value.content, revision: value.revision, image: isImage(file.path), reading: true, fresh: false });
       });
     });
@@ -63,7 +71,7 @@ export function useEditorActions(context: EditorContext) {
 
   function newFile() {
     if (!ui.projectId) return;
-    guard(() => setEditor({ projectId: ui.projectId!, path: 'documents/untitled.md', name: 'untitled.md', savedName: '',
+    guard(() => setEditor({ identity: Symbol('editor'), projectId: ui.projectId!, path: 'documents/untitled.md', name: 'untitled.md', savedName: '',
       text: '', savedText: '', revision: null, image: false, reading: false, fresh: true }));
   }
 
@@ -104,7 +112,9 @@ export function useEditorActions(context: EditorContext) {
       await runtime.workspace.move(document.projectId, document.path, target, document.revision!);
       const current = await runtime.workspace.preview(document.projectId, target);
       const saved = { ...document, path: target, name: targetName, savedName: targetName, revision: current.revision };
-      editorRef.current = saved; setEditor(saved); setSheet(undefined); await refresh(ui.projectId); setNotice('文件已重命名。');
+      const latest = editorRef.current;
+      if (latest?.identity === document.identity) setEditor({ ...saved, text: latest.text });
+      setSheet(undefined); await refresh(ui.projectId); setNotice('文件已重命名。');
     });
   }
   return { persistEditor, guard, closeEditor, openFile, newFile, importFile, deleteEditor, renameEditor };

@@ -2,6 +2,8 @@
 
 日期：2026-10-14。状态：R0–R5 原型实施与阶段验证完成；后续能力见第 15 节。
 
+策略更新：本文保留 R0–R5 的历史设计/实施记录，其中旧格式兼容与迁移不再作为后续要求。未发布开发期允许破坏性接口/格式更新，按 AGENTS.md 与 architecture-improvement.md 清理旧路径，开发数据可重建；当前格式的恢复和外部协议支持继续保留。后续改进已删除旧模型配置、tasks/transcripts、旧对话补写与缺失 kind 分支；下面的迁移步骤仅属已废弃的历史设计。
+
 基线：`42403cf`，现有 React Native / Expo / TypeScript、Pi Agent Core、三类模型协议、远程 MCP、Agent Skills 和真实 Git 工作流。基线已通过 130 项单元测试和 35 项浏览器回归；这些结果不代表本文提出的多 Agent 能力已通过验证。
 
 本文定义后续重构与扩展的架构目标；当前实施状态仍以 [design.md](design.md) 第 2 节和 [validation.md](validation.md) 为准。文件版本语义延续 [git-workflow.md](git-workflow.md)，MCP 与 Skills 的现有兼容范围分别见 [remote-mcp.md](remote-mcp.md)、[agent-skills.md](agent-skills.md)。
@@ -281,7 +283,7 @@ RunEvent 至少包含 runId、rootRunId、parentRunId、runSequence、事件类�
 
 首阶段保留 records 表与现有文件布局。应用实体增加 schemaVersion；仓库/轨迹结构使用单独版本，不将业务 JSON 版本等同于 SQLite 表版本。需要多记录一致性的纯元数据操作通过存储事务端口实现（SQLite 事务 / IndexedDB transaction）；它不覆盖 Git、文件和 SecureStore。
 
-迁移采用添加新记录与兼容读取：
+以下为 R0–R5 时的历史迁移设计，已取消且相关代码已删除：
 
 - 旧 TaskRecord 映射为 kind=root、rootRunId=id、无 parentRunId，保留原 id、conversationId、快照、公开历史和旧轨迹。
 - 新 Run 保存到版本化记录命名空间；迁移时先提交目标及索引，再记录迁移完成标记。重试按同一 id 幂等，不重复创建任务。

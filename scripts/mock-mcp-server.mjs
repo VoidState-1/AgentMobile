@@ -1,7 +1,8 @@
 import http from 'node:http';
 import { Buffer } from 'node:buffer';
 import { mcpFixture, mcpSse } from '../tests/mcp-fixtures.ts';
-import { answerEvents, toolEvents, sse } from '../tests/protocol-fixtures.ts';
+import { sourceModule } from './source-module.mjs';
+const { answerEvents, toolEvents, sse } = await import(await sourceModule('tests/protocol-fixtures.ts'));
 
 // Local-only fixture for Android and browser verification, with no paid service.
 const fixtures = { '/mcp-legacy': mcpFixture({ sse: true, paginated: true, token: 'fixture-mcp-token' }),

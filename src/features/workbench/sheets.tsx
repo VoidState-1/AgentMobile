@@ -1,17 +1,17 @@
-import { useState } from 'react';
+import { memo, useState } from 'react';
 import { Pressable, TextInput, View } from 'react-native';
 import { Check, FileText, Folder, Image as ImageIcon, Laptop, Moon, Plus, Search, Sun, Upload } from '@/shared/ui/icons';
-import type { Workbench } from './use-workbench';
-import type { AppearanceMode } from '@/shared/state/workbench';
+import type { DialogsCapability, EditorCapability, FilesCapability, ConversationCapability } from './use-workbench';
+import type { AppearanceMode } from '@/shared/workbench-state';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { dateLabel, fileName } from '@/shared/format';
 import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
 import { ConversationsPanel } from '@/features/conversations/panel';
 import { SkillPicker } from '@/features/skills/picker';
 
-function RenameSheet({ controller }: { controller: Workbench }) {
+function RenameSheet({ controller }: { controller: EditorCapability }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
   return <Sheet visible title="重命名文件" onClose={() => controller.setSheet(undefined)} busy={controller.busy}
     footer={<Button label="保存名称" busy={controller.busy} disabled={!name.trim() || name === controller.editor?.name}
@@ -21,15 +21,15 @@ function RenameSheet({ controller }: { controller: Workbench }) {
   </Sheet>;
 }
 
-export function WorkbenchSheets({ controller }: { controller: Workbench }) {
+export const WorkbenchSheets = memo(function WorkbenchSheets({ controller, editor, files, conversation }: { controller: DialogsCapability; editor: EditorCapability; files: FilesCapability; conversation: ConversationCapability }) {
   const theme = useWorkbenchTheme();
   const [projectSearch, setProjectSearch] = useState('');
   return <>
-    {controller.sheet === 'skills' && <SkillPicker controller={controller} />}
+    {controller.sheet === 'skills' && <SkillPicker controller={controller} conversation={conversation} />}
     {(controller.sheet === 'conversations' || controller.sheet === 'conversation-name') && <ConversationsPanel controller={controller} />}
     <Sheet visible={controller.sheet === 'create'} title="新建项目" subtitle="文字、图片和会话都在同一个工作区里。"
       onClose={() => controller.setSheet(undefined)} busy={controller.busy}
-      footer={<Button label="创建工作区" icon={Plus} busy={controller.busy} disabled={!controller.projectName.trim() || !controller.runtime}
+      footer={<Button label="创建工作区" icon={Plus} busy={controller.busy} disabled={!controller.projectName.trim() || !controller.modelsApi}
         onPress={() => { void controller.createProject(); }} />}>
       <Field label="项目名称" value={controller.projectName} onChangeText={controller.setProjectName} placeholder="例如：旅行资料、产品想法…" maxLength={60} autoFocus />
       {!!controller.error && <T tone="danger" style={{ fontSize: 12 }}>{controller.error}</T>}
@@ -74,20 +74,20 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       <Button label="Agent Skills" variant="secondary" onPress={controller.openSkills} />
       <T tone="secondary" style={{ fontSize: 12 }}>导入、编辑和启用可复用的工作流程。</T>
     </Sheet>
-    {controller.sheet === 'models' && controller.runtime && <ModelPicker service={controller.runtime.models}
+    {controller.sheet === 'models' && controller.modelsApi && <ModelPicker service={controller.modelsApi}
       configuration={controller.configuration} projectId={controller.projectId} conversationId={controller.conversationId}
       onClose={() => controller.setSheet(undefined)} onManage={controller.openModelConfig} />}
     <Sheet visible={controller.sheet === 'attach'} title="参考资料" subtitle="选择当前项目文件，或导入新的资料。"
       onClose={() => controller.setSheet(undefined)}
-      footer={<Button label="导入资料" icon={Upload} variant="secondary" busy={controller.busy} onPress={() => { void controller.importFile(true); }} />}>
-      {controller.files.map((file) => <Pressable key={file.path} accessibilityRole="button" accessibilityLabel={'引用 ' + file.path}
-        onPress={() => { controller.setAttachment(file.path); controller.setSheet(undefined); }}
+      footer={<Button label="导入资料" icon={Upload} variant="secondary" busy={controller.busy} onPress={() => { void files.importFile(true); }} />}>
+      {files.files.map((file) => <Pressable key={file.path} accessibilityRole="button" accessibilityLabel={'引用 ' + file.path}
+        onPress={() => { conversation.setAttachment(file.path); controller.setSheet(undefined); }}
         style={{ flexDirection: 'row', alignItems: 'center', gap: 10, padding: 12, backgroundColor: theme.inset, borderRadius: 8 }}>
         {isImage(file.path) ? <ImageIcon size={17} color={theme.secondary} /> : <FileText size={17} color={theme.secondary} />}
         <View style={{ flex: 1 }}><T style={{ fontSize: 13 }}>{fileName(file.path)}</T><T tone="muted" style={{ fontSize: 11 }}>{file.path}</T></View>
       </Pressable>)}
     </Sheet>
-    {controller.sheet === 'rename' && <RenameSheet controller={controller} />}
+    {controller.sheet === 'rename' && <RenameSheet controller={editor} />}
     <Sheet visible={!!controller.confirmation} title={controller.confirmation?.title ?? ''} onClose={() => controller.setConfirmation(undefined)}
       busy={controller.busy} footer={<View style={{ gap: 8 }}>
         {controller.confirmation?.saveFirst && <Button label="保存后离开" busy={controller.busy} onPress={() => { void controller.saveAndLeave(); }} />}
@@ -100,4 +100,4 @@ export function WorkbenchSheets({ controller }: { controller: Workbench }) {
       {!!controller.error && <T tone="danger" style={{ fontSize: 12 }}>{controller.error}</T>}
     </Sheet>
   </>;
-}
+});

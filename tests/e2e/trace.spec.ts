@@ -1,6 +1,45 @@
 import { test, expect } from '@playwright/test';
 import { protocols, snapshot, answerEvents, toolEvents, sse } from '../protocol-fixtures';
 import { openModels, addConnection, addModel, returnToWorkbench } from './model-helpers';
+import { readCurrentRuns } from './current-records';
+
+test('超过一页的工作轨迹独立展示最终回答，并按需展开长回答', async ({ page }) => {
+  await page.goto('/');
+  await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
+  await page.getByLabel('项目名称', { exact: true }).fill('长轨迹');
+  await page.getByRole('button', { name: '创建工作区', exact: true }).click();
+  await page.getByLabel('任务目标', { exact: true }).fill('整理笔记');
+  await page.getByRole('button', { name: '发送任务', exact: true }).click();
+  await expect(page.getByText('已完成', { exact: true })).toBeVisible();
+  const run = (await readCurrentRuns(page))[0];
+  await page.evaluate(async id => {
+    const db = await new Promise<IDBDatabase>(resolve => { const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); });
+    const transaction = db.transaction(['run_headers', 'run_results', 'trace_nodes'], 'readwrite');
+    const headers = transaction.objectStore('run_headers'); const traces = transaction.objectStore('trace_nodes');
+    const response = '最终长回答\n' + '内容'.repeat(7000) + '\n回答尾部';
+    headers.get(id).onsuccess = event => { const header = (event.target as IDBRequest).result; headers.put({ ...header, revision: header.revision + 1, responsePreview: response.slice(0, 200), responseCharacters: response.length }, id); };
+    transaction.objectStore('run_results').put({ response }, id);
+    traces.getAll().onsuccess = event => {
+      for (const node of (event.target as IDBRequest).result) if (node.runId === id) traces.delete(node.id);
+      for (let step = 1; step <= 62; step++) {
+        const node = { id: id + '-step-' + step, runId: id, rootRunId: id, runSequence: step, groupSequence: step,
+          round: step, kind: 'tool', state: 'completed', revision: 1, tool: 'list_files', callId: String(step), input: '{}', output: '{}',
+          startedAt: new Date().toISOString(), endedAt: new Date().toISOString(), textPreview: '', textCharacters: 0, textChunks: 0 };
+        traces.put(node, node.id);
+      }
+    };
+    await new Promise<void>((resolve, reject) => { transaction.oncomplete = () => resolve(); transaction.onabort = () => reject(transaction.error); }); db.close();
+  }, run.id);
+  await page.reload();
+  await expect(page.getByRole('button', { name: '加载更多工作步骤', exact: true })).toBeVisible();
+  await expect(page.getByTestId('run-response')).toContainText('最终长回答');
+  await expect(page.getByTestId('run-response')).not.toContainText('回答尾部');
+  await page.getByRole('button', { name: '展开更多回答', exact: true }).click();
+  await expect(page.getByTestId('run-response')).toContainText('回答尾部');
+  await expect(page.getByTestId('trace-tool')).toHaveCount(50);
+  await page.getByRole('button', { name: '加载更多工作步骤', exact: true }).click();
+  await expect(page.getByTestId('trace-tool')).toHaveCount(62);
+});
 
 for (const protocol of protocols) test(protocol + '：推理与工具交错、配置生效、详情和刷新', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
@@ -66,30 +105,28 @@ for (const protocol of protocols) test(protocol + '：推理与工具交错、�
   expect(requests).toBe(2); expect(errors).toEqual([]);
 });
 
-test('重启收束正在生成的轨迹，旧任务正常回看', async ({ page }) => {
+test('重启收束正在生成的轨迹，并保留收到的推理摘要', async ({ page }) => {
   await page.goto('/');
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('轨迹恢复'); await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await page.getByRole('button', { name: '整理资料', exact: true }).click(); await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
   await page.evaluate(async () => {
-    const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('agent-mobile-prototype', 1); request.onsuccess = () => resolve(request.result); });
+    const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); });
     await new Promise<void>((resolve) => {
-      const tx = db.transaction('records', 'readwrite'); const store = tx.objectStore('records'); const request = store.openCursor();
+      const tx = db.transaction(['trace_nodes', 'trace_text_chunks', 'run_headers'], 'readwrite'); const request = tx.objectStore('run_headers').openCursor();
       request.onsuccess = () => { const cursor = request.result; if (!cursor) return;
-        if (String(cursor.key).startsWith('runs-v2/')) {
-          const task = cursor.value; task.state = 'running'; cursor.update(task);
-          const traces = store.get('run-traces/' + task.id); traces.onsuccess = () => store.put([...traces.result, { id: 'interrupted-thought', round: 5, contentIndex: 0,
-            kind: 'reasoning', visibility: 'summary', state: 'running', startedAt: task.createdAt, text: '中断前已收到的摘要。' }], 'run-traces/' + task.id);
-          store.put({ ids: [task.id] }, 'run-indexes/active');
-          const legacy = { ...task, id: 'legacy-trace', state: 'completed', trace: undefined, prompt: '旧任务兼容验证', response: '旧任务最终答案。' };
-          store.put(legacy, 'tasks/legacy-trace');
+        if (cursor.value.kind === 'root') {
+          const task = cursor.value; task.state = 'running'; task.active = 1; cursor.update(task);
+          const text = '中断前已收到的摘要。'; const id = 'interrupted-thought';
+          tx.objectStore('trace_nodes').put({ id, runId: task.id, rootRunId: task.id, runSequence: 99, groupSequence: 99, revision: 1, round: 5, contentIndex: 0,
+            kind: 'reasoning', visibility: 'summary', state: 'running', startedAt: task.createdAt, textPreview: text, textCharacters: text.length, textChunks: 1 }, id);
+          tx.objectStore('trace_text_chunks').put({ nodeId: id, ordinal: 0, offset: 0, text, characters: text.length }, [id, 0]);
         } cursor.continue();
       }; tx.oncomplete = () => resolve();
     }); db.close();
   });
   await page.reload(); await expect(page.getByText('已中断', { exact: true })).toBeVisible();
-  await expect(page.getByText('历史步骤 · 旧任务未保存文字与工具的交错顺序', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '展开推理摘要', exact: true }).click();
   await expect(page.getByText('服务返回的摘要 · 未完整结束', { exact: true })).toBeVisible();
   await expect(page.getByText('中断前已收到的摘要。', { exact: true })).toBeVisible();

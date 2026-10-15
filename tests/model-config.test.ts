@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { CredentialStore, MetadataStore } from '../src/core/storage/contracts';
 import { ModelConfigurationService } from '@/application/models/configuration';
-import { configurationFingerprint, mainSessionId, selectedModelId } from '../src/core/models/rules';
+import { configurationFingerprint, selectedModelId } from '../src/core/models/rules';
 import { defaultModelParameters } from '../src/core/models/types';
 import type { ModelEntry, ProviderConnection } from '../src/core/models/types';
 
@@ -17,8 +17,8 @@ function fixture() {
     all: async <T>(bucket: string) => [...records].filter(([key]) => key.startsWith(bucket + '/')).map(([, value]) => structuredClone(value) as T),
   };
   const credentials: CredentialStore = {
-    get: async (reference = 'legacy') => keys.get(reference) ?? '',
-    set: async (value, reference = 'legacy') => {
+    get: async (reference) => reference ? keys.get(reference) ?? '' : '',
+    set: async (value, reference) => {
       if (!value && failCredentialDelete) throw new Error('模拟安全存储清理失败');
       if (value) keys.set(reference, value); else keys.delete(reference);
     },
@@ -90,23 +90,12 @@ describe('多连接配置、凭证和运行快照', () => {
     const connection = await service.saveConnection(connectionInput('个人'), { value: 'test-key' });
     const a = await addModel(service, connection, 'a'); const b = await addModel(service, connection, 'b'); const c = await addModel(service, connection, 'c');
     await service.setSelection('global', a.id); await service.setSelection('project', b.id, 'project');
-    await service.setSelection('session', c.id, mainSessionId('project'));
-    expect(selectedModelId(service.getSnapshot(), 'project', mainSessionId('project'))).toBe(c.id);
+    await service.setSelection('session', c.id, 'conversation-a');
+    expect(selectedModelId(service.getSnapshot(), 'project', 'conversation-a')).toBe(c.id);
     await service.removeModel(c.id);
-    await expect(service.acquireSelection('project', mainSessionId('project'))).rejects.toThrow('已删除');
-    await service.setSelection('session', undefined, mainSessionId('project'));
-    expect(selectedModelId(service.getSnapshot(), 'project', mainSessionId('project'))).toBe(b.id);
-  });
-
-  it('旧配置迁移可重复执行，保留模型和密钥，元数据写失败不清旧密钥', async () => {
-    const f = fixture(); f.records.set('settings/model', { mode: 'remote', baseUrl: 'https://api.deepseek.com', model: 'deepseek-flash', imageInput: true });
-    f.keys.set('legacy', 'legacy-secret'); f.failGraph(true);
-    await expect(f.create().initialize()).rejects.toThrow('数据库'); expect(f.keys.get('legacy')).toBe('legacy-secret');
-    f.failGraph(false); const service = f.create(); await service.initialize();
-    const second = f.create(); await second.initialize();
-    expect(second.getSnapshot().connections).toHaveLength(1); expect(second.getSnapshot().models).toHaveLength(1);
-    expect((await second.acquireSelection()).secret).toBe('legacy-secret'); expect(f.keys.has('legacy')).toBe(false);
-    expect(second.getSnapshot().mode).toBe('remote');
+    await expect(service.acquireSelection('project', 'conversation-a')).rejects.toThrow('已删除');
+    await service.setSelection('session', undefined, 'conversation-a');
+    expect(selectedModelId(service.getSnapshot(), 'project', 'conversation-a')).toBe(b.id);
   });
 
   it('同 Origin 路径更改保留凭证，改变目标服务需要重新绑定', async () => {

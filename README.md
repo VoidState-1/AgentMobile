@@ -28,6 +28,8 @@
 
 Node.js 满足 Expo SDK 57 的要求，当前开发环境为 24.11.0；使用 npm 和 package-lock.json。
 
+项目尚未对外发布：开发期允许内部接口和存储格式的破坏性更新，不维护旧原型兼容层或格式迁移链，开发数据可重建。当前格式的事务、幂等、权限和中断恢复仍须验证。具体约定见 AGENTS.md，整改方案见 [docs/architecture-improvement.md](docs/architecture-improvement.md)。
+
 ```sh
 npm ci
 npm run web
@@ -79,17 +81,17 @@ Git 工作流：[docs/git-workflow.md](docs/git-workflow.md)。原生验证运�
 
 ```text
 src/core/             平台无关类型、路径规则、存储接口
-src/adapters/agent/   Pi 适配、工具定义、任务执行器、演示传输
+src/application/     用例、受控工具、日志恢复与根/子运行编排
+src/bootstrap/       依赖组装与显式 AppServices
+src/adapters/agent/   Pi 适配、平台生命周期与演示传输
 src/adapters/model/   三协议 REST/SSE、模型目录与诊断
 src/adapters/storage/ SQLite/私有文件与 Web IndexedDB 适配
 src/adapters/git/     真实 Git 和自定义 fs 适配
-src/adapters/workspace/ 文件权限、修订、操作日志与恢复
-src/features/workbench/ 主题、会话、文件、编辑器、版本与设置
+src/features/workbench/ 六组界面能力、会话、文件、编辑器与版本
 plugins/             可重建的原生配置，包括不遮挡界面的开发菜单
-modules/             libgit2 原生模块预留
 tests/               核心一致性与浏览器流程测试
 ```
 
-android/、ios/ 由 Expo Prebuild 生成，不提交。持久原生修改放在 modules/config plugin。应用标识暂用 com.agentmobile.app，上架前替换。图标暂用 Expo 模板素材。
+android/、ios/ 由 Expo Prebuild 生成，不提交。实际原生源码放在 modules，通过 Expo Modules/config plugin 集成；当前未实现原生 Git 桥接，不预建占位目录。原生计划见 docs/native-modules.md。应用标识暂用 com.agentmobile.app，上架前替换。图标暂用 Expo 模板素材。
 
 不把密钥放入源码、EXPO_PUBLIC_*、Git、日志或网页资源。统一模型额度需要后端保管开发者密钥，当前采用用户自带 Key。

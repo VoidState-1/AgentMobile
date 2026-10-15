@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { Buffer } from 'node:buffer';
-import { answerEvents, toolEvents, sse } from '../tests/protocol-fixtures.ts';
+import { sourceModule } from './source-module.mjs';
+const { answerEvents, toolEvents, sse } = await import(await sourceModule('tests/protocol-fixtures.ts'));
 
 // Local-only deterministic protocol fixture. Never contacts a paid provider.
 const server = http.createServer(async (request, response) => {

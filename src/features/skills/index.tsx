@@ -4,7 +4,7 @@ import { useRouter } from 'expo-router';
 import type { SkillBundle } from '@/core/skills/types';
 import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { useSkills } from './common';
 
 export function SkillsPage() {

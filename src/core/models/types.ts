@@ -75,7 +75,6 @@ export interface ModelConfiguration {
   models: ModelEntry[];
   defaults: { global?: string; projects: Record<string, string>; sessions: Record<string, string> };
   recent: string[];
-  migratedLegacy: boolean;
 }
 export interface DiscoveredModel {
   apiId: string;
@@ -109,7 +108,7 @@ export interface ModelRunLease {
 
 export function emptyModelConfiguration(): ModelConfiguration {
   return { schemaVersion: 1, revision: 0, mode: 'demo', connections: [], models: [],
-    defaults: { projects: {}, sessions: {} }, recent: [], migratedLegacy: false };
+    defaults: { projects: {}, sessions: {} }, recent: [] };
 }
 export const defaultModelParameters: ModelParameters = { maxOutputTokens: defaultOutputTokens, allowImages: false, reasoning: 'off' };
 export function unknownCapabilities(): ModelEntry['capabilities'] {

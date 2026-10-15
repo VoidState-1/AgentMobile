@@ -4,7 +4,7 @@ import { Image } from 'expo-image';
 import { ImageOff } from '@/shared/ui/icons';
 import { safePath } from '@/core/workspace/path';
 import { T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 
 function Inline({ text }: { text: string }) {
   const theme = useWorkbenchTheme();

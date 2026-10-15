@@ -1,6 +1,7 @@
+import { AppError } from '@/core/errors';
 import { getCurrentSystemPrompt, type Message, type Tool } from '@earendil-works/pi-ai';
 import type { ModelRunSnapshot } from '@/core/models/types';
-import { ProtocolError } from '../http';
+
 import { contentLimits } from '@/core/agent/settings';
 import { imageParts, userParts, textOf, number, argsObject, type Wire, type NativeAssistant, type PublicThinking } from './shared';
 import type { ProtocolDecoder } from './decoder';
@@ -43,7 +44,7 @@ export function geminiBody(config: ModelRunSnapshot, messages: Message[], tools:
 
 export const geminiDecoder: ProtocolDecoder = {
   consume(event, context, state) {
-if (event.promptFeedback?.blockReason) throw new ProtocolError('服务拒绝了测试输入，请检查模型限制。');
+if (event.promptFeedback?.blockReason) throw new AppError('REMOTE', '服务拒绝了测试输入，请检查模型限制。');
             const candidate = event.candidates?.[0];
             context.message.nativeParts ??= { protocol: 'gemini', parts: [] };
             for (const part of candidate?.content?.parts ?? []) {
@@ -58,7 +59,7 @@ if (event.promptFeedback?.blockReason) throw new ProtocolError('服务拒绝了�
               if (part.functionCall) {
                 context.closeContent(context.message.content.length - 1);
                 const call = part.functionCall;
-                if (context.message.content.filter((p) => p.type === 'toolCall').length >= contentLimits.toolCallsPerRound) throw new ProtocolError('工具调用超过限制。');
+                if (context.message.content.filter((p) => p.type === 'toolCall').length >= contentLimits.toolCallsPerRound) throw new AppError('REMOTE', '工具调用超过限制。');
                 context.message.content.push({ type: 'toolCall', id: 'gemini-' + context.requestId + '-' + context.message.content.length, name: call.name,
                   arguments: argsObject(call.args ?? {}), thoughtSignature: part.thoughtSignature });
               }
@@ -71,7 +72,7 @@ if (event.promptFeedback?.blockReason) throw new ProtocolError('服务拒绝了�
             }
   },
   finish(context, state) {
-if (!state.terminal || !['STOP', 'MAX_TOKENS'].includes(state.reason)) throw new ProtocolError('Gemini 响应不完整或被服务拒绝；未执行工具。');
+if (!state.terminal || !['STOP', 'MAX_TOKENS'].includes(state.reason)) throw new AppError('REMOTE', 'Gemini 响应不完整或被服务拒绝；未执行工具。');
           context.message.stopReason = state.reason === 'MAX_TOKENS' ? 'length' : context.message.content.some((p) => p.type === 'toolCall') ? 'toolUse' : 'stop';
   },
 };

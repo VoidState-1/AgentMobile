@@ -1,6 +1,7 @@
 import http from 'node:http';
 import { Buffer } from 'node:buffer';
-import { toolEvents, answerEvents, sse } from '../tests/protocol-fixtures.ts';
+import { sourceModule } from './source-module.mjs';
+const { toolEvents, answerEvents, sse } = await import(await sourceModule('tests/protocol-fixtures.ts'));
 
 const requests = [];
 http.createServer(async (request, response) => {

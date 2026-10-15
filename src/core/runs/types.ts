@@ -3,11 +3,12 @@ import type { TraceItem } from '@/core/trace';
 import type { AgentSettings } from '../agent/settings';
 import type { McpServerSnapshot } from '../mcp/types';
 import type { SkillSummary } from '../skills/types';
+import type { StopReason } from './termination';
 
 export type RunState = 'queued' | 'running' | 'waiting_children' | 'cancelling' | 'completed' | 'failed' | 'cancelled' | 'interrupted';
 
-/** Public execution view, also used to read pre-v2 task records. */
-export interface TaskRecord {
+/** In-memory execution view. Persistence and queries use independent records. */
+export interface ExecutionView {
   id: string;
   projectId: string;
   conversationId?: string;
@@ -16,7 +17,7 @@ export interface TaskRecord {
   mode: 'demo' | 'remote';
   modelSnapshot?: ModelRunSnapshot;
   agentSettingsSnapshot?: AgentSettings;
-  mcpSnapshot?: McpServerSnapshot[];
+  mcpSnapshot?: readonly McpServerSnapshot[];
   skillsSnapshot?: readonly SkillSummary[];
   skillActivations?: { name: string; revision: string; source: 'explicit' | 'agent'; at: string }[];
   state: RunState;
@@ -29,13 +30,12 @@ export interface TaskRecord {
   changedPaths?: string[];
   uncommittedPaths?: string[];
   response: string;
-  /** Absent on legacy tasks, whose original ordering cannot be reconstructed. */
   trace?: TraceItem[];
-  events: { tool: string; state: 'started' | 'done' | 'error'; description: string }[];
   error?: string;
+  stopReason?: StopReason;
   createdAt: string;
   /** Public child views; persisted separately, never part of parent transcript. */
-  children?: TaskRecord[];
+  children?: ExecutionView[];
   kind?: 'root' | 'child';
   proposalId?: string;
 }

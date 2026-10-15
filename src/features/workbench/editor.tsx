@@ -1,24 +1,25 @@
-import { useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Image } from 'expo-image';
 import { ArrowLeft, Download, FileText, Image as ImageIcon, Pencil, Save, Trash2, X } from '@/shared/ui/icons';
 import { Button, IconButton, T } from '@/shared/ui/primitives';
 import { Markdown, resolveImagePath } from './markdown';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
-import type { Workbench } from './use-workbench';
+import { useWorkbenchTheme } from '@/shared/theme';
+import type { EditorCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
 
-export function Editor({ controller, mobile }: { controller: Workbench; mobile: boolean }) {
+export const Editor = memo(function Editor({ controller, mobile }: { controller: EditorCapability; mobile: boolean }) {
   const theme = useWorkbenchTheme();
   const document = controller.editor!;
-  const readonly = !!controller.projectActive && controller.projectActive.projectId === document.projectId;
+  const { preview } = controller;
+  const readonly = controller.projectActive;
   const imageVersions = controller.files.filter((file) => isImage(file.path)).map((file) => file.path + ':' + file.revision).join('|');
   const loadImage = useCallback(async (target: string) => {
     const path = resolveImagePath(document.path, target);
-    if (!imageVersions || !isImage(path) || !controller.runtime) throw new Error('图片不可用');
-    return (await controller.runtime.workspace.preview(document.projectId, path)).content;
-  }, [document.path, document.projectId, controller.runtime, imageVersions]);
+    if (!imageVersions || !isImage(path) || !preview) throw new Error('图片不可用');
+    return (await preview(document.projectId, path)).content;
+  }, [document.path, document.projectId, preview, imageVersions]);
   const update = (patch: Partial<typeof document>) => controller.setEditor((value) => value ? { ...value, ...patch } : value);
   useEffect(() => {
     if (Platform.OS !== 'web') return;
@@ -91,4 +92,4 @@ export function Editor({ controller, mobile }: { controller: Workbench; mobile: 
   return mobile ? <Modal visible animationType="none" onRequestClose={controller.closeEditor}>
     <SafeAreaView style={{ flex: 1, backgroundColor: theme.surface }} edges={['top', 'bottom']}>{body}</SafeAreaView>
   </Modal> : <View style={{ width: 410, borderLeftWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}>{body}</View>;
-}
+});

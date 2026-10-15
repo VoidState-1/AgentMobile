@@ -71,17 +71,3 @@ test('真实 Agent 上下文和模型按对话隔离，切换对话不取消任�
   expect(JSON.stringify(requests[2])).toContain('A_PRIVATE'); expect(JSON.stringify(requests[2])).not.toContain('B_PRIVATE');
   await page.screenshot({ path: 'work/conversations-desktop.png' });
 });
-
-test('旧项目任务自动迁为原有对话，创建新对话不会显示旧消息', async ({ page }) => {
-  await project(page);
-  await page.evaluate(async () => {
-    const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('agent-mobile-prototype'); request.onsuccess = () => resolve(request.result); });
-    const p = await new Promise<any>((resolve) => { const request = db.transaction('records').objectStore('records').get('preferences/workbench'); request.onsuccess = () => resolve(request.result); });
-    await new Promise<void>((resolve, reject) => { const tx = db.transaction('records', 'readwrite'); const store = tx.objectStore('records'); store.delete('conversations/state');
-      store.put({ id: 'legacy-e2e', projectId: p.projectId, prompt: '旧会话的提问', response: '旧会话的回答', mode: 'demo', state: 'completed', events: [], baseCommit: 'legacy', createdAt: '2026-10-13' }, 'tasks/legacy-e2e');
-      tx.oncomplete = () => resolve(); tx.onerror = () => reject(tx.error); }); db.close();
-  });
-  await page.reload(); await expect(page.getByTestId('conversation-bar')).toContainText('原有对话'); await expect(page.getByText('旧会话的回答', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '新建对话', exact: true }).click(); await expect(page.getByText('旧会话的回答', { exact: true })).toHaveCount(0);
-  await select(page, '原有对话'); await expect(page.getByText('旧会话的提问', { exact: true })).toBeVisible();
-});

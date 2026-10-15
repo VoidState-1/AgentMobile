@@ -7,7 +7,7 @@ import type { CredentialStore } from '../src/core/storage/contracts';
 import type { McpAttempt } from '../src/core/mcp/types';
 import { testStorage } from './storage';
 import { mcpFixture, fixtureTools } from './mcp-fixtures';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { startTestRun } from './agent-runtime';
 import { chatSnapshot, answerEvents, toolEvents, sse } from './protocol-fixtures';
 
@@ -157,7 +157,7 @@ describe('官方 MCP SDK 协议与持久化边界', () => {
   });
   it('Pi 在已发送 MCP 调用期间取消，轨迹保留结果未知而非声称未执行', async () => {
     const f = await setup(); const fixture = mcpFixture(); vi.stubGlobal('fetch', fixture.handle);
-    const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('取消'); await grant(f, project.id);
+    const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('取消'); await grant(f, project.id);
     const run = f.runtime.createRun(await f.configuration.acquireProject(project.id)); let received!: () => void; const sent = new Promise<void>((resolve) => { received = resolve; });
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('mcp.example')) {
@@ -174,7 +174,7 @@ describe('官方 MCP SDK 协议与持久化边界', () => {
   });
   it('真实 Pi 循环仅获得授权工具，将远程结果写入本地 Git，并保存工作轨迹', async () => {
     const f = await setup(); const fixture = mcpFixture({ modern: true, sse: true });
-    vi.stubGlobal('fetch', fixture.handle); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID); const project = await workspace.create('MCP'); await grant(f, project.id);
+    vi.stubGlobal('fetch', fixture.handle); const workspace = createWorkspace(f.files, f.metadata, randomUUID); const project = await workspace.create('MCP'); await grant(f, project.id);
     const run = f.runtime.createRun(await f.configuration.acquireProject(project.id)); const modelRequests: any[] = [];
     vi.stubGlobal('fetch', async (url: string | URL | Request, init?: RequestInit) => {
       if (String(url).includes('mcp.example')) return fixture.handle(url, init);

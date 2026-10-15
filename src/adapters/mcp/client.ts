@@ -1,13 +1,14 @@
+import { AppError } from '@/core/errors';
 import { fetch } from 'expo/fetch';
 import { Client, StreamableHTTPClientTransport, type FetchLike } from '@modelcontextprotocol/client';
 import { CfWorkerJsonSchemaValidator } from '@modelcontextprotocol/client/validators/cf-worker';
 import type { McpLease, McpTool } from '@/core/mcp/types';
 import { canonical, schemaIssue, scrub, toolFingerprint } from '@/core/mcp/rules';
 
-import { McpError } from '@/core/mcp/errors';
-export { McpError };
+
+
 export function safeMcpError(error: unknown, aborted = false): string {
-  if (error instanceof McpError) return error.message;
+  if (error instanceof AppError) return error.message;
   return aborted ? 'MCP 调用已停止。' : 'MCP 连接失败，请检查端点、Token、服务状态或浏览器跨域设置。';
 }
 export const sanitizeMcp = <T>(value: T, secret: string): T => {
@@ -21,7 +22,7 @@ function boundedResponse(response: Response): Response {
   const reader = response.body.getReader(); let size = 0;
   const body = new ReadableStream<Uint8Array>({ async pull(controller) {
     try { const chunk = await reader.read(); if (chunk.done) { controller.close(); return; }
-      size += chunk.value.byteLength; if (size > 2 * 1024 * 1024) throw new McpError('MCP 响应超过 2 MB，请分段查询。');
+      size += chunk.value.byteLength; if (size > 2 * 1024 * 1024) throw new AppError('REMOTE', 'MCP 响应超过 2 MB，请分段查询。');
       controller.enqueue(chunk.value);
     } catch (error) { await reader.cancel().catch(() => {}); controller.error(error); }
   }, cancel: () => reader.cancel() });
@@ -35,7 +36,7 @@ function boundedResponse(response: Response): Response {
     if (key === 'body') return body;
     if (key === 'text') return text;
     if (key === 'json') return async () => JSON.parse(await text());
-    if (key === 'clone') return () => { throw new McpError('MCP 响应不能重复读取。'); };
+    if (key === 'clone') return () => { throw new AppError('REMOTE', 'MCP 响应不能重复读取。'); };
     const value = Reflect.get(target, key, target); return typeof value === 'function' ? value.bind(target) : value;
   } });
 }
@@ -50,17 +51,17 @@ export class McpSession {
     const { snapshot, secret } = lease;
     const boundedFetch: FetchLike = async (input, init) => {
       const url = typeof input === 'string' ? input : input.href;
-      if (new URL(url).href !== snapshot.url) throw new McpError('MCP 重定向或额外地址未获授权，请配置最终端点。');
+      if (new URL(url).href !== snapshot.url) throw new AppError('VALIDATION', 'MCP 重定向或额外地址未获授权，请配置最终端点。');
       const body = typeof init?.body === 'string' ? init.body : '';
-      if (new TextEncoder().encode(body).byteLength > 512 * 1024) throw new McpError('MCP 参数超过 512 KB，请分段处理。');
+      if (new TextEncoder().encode(body).byteLength > 512 * 1024) throw new AppError('LIMIT', 'MCP 参数超过 512 KB，请分段处理。');
       const method = body ? JSON.parse(body).method : '';
       if (method === 'tools/call') {
-        if (this.sent) throw new McpError('远端调用已发送，禁止自动重复发送。', true);
+        if (this.sent) throw new AppError('UNKNOWN', '远端调用已发送，禁止自动重复发送。', true);
         await this.sending?.(); this.sent = true;
       }
       const response = await fetch(input, { ...init, redirect: 'error' });
       if (method === 'tools/call' && [400, 401, 403, 404].includes(response.status)) this.httpRejected = true;
-      if (response.status === 401 || response.status === 403) throw new McpError('MCP 认证失败；请检查 Token。需要 OAuth 的服务暂未支持。');
+      if (response.status === 401 || response.status === 403) throw new AppError('REMOTE', 'MCP 认证失败；请检查 Token。需要 OAuth 的服务暂未支持。');
       return boundedResponse(response as Response);
     };
     this.transport = new StreamableHTTPClientTransport(new URL(snapshot.url), { fetch: boundedFetch,
@@ -77,8 +78,8 @@ export class McpSession {
   async discover(signal?: AbortSignal): Promise<{ tools: McpTool[]; info?: string; version?: string }> {
     await this.connect(signal);
     const result = await this.client.listTools(undefined, { signal, timeout: this.lease.snapshot.timeoutMs, cacheMode: 'refresh' });
-    if (result.tools.length > 64) throw new McpError('MCP 目录超过 64 个工具，请使用更小的服务目录。');
-    if (new Set(result.tools.map((tool) => tool.name)).size !== result.tools.length) throw new McpError('MCP 目录存在重复工具名称，请修复服务器目录。');
+    if (result.tools.length > 64) throw new AppError('REMOTE', 'MCP 目录超过 64 个工具，请使用更小的服务目录。');
+    if (new Set(result.tools.map((tool) => tool.name)).size !== result.tools.length) throw new AppError('REMOTE', 'MCP 目录存在重复工具名称，请修复服务器目录。');
     const tools = result.tools.map((raw): McpTool => {
       const value = sanitizeMcp(raw, this.lease.secret); const inputSchema = value.inputSchema as Record<string, unknown>;
       const descriptor = { name: value.name, title: value.title?.slice(0, 100), description: (value.description ?? '').slice(0, 2000),
@@ -93,10 +94,10 @@ export class McpSession {
   async call(tool: McpTool, args: Record<string, unknown>, signal: AbortSignal | undefined, onSending: () => Promise<void>, onProgress: (text: string) => void) {
     this.sent = false; this.httpRejected = false;
     const current = (await this.discover(signal)).tools.find((value) => value.name === tool.name);
-    if (!current || current.fingerprint !== tool.fingerprint || current.unavailableReason) throw new McpError('MCP 工具定义已变化，请重新发现并为项目授权。');
+    if (!current || current.fingerprint !== tool.fingerprint || current.unavailableReason) throw new AppError('REMOTE', 'MCP 工具定义已变化，请重新发现并为项目授权。');
     // The interpreter annotates schemas during compilation; run snapshots stay immutable.
     const validation = new CfWorkerJsonSchemaValidator().getValidator(JSON.parse(JSON.stringify(tool.inputSchema)))(args);
-    if (!validation.valid) throw new McpError('MCP 工具参数不符合输入定义，本次未发送。');
+    if (!validation.valid) throw new AppError('VALIDATION', 'MCP 工具参数不符合输入定义，本次未发送。');
     this.sending = onSending;
     try {
       const result = await this.client.callTool({ name: tool.name, arguments: args }, {
@@ -107,8 +108,8 @@ export class McpSession {
       });
       return sanitizeMcp(result, this.lease.secret);
     } catch {
-      if (this.sent && !this.httpRejected) throw new McpError('远端调用结果未知；可能已执行，请先核对服务器状态。同一参数不会自动重试。', true);
-      throw new McpError(signal?.aborted ? '调用在发送前已取消。' : 'MCP 调用未被接受，请检查服务、参数或认证。');
+      if (this.sent && !this.httpRejected) throw new AppError('UNKNOWN', '远端调用结果未知；可能已执行，请先核对服务器状态。同一参数不会自动重试。', true);
+      throw new AppError('REMOTE', signal?.aborted ? '调用在发送前已取消。' : 'MCP 调用未被接受，请检查服务、参数或认证。');
     } finally { this.sending = undefined; }
   }
   close = async () => { await this.client.close().catch(() => {}); };

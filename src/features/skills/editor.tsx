@@ -1,14 +1,15 @@
+import { AppError } from '@/core/errors';
 import { useEffect, useState } from 'react';
 import { Buffer } from 'buffer';
 import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { SkillBundle, SkillVersion } from '@/core/skills/types';
-import { SkillError, resourceKind, skillPath } from '@/core/skills/rules';
+import type { SkillBundle, SkillVersionPage } from '@/core/skills/types';
+import { resourceKind, skillPath } from '@/core/skills/rules';
 import { mimeFor } from '@/core/workspace/path';
 import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle, useDraftGuard } from '@/shared/ui/forms';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { useSkills } from './common';
 
 const template = '---\nname: my-skill\ndescription: 整理文字资料，适用于需要提炼重点并形成结构化笔记的任务。\n---\n\n# 工作流程\n\n1. 读取相关项目资料，核对目标。\n2. 提炼重点、待确认信息和下一步。\n3. 保存为 Markdown，保留来源说明。\n';
@@ -26,7 +27,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
   const [files, setFiles] = useState<SkillBundle['files']>([]); const [baseCommit, setBaseCommit] = useState(config.commit);
   const [loaded, setLoaded] = useState(!name); const [changed, setChanged] = useState(false); const [notice, setNotice] = useState('');
   const [resource, setResource] = useState<ResourceDraft>(); const [discardResource, setDiscardResource] = useState(false);
-  const [deleting, setDeleting] = useState(false); const [versions, setVersions] = useState<SkillVersion[]>();
+  const [deleting, setDeleting] = useState(false); const [versions, setVersions] = useState<SkillVersionPage>();
   const [restoring, setRestoring] = useState<{ bundle: SkillBundle; commit: string; expectedCommit: string }>();
   const resourceType = resource?.fresh ? 'text' : resource ? resourceKind(resource.path) : undefined;
   const resourceDirty = !!resource && resourceType === 'text' && (resource.fresh ? !!resource.text || resource.path !== 'references/notes.md' : resource.text !== resource.savedText);
@@ -45,11 +46,11 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
   };
   const draftBundle = () => {
     const bundle = runtime!.skills.validateBundle([{ path: 'SKILL.md', bytes: Buffer.from(source) }, ...files.filter((file) => file.path !== 'SKILL.md')]);
-    if (name && bundle.name !== name) throw new SkillError('已有技能名称不能直接改名；请保持 name 字段，或新建另一个技能。');
+    if (name && bundle.name !== name) throw new AppError('VALIDATION', '已有技能名称不能直接改名；请保持 name 字段，或新建另一个技能。');
     return bundle;
   };
   const save = () => { void action(async () => {
-    if (resourceDirty) throw new SkillError('请先将资源编辑应用到技能草稿。');
+    if (resourceDirty) throw new AppError('VALIDATION', '请先将资源编辑应用到技能草稿。');
     const bundle = draftBundle(); await runtime!.skills.install([bundle], baseCommit); adopt(bundle); setNotice('技能已保存；内容变化后请重新启用。');
     if (!name) guard.allow(() => router.replace({ pathname: '/skills/edit', params: { name: bundle.name } }));
   }); };
@@ -81,11 +82,15 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
       {!!name && <Section title="版本与导出">
         <Button label="导出技能 ZIP" variant="secondary" disabled={busy || dirty} onPress={() => { void action(async () => { await runtime!.io.exportSkill(name, baseCommit); }); }} />
         <Button label="查看技能版本" variant="secondary" busy={busy} onPress={() => { void action(async () => { setVersions(await runtime!.skills.versions(name)); }); }} />
-        {versions?.map((version, index) => <View key={version.commit} style={{ gap: 5 }}>
+        {versions?.versions.map((version, index) => <View key={version.commit} style={{ gap: 5 }}>
           <T tone="secondary" style={{ fontSize: 11 }}>{version.message} · {new Date(version.timestamp).toLocaleString()}</T>
           <T tone="muted" style={{ fontSize: 10 }}>{version.revision.slice(0, 7)}{index === 0 ? ' · 当前版本' : ''}</T>
           {index > 0 && <Button label={'预览技能版本 ' + version.revision.slice(0, 7)} variant="ghost" disabled={busy || dirty} onPress={() => { void action(async () => { setRestoring({ bundle: await runtime!.skills.bundle(version.commit, name), commit: version.commit, expectedCommit: config.commit }); }); }} />}
         </View>)}
+        {versions?.cursor && <Button label="加载更多技能版本" variant="ghost" busy={busy} onPress={() => { void action(async () => {
+          const page = await runtime!.skills.versions(name!, versions.cursor);
+          setVersions({ versions: [...versions.versions, ...page.versions], cursor: page.cursor });
+        }); }} />}
         {dirty && <T tone="muted" style={{ fontSize: 11 }}>先保存草稿，再导出或恢复版本。</T>}
         <Button label="删除技能" variant="danger" disabled={busy} onPress={() => setDeleting(true)} />
       </Section>}
@@ -93,10 +98,10 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
     {guard.guard}
     <Sheet visible={!!resource} title="技能资源" busy={busy} onClose={() => resourceDirty ? setDiscardResource(true) : setResource(undefined)} footer={<View style={{ gap: 8 }}>
       {resource && resourceType === 'text' && <Button label="应用资源到草稿" disabled={busy} onPress={() => { void action(async () => {
-        const path = skillPath(resource.path); if (path.toLowerCase() === 'skill.md') throw new SkillError('请在主编辑区修改 SKILL.md。');
-        if (resourceKind(path) !== 'text') throw new SkillError('文字资源需要使用 .md、.txt 等文本扩展名。');
-        if (resource.fresh && files.some((file) => file.path.toLowerCase() === path.toLowerCase())) throw new SkillError('技能资源路径已存在，请选择现有文件编辑。');
-        const bytes = Buffer.from(resource.text); if (bytes.length > 1024 * 1024) throw new SkillError('技能资源最多 1 MB。');
+        const path = skillPath(resource.path); if (path.toLowerCase() === 'skill.md') throw new AppError('VALIDATION', '请在主编辑区修改 SKILL.md。');
+        if (resourceKind(path) !== 'text') throw new AppError('VALIDATION', '文字资源需要使用 .md、.txt 等文本扩展名。');
+        if (resource.fresh && files.some((file) => file.path.toLowerCase() === path.toLowerCase())) throw new AppError('VALIDATION', '技能资源路径已存在，请选择现有文件编辑。');
+        const bytes = Buffer.from(resource.text); if (bytes.length > 1024 * 1024) throw new AppError('VALIDATION', '技能资源最多 1 MB。');
         setFiles([...files.filter((file) => file.path !== path), { path, bytes }]); setChanged(true); setResource(undefined); setNotice('资源已加入草稿，保存技能后生效。');
       }); }} />}
       {resource && !resource.fresh && <Button label="从技能移除此资源" variant="danger" disabled={busy} onPress={() => { setFiles(files.filter((file) => file.path !== resource.path)); setChanged(true); setResource(undefined); }} />}

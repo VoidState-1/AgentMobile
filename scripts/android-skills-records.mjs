@@ -4,6 +4,7 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { DatabaseSync } from 'node:sqlite';
 import { readRuns } from './native-runs.mjs';
+import { readOperations } from './native-journal.mjs';
 
 // Inspect only the isolated fixture emulator after execution has settled.
 export async function verifySkillsRecords(serial) {
@@ -25,7 +26,7 @@ export async function verifySkillsRecords(serial) {
     if (!Object.values(configuration.grants).some((grants) => grants['note-workflow'] === configuration.skills[0].revision)) throw new Error('技能重新启用未持久化。');
     const projects = db.prepare("SELECT payload FROM records WHERE bucket='projects'").all().map((row) => JSON.parse(row.payload));
     if (projects.some((project) => project.id === 'agent-skills-library')) throw new Error('内部技能库泄漏到用户项目列表。');
-    const operations = db.prepare("SELECT payload FROM records WHERE bucket='skill-library:operations'").all().map((row) => JSON.parse(row.payload));
+    const operations = readOperations(db, 'skills');
     if (operations.filter((operation) => operation.phase === 'recorded' && operation.commit).length < 2) throw new Error('技能导入/资源更新缺少 Git 操作回执。');
     process.stdout.write('Native SQLite Skills verified: automatic/explicit activations, resource version change, Git commits, project grants and hidden library.\n');
   } finally { db.close(); }

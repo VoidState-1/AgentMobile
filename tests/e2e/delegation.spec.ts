@@ -1,3 +1,4 @@
+import { readCurrentRuns } from './current-records';
 import { test, expect } from '@playwright/test';
 import { configureModel } from './model-helpers';
 import { answerEvents, toolEvents, sse } from '../protocol-fixtures';
@@ -42,11 +43,7 @@ for (const explicitWait of [false, true]) test(explicitWait ? 'wait_agents 显�
   if (!explicitWait) { await page.getByRole('button', { name: '展开子 Agent 子任务A', exact: true }).click(); await expect(page.getByText('分析A完成，引用 notes.md。', { exact: true })).toBeVisible(); }
   await page.reload(); await expect(page.getByTestId('child-trace')).toHaveCount(2);
   await page.getByRole('button', { name: '展开子 Agent 子任务B', exact: true }).click(); await expect(page.getByText('审阅B完成，引用 notes.md。', { exact: true })).toBeVisible();
-  const records = await page.evaluate(async () => {
-    const db = await new Promise<IDBDatabase>((resolve) => { const request = indexedDB.open('agent-mobile-prototype', 1); request.onsuccess = () => resolve(request.result); });
-    const records = await new Promise<any[]>((resolve) => { const tx = db.transaction('records', 'readonly'); const keys = tx.objectStore('records').getAllKeys(); const values = tx.objectStore('records').getAll();
-      tx.oncomplete = () => resolve(values.result.filter((_, index) => String(keys.result[index]).startsWith('runs-v2/'))); }); db.close(); return records;
-  });
+  const records = await readCurrentRuns(page);
   expect(records).toHaveLength(3); expect(records.filter((record) => record.kind === 'child').map((record) => record.state).sort()).toEqual(explicitWait ? ['cancelled', 'completed'] : ['completed', 'completed']);
   expect(new Set(records.filter((record) => record.kind === 'child').map((record) => record.inputSnapshotRef)).size).toBe(1);
 });

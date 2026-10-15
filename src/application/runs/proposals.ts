@@ -1,7 +1,7 @@
+import { SerialQueue } from '@/core/serial-queue';
 import type { ChangeProposal } from '@/core/runs/proposals';
 import type { RunRecord } from '@/core/runs/records';
 import { terminalRun } from '@/core/runs/records';
-import type { Operation } from '@/core/workspace/types';
 import { safePath, isImage } from '@/core/workspace/path';
 import type { ContentCodec } from '@/core/storage/codec';
 import { AppError } from '@/core/errors';
@@ -12,12 +12,14 @@ import { ProposalOverlay } from './proposal-overlay';
 
 export class ProposalService {
   readonly repository: ProposalRepository;
-  private readonly queues = new Map<string, Promise<unknown>>();
+  private readonly queues = new Map<string, SerialQueue>();
   private receiptFailure?: string;
   constructor(private readonly workspace: WorkspaceApplication, private readonly runs: RunRepository, private readonly codec: ContentCodec) {
     this.repository = new ProposalRepository(workspace.metadata);
   }
-  private exclusive<T>(id: string, work: () => Promise<T>): Promise<T> { const next = (this.queues.get(id) ?? Promise.resolve()).catch(() => {}).then(work); this.queues.set(id, next); return next; }
+  private exclusive<T>(id: string, work: () => Promise<T>): Promise<T> { let queue = this.queues.get(id);
+    if (!queue) { queue = new SerialQueue(); this.queues.set(id, queue); }
+    return queue.run(work); }
   assertSettled() { if (this.receiptFailure) throw new AppError('STORAGE', this.receiptFailure); }
   private async saveReceipt(proposal: ChangeProposal) {
     try { await this.repository.save(proposal); }
@@ -97,7 +99,7 @@ export class ProposalService {
     for (const proposal of await this.repository.all()) {
       const source = await this.runs.get(proposal.sourceRunId);
       if (proposal.state === 'applying') {
-        const operation = proposal.operationId && await this.workspace.metadata.get<Operation>('operations', proposal.operationId);
+        const operation = proposal.operationId && await this.workspace.metadata.operation(this.workspace.journal.scope(proposal.projectId), proposal.operationId);
         if (operation && operation.phase !== 'recorded') continue;
         await this.repository.save({ ...proposal, state: operation ? 'applied' : source?.state === 'completed' ? 'ready' : 'interrupted', updatedAt: new Date().toISOString() });
       } else if (proposal.state === 'draft' || (source && !terminalRun(source.state))) {

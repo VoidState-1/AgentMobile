@@ -7,7 +7,7 @@ import { providerPresets, protocolNames } from '@/core/models/presets';
 import { serviceOrigin } from '@/core/models/rules';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
 import { ChevronRight, Plus } from '@/shared/ui/icons';
-import { useWorkbenchTheme } from '@/shared/theme/use-theme';
+import { useWorkbenchTheme } from '@/shared/theme';
 import { CheckResult, Choices, ConfigPage, Loading, Section, Toggle, useConfiguration, useDraftGuard, type ConfigurationController } from './common';
 
 type Draft = Parameters<ModelConfigurationService['saveConnection']>[0];

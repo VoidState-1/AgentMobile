@@ -5,7 +5,7 @@ import type { AppServices as Runtime } from '@/application/services';
 import { defaultAgentLimits, defaultSystemPrompt, contentLimits, type AgentLimits } from '@/core/agent/settings';
 import { Button, Field, T } from '@/shared/ui/primitives';
 import { ConfigPage, FormScroll, Loading, Section, useDraftGuard } from '@/shared/ui/forms';
-import { useAppServices } from '@/shared/hooks/use-app-services';
+import { useAppServices } from '@/shared/use-app-services';
 
 const fields: { key: keyof AgentLimits; label: string; hint: string; unit: number }[] = [
   { key: 'maxModelRounds', label: '模型请求轮数', hint: '1–200 轮', unit: 1 },

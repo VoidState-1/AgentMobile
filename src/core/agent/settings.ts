@@ -1,3 +1,4 @@
+import { AppError } from '@/core/errors';
 
 export const contentLimits = {
   promptCharacters: 16_000, systemPromptCharacters: 16_000,
@@ -32,14 +33,14 @@ export interface AgentSettings {
 }
 export const defaultAgentSettings = (): AgentSettings => ({ schemaVersion: 1, revision: 0, systemPrompt: defaultSystemPrompt, limits: { ...defaultAgentLimits } });
 export function validateAgentSettings(value: Pick<AgentSettings, 'systemPrompt' | 'limits'>): void {
-  if (typeof value.systemPrompt !== 'string' || !value.systemPrompt.trim() || value.systemPrompt.length > contentLimits.systemPromptCharacters) throw new Error('系统提示词需要 1–16,000 个字符。');
+  if (typeof value.systemPrompt !== 'string' || !value.systemPrompt.trim() || value.systemPrompt.length > contentLimits.systemPromptCharacters) throw new AppError('VALIDATION', '系统提示词需要 1–16,000 个字符。');
   const l = value.limits;
   const ranges: [keyof AgentLimits, number, number, string][] = [
     ['maxModelRounds', 1, 200, '模型请求轮数'], ['maxToolCalls', 1, 2000, '工具调用次数'],
     ['maxRuntimeMs', 60_000, 120 * 60_000, '任务总时长'], ['requestTimeoutMs', 5000, 30 * 60_000, '单次请求超时'],
     ['historyTasks', 0, 50, '历史任务数量'],
   ];
-  for (const [key, min, max, name] of ranges) if (!Number.isInteger(l?.[key]) || l[key] < min || l[key] > max) throw new Error(name + '超出允许范围。');
-  if (l.requestTimeoutMs > l.maxRuntimeMs) throw new Error('单次请求超时不能超过任务总时长。');
+  for (const [key, min, max, name] of ranges) if (!Number.isInteger(l?.[key]) || l[key] < min || l[key] > max) throw new AppError('LIMIT', name + '超出允许范围。');
+  if (l.requestTimeoutMs > l.maxRuntimeMs) throw new AppError('VALIDATION', '单次请求超时不能超过任务总时长。');
 }
 export const effectiveSystemPrompt = (settings: AgentSettings) => workspaceSystemRules + '\n\n' + settings.systemPrompt;

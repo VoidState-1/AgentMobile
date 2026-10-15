@@ -1,7 +1,7 @@
 import { useCallback, useRef, useState, type SetStateAction } from 'react';
-import type { EditorDocument } from './types';
+import type { EditorDocument, EditorSession } from './types';
 
-export function useEditorSession() {
+export function useEditorSession(): EditorSession {
   const [editor, setEditorState] = useState<EditorDocument>();
   const editorRef = useRef<EditorDocument | undefined>(undefined);
   const setEditor = useCallback((value: SetStateAction<EditorDocument | undefined>) => {

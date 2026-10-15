@@ -415,3 +415,87 @@ R0–R5 行为与迁移/失败路径验收完成。当前仅内置角色/父模�
 `npm run check` 通过（165 项测试；原 166 项中合并 1 项重复验证）；41 条 Playwright 浏览器回归通过（4 workers），覆盖协议、推理、预算、取消、Git、实时资料、并发、子 Agent、writer 提案、MCP、Skills 与旧数据迁移。开启 `noUnusedLocals/noUnusedParameters`，静态引用检查没有剩余孤立 src 模块；文件路由、Metro Pi alias、Web 平台实现按隐式入口保留。
 
 删除未接入的 image-picker/image-manipulator 和应用直接 Zod 依赖；MCP SDK 继续使用锁定的传递 Zod 版本。保留 Router 所需 Reanimated/Worklets/Gesture Handler。Expo Doctor 21/21、原生配置 introspection、Web/Android/iOS JS/Hermes 导出通过。清理 17 个未引用模板素材，使用中的六个应用图标/启动素材路径仍有效。未重跑原生安装与模拟器操作；没有修改 SQLite、Git 或原生桥接实现。本轮只使用模拟协议，没有调用付费模型。
+## 2026-10-14：改进方案第一阶段（整体仍在执行）
+
+统一 StopReason/终态判定，宿主错误改为 AppError；删除错误子类与 UI 中文前缀正则。所有工具显式声明 effect，冻结角色参与工具构建/派发；静态边界覆盖 alias、相对路径、类型、动态 import 与 require。目录实际由 65 个收敛到 44 个子目录（含新建的真实存储模块，仍需最终盘点），没有旧路径转发文件。
+
+OperationJournal 使用明确 projects/skills namespace，以及独立 header/body/counter。prepare 的序号、摘要、不可变正文在同一数据库事务分配/保存；phase 更新验证 revision 与意图不变；recorded 与项目元数据同批写入。摘要/归属/任务最终状态查询不读取正文，恢复逐项目/按序读取未完成正文，失败阻断该项目。Skills 显式 files_commit 固定目标快照；删除 automaticCommits、缺失 kind 分支及旧格式恢复测试。补验证 Git 成功但技能回执失败时冻结、重开不增加第二个版本，以及摘要读取禁止正文的故障注入。
+
+删除旧模型配置/凭证入口、旧任务/transcript 迁移、旧对话补写。启动修复草稿只查询精确 accepted-drafts 回执；它与运行准入同批提交。当前 SQLite/IndexedDB 格式为 agent-mobile-f1，不建立升级/降级链。格式不匹配时显示开发重建入口，确认前不清理；入口仅在内核未建立时可用，重建作用于此应用 DB/工作区/Git，设备 SecureStore 凭证、其他应用和外部服务不在范围。
+
+截至该阶段：npm run check 通过（25 套、173 项测试）；Web 导出通过；40 条完整 Playwright 回归通过（三模型协议、两代 MCP、Skills、Git、根/子 Agent、实时资料）；开发重建入口新增后，补跑格式/工作台回归，结果见后续记录。没有使用真实 API Key 或付费模型。未修改依赖/Expo 配置。
+
+node scripts/storage-current-format.mjs 执行实际 source adapter：Node SQLite 验证当前结构创建/重开、prepared+counter 回滚、并发 105 个序号、重复 ID、header-only 分页、跨表 revision 冲突回滚和格式不匹配；真实 Chrome IndexedDB 验证 105 条并发意图、重复 ID、事务回滚、30+30 分页、100 条恢复顺序、查询只触及 header store、实例身份稳定与旧格式阻断。Node SQLite 桥接夹具不能证明 Expo SQLite/Hermes 或 Android 真机行为；当前没有运行中的 Android 模拟器。
+
+node scripts/storage-range.mjs：Chrome 155.0.8059.41，Windows x64，隔离实例 3,000 个紧凑摘要和另一 bucket 32 × 128 KiB 独立正文，总约 4 MiB。各 5 次：键范围查询中位 15.9 ms、最大 16.7 ms；旧全库复制/过滤中位约 25.8 ms、最大 27.5 ms。两组先后执行、有缓存和 GC 影响；heap 35.2 MB 是一次读数，不是峰值或对照结论。本结果验证读取范围收敛，不能外推到冷启动、全项目刷新、1/4/20 MB 混合样本或真机收益；完整性能样本仍待后续交付。
+
+运行 v3/摘要与详情/底层分页、trace/text chunks/transcript frames、ExecutionDriver、共享 ScopedFileReader、窄 workbench/API 和原生验证尚未完成。第一阶段的绿灯不代表整个十批次方案已验收。生成 DB/测量结果/截图在 work/，未提交；用户 4180 预览服务保持运行，预览已更新。
+
+## 2026-10-15：运行摘要、分页与持续写入
+
+运行列表改为独立 RunSummary/RunDetail/RunView 和 RunsApi；废弃 TaskRecord 展示/实体耦合及完整 tasks 查询。私有执行快照命名 ExecutionView，移除 events 镜像；AppServices 只投影公共显示字段，任务差异/撤销输入改为 runId，在业务层加载可信记录。当前工作台 FlatList 初始渲染 3 项、首批 30 条摘要，可见项再读取详情，子正文展开后读取。后续步骤/正文有独立分页入口。
+
+GitPort.historyPage 固定 HEAD，后页按提交 OID 继续，默认 30/上限 100；此产品当前只有线性提交链，无合并功能。Git/Skills 界面增加加载更多；Skills 扫描到足够相关版本或链结束，复用同一修订算法，不只检查最近 30 次库提交。findOperation 逐页搜索完整提交标记，超过 100 条和相似 ID 测试通过。
+
+数据格式更新为 agent-mobile-f3（SQLite/IDB 物理版本 4），没有格式迁移链。trace_nodes、trace_text_chunks、transcript_frames 各自有索引；节点更新检查 revision/归属/终态，文本块验证连续 ordinal、UTF-16 offset/长度，帧验证版本/连续序号/同键一致。Recorder 每次仅提交 dirty 节点、新块与未保存帧；流式进度不重写完整回答。Pi 对 message_end 保存单条消息，系统/历史种子各一次，取消尾部继续保存，没有每轮 deep clone agent.state.messages。终态与轨迹尾部/帧同库原子写入；持续写链错误仍阻断后续写入/完成。界面通知与 200ms DB 合并独立。
+
+发现并修复真实收尾竞态：引擎返回后，尚存的自动保存定时器可能在最终工作区快照结束前保存 completed，使最后快照被终态保护忽略。根/子进入收尾就关闭自动刷新，然后完成特有快照/候选收束，再提交终态。
+
+npm run check 通过（26 套、179 项），Web 导出通过，41 条完整浏览器回归通过。新验证覆盖增量块不重写、摘要不读正文、12000 UTF-16 分页代理对、终态/尾帧同批、旧进度及重复帧冲突。实际 SQLite/IndexedDB source adapter 测试进一步通过文本范围查询、重复块/帧冲突、帧顺序与终态批次；生成结果在 work/validation/current-format.json。没有调用付费服务。Android/iOS 当前批次的原生桥接、故障注入与完整性能样本仍待验收；前一阶段 Android Hermes 导出不能代替本阶段运行验证。
+
+## 2026-10-15：共同驱动、受限读取与原生当前格式
+
+根/子通过同一 ExecutionDriver 管理 EngineSession、请求槽/配额、派发前检查、持久化意图、effect/角色授权、停止订阅与计时器/permit 清理；根保留项目租约、委派汇总与文件快照，子保留候选收束与配额释放。驱动不接收 WorkspaceApplication。live/snapshot/proposal 都使用 ScopedFileReader 与一套 schema/分页/文字/搜索/图片算法；快照无写端口，提案读授权候选，跨页来源/版本变化报 CONFLICT；list_files 改为 files/cursor/source，演示与测试调用者同步更新。
+
+snapshot 的 file/status/preview 共用一次内容读取，workingTree 直接遍历读取一次，必要 Git 全树成本保留。新增真实 I/O 计数验证一次刷新每份文件只读一次；新增跨页版本/grant、分页搜索/取消测试。AppServices 公开契约改为显式接口，没有 Pick<ServiceClass>；UI diff/undo 只提交 runId，业务查可信记录。editor/composer 各有唯一 ref+state 写入入口，外部 ref 只读；保存完成核对当前文档身份，保留后来输入，离开前再次核对未保存内容。窄 workbench 六组能力和文件描述索引尚待完成。
+
+npm run check：27 套、182 项通过。Web 最新完整回归先发现一个旧测试仍把 list_files 当数组；按新契约更新后，资料实时更新/引用图片删除 4 条回归通过。其他 40 条完整回归此前通过；编辑入口改动后仍需对应 UI 验证，不能把此前结果当作它的验证。
+
+Android API 36.1 x86_64，Medium_Phone_API_36.1 的只读隔离实例，emulator-5572；不清原 AVD 数据。安装现有 SDK 57 development APK，通过 Metro 8082 加载当前源码；Metro 只监听 ::1，使用本地 IPv4 8083→::1:8082 代理与 adb reverse 修复客户端连接。没有为连接问题修改产品依赖/Expo 配置。原生实际编辑 notes.md、保存后离开、Pi 演示工具生成 summary.md，强制停止/重开后两份内容保留。FlatList 完成状态可能在视口外，smoke 改为等待发送按钮恢复；原先等待已完成文本的超时不是运行失败，SQLite 随后核对真实终态。
+
+node scripts/android-runs.mjs emulator-5572 对该隔离实例读取真实 SQLite/Git：当前 Run v3、独立 trace 节点/文本块、transcript frames、4 次模型请求/3 个工具；注入未完成根/子/排队及精确草稿回执，重启后均 interrupted、活动索引清空、正文/轨迹保留、草稿清理且操作日志数不增加，未重放模型/文件工具。该项不能代替真实断电、事务 trigger 回滚、writer/Skills/MCP unknown 新格式原生验证或真机性能。
+2026-10-15 本批补验：编辑入口/保存基线改动后，7 条 workbench 浏览器回归通过；npm run check 仍为 27 套、182 项通过，git diff --check 无空白错误。尚未完成的具体项保持原范围：文件描述索引与失效验证；工作台按 conversation/editor/files/git/runs/dialogs 六组契约收敛；完整性能三样本/至少五次测量；当前原生 schema 的事务 trigger 失败、Skills/writer/MCP unknown 验证；iOS JS 导出与原生限制说明；最终逐项完成审计。未创建提交或 PR。
+
+## 2026-10-15：目录、界面能力与当前格式的最终收敛
+
+文件描述索引只缓存路径、大小、MIME 与真实 Git 修订，不缓存正文。Web 的 stat 从 IndexedDB 复合索引读取轻量键，内容版本 UUID 与实际文件同一行原子更新；Native 校验真实 MD5 内容指纹，仍需要读取文件，减少的是 JS 字节复制/重复 Git 哈希，不承诺原生物理 I/O 为 O(1)。没有可信指纹时每次重新读取。当前操作 recorded 后验证并暖索引；冷启动/恢复失败清空索引；未知同大小同时间内容变化也重新验证。保存、提案合入的写前内容检查未被缓存替代。
+
+数据格式为 agent-mobile-f4 / SQLite、IndexedDB 物理版本 5。旧实例阻断并提示明确重建，未加入历史读取或迁移链。Android 实测发现并修复开发重建路径问题：SQLite 给出本地路径，Expo FileSystem 的 File 需要 URI；失败标记仍阻断不完整实例，修复后原生中断重建可以重试成功。Web versionchange 关闭旧连接，后续访问返回带刷新提示的 CONFLICT。实际 source adapter 进一步验证初始化 DDL/格式标记/物理版本在同一 SQLite 事务回滚，当前格式重试初始化、序号/正文/CAS 回滚、trace/chunk/frame 原子写入与关闭提示。
+
+工作台输出 conversation/editor/files/git/runs/dialogs 六组能力。稳定动作绑定在提交后的界面状态，组件仅接收所需组并用 memo 隔离无关分片；活动指示器不持有整棵 trace。运行事件不触发文件/Git 查询，只有当前项目的 recorded 工作区通知刷新资料。查询范围变更立即隐藏旧文件、Git 状态、操作和对话列表，新范围查询返回前不展示旧数据。真实 IDB 阻塞回归验证这条边界。
+
+editor/composer 均通过唯一入口写入 ref+state；editor 会话身份使用 Symbol，旧保存回执不会命中重新打开的同名文档。保存过程中输入保留并继续显示未保存状态；保存后离开重新核对最新输入。公共详情只读取 header/input/result，不加载冻结工具/供应商或 opaque provider 消息。长轨迹首 50 节点不影响最终回答可见性，长回答初始 12,000 UTF-16 单位、按需展开。SerialQueue 只统一可恢复失败的普通命令队列；Recorder sticky 失败链、请求公平队列和需要特别收束的队列保留自身语义。JSON DTO clone/freeze 仅用于已经校验的业务 DTO，不处理能力、字节、租约或 provider 消息。
+
+src 子目录从原 65 个收敛为 43 个，空目录为 0；没有旧路径转发或预建未来框架。AppServices 为显式契约，边界检查、未使用声明检查继续生效。关键停止、驱动、事务、恢复和并发代码展开为可阅读的块。原外部审计报告保留原文。
+
+当前格式 Android/Hermes 实存验证通过：两个 Pi 只读子 Agent、同输入快照、并发请求最多 2、结果汇总、递归取消与强制中断恢复；writer 候选隔离、主合入/归属、真实 index/HEAD 保护、整组撤销；合入 recorded 的 SQLite trigger 故障阻止虚假完成，重启恢复原回执且不重放模型。Skills 实际 ZIP 导入、懒加载/明确加载、冻结版本、资源更新、历史和重启通过；额外 trigger 在 Git 已成功后令 recorded 失败，验证项目元数据回滚、原操作恢复和 HEAD 不增加第二个版本。MCP 2026/2025 SSE、原生进度、工作区写入、强制中断 unknown、人工解除重试屏障及 Token 不进入元数据通过。
+
+复现脚本：android-delegation.mjs（--verify 可只核对已保存的合成 DB）、android-proposals.mjs、android-skills.mjs、android-skills-fault.mjs、android-mcp.mjs；只对 emulator-5572 的只读隔离实例运行。本轮没有使用真实 Key 或付费模型，未清理凭证或原 AVD 数据。依赖与 Expo 配置未改变。iOS 仅 JS/Hermes 导出验证，iOS 原生与 arm64 真机未验证；进程中断与事务 trigger 不证明真实断电/fsync 保证。
+
+## 本轮性能验收与实际限制
+
+三个隔离样本分别为：20 文件（含 project.json）/50 根运行/200 操作，200 文件/1,000 根运行/3,000 操作，以及 20 文件/50 根运行/32 个独立大内容操作。大内容包含 1 MiB 文本、可真实解码的 4 MiB/20 MiB PNG（随机独立 RGBA 像素）、260 个轨迹节点和长回答。正文由实际当前存储适配器逐条保存，不共享同一字符串引用模拟存储；Git 可以共享不可变内容对象。每个样本五次，数据和原始结果只保存在 work/validation。
+
+Web：Windows x64、i7-10700F、16 GiB RAM、Chrome 155.0.8059.41，Expo 生产 Web 导出。冷启动为新页面/JS/业务启动，未驱逐 OS/IDB 缓存；首屏等待初始可用界面/最新运行文字，后续详情按可见性读取。下表为中位/最大毫秒，JS 堆为 CDP 每 50ms 采样峰值，不能当作精确峰值或包含所有 ArrayBuffer/图片解码内存的总量。
+
+| 样本 | 冷启动 | 首屏 | 冷刷新 | 温刷新 | 保存 | 保存 JS 堆峰值 |
+| --- | --- | --- | --- | --- | --- | --- |
+| 普通 | 568 / 723 | 584 / 746 | 57 / 64 | 18 / 20 | 70 / 76 | 6.7 MiB |
+| 历史 | 590 / 674 | 620 / 725 | 294 / 309 | 76 / 82 | 320 / 380 | 10.3 MiB |
+| 大内容 | 576 / 639 | 620 / 669 | 163 / 179 | 18 / 23 | 928 / 1,004 | 80.4 MiB |
+
+三个样本首批均为 30 条摘要；首屏不读操作正文或 transcript。IDB/文件边界读写字节是逻辑传输量，不是物理磁盘 I/O：原始结果含各 store 命中计数、每阶段 readBytes/writeBytes。大内容温刷新不会复制历史大正文和项目图片字节；保存仍有必要全树读取/哈希。没有宣称整次保存或 Git 为 O(1)，也没有根据不同时段的运行推导固定收益比例。
+
+Android：API 36.1 x86_64 只读隔离模拟器、SwiftShader、SDK 57 development build/Hermes、Metro 8082，同一主机。每阶段记录墙钟和 dumpsys meminfo 约 250ms 采样 PSS/native heap。计时包含 adb/uiautomator 观察；冷启动包含开发客户端/Metro，未清 OS 文件缓存。大内容刷新等待完整文件计数，普通/历史刷新等待首个文本条目，所以这不是严格一致的 UI 延迟对照；普通/历史样本在最后的 Git 对象复用改动之前采集，大内容为改动之后。只把它们作为实测成本与内存基线，不比较优化比例。
+
+| 样本 | 冷启动中位/最大 | 刷新中位/最大 | 保存中位/最大 | 保存 PSS/native heap 采样峰值 |
+| --- | --- | --- | --- | --- |
+| 普通 | 20.15 / 23.24 秒 | 6.04 / 6.31 秒 | 9.10 / 9.35 秒 | 520 / 295 MiB |
+| 历史 | 22.46 / 24.29 秒 | 14.76 / 15.43 秒 | 20.93 / 23.16 秒 | 636 / 343 MiB |
+| 大内容 | 28.67 / 31.23 秒 | 33.18 / 34.12 秒 | 124.10 / 130.48 秒 | 678 / 328 MiB |
+
+大内容原生成本很高，并观察到换页压力。确认 isomorphic-git 在对象存在检查之前重新压缩内容后，checkpoint 改为计算实际 SHA、读取并校验已有 blob，内容一致才复用；损坏对象阻断快照并保留 HEAD，专项测试通过。此改动没有消除全树读取/哈希、对象解压和开发运行时成本。当前结果不足以通过发布前的真机性能验收；后续 Git/图片和轨迹渲染性能应另行设计，选择原生后端时用同样数据复测，不能用模拟器开发构建数值许诺真机收益。
+
+复现：node scripts/architecture-measurement.mjs；AGENT_MOBILE_METRO_PORT=8082 时运行 node scripts/android-measurement.mjs emulator-5572。后者只允许指定的隔离设备，会替换该设备的测试 DB/工作区，保留 SecureStore；不可用于用户设备。--sample=large 可重测大内容并保留已记录的其他样本。每次重新测量注明源码和构建阶段。没有设置缺乏真机基线的产品耗时承诺；本轮硬验收是查询/写入范围、版本/权限检查、原子回执与数据正确性。
+
+最终检查：npm run check 28 套/187 项通过；完整浏览器 44 条通过，最终 Git blob 复用变更后补跑 Git/提案/Skills 7 条通过；SQLite/真实 Chrome source adapter 故障测试通过；Web、Android/iOS JS/Hermes 导出通过；git diff --check 无错误。原生功能/故障专项见上节。没有提交或 PR，全部源码改动留在工作树。已停止本轮隔离模拟器、Metro、IPv4 代理和模拟服务器，保留用户 4180 预览服务与最新 Web 导出。

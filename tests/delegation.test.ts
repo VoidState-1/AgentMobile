@@ -1,6 +1,7 @@
+import { testNotifications } from './notifications';
 import { randomUUID } from 'node:crypto';
 import { afterEach, expect, it, vi } from 'vitest';
-import { WorkspaceService } from '../src/adapters/workspace/service';
+import { createWorkspace } from '../src/bootstrap/workspace';
 import { contentCodec } from '../src/adapters/storage/codec';
 import { defaultAgentSettings } from '../src/core/agent/settings';
 import { defaultSchedulerLimits } from '../src/core/runs/scheduling';
@@ -11,19 +12,21 @@ import { DelegationSession } from '../src/application/runs/delegation';
 import { RunRepository } from '../src/application/runs/repository';
 import { GroupBudget } from '../src/application/runs/budget';
 import { RequestScheduler } from '../src/application/runs/request-scheduler';
+import { RunStopController } from '../src/core/runs/termination';
+import { builtinAgents } from '../src/core/agent/definitions';
 import type { PreparedRun } from '../src/application/runs/resources';
 import { testStorage } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
-afterEach(async () => { for (const cleanup of cleanups.splice(0)) await cleanup(); });
+afterEach(async () => { vi.useRealTimers(); for (const cleanup of cleanups.splice(0)) await cleanup(); });
 const request = (prompt: string): SpawnRequest => ({ role: 'reader', prompt, paths: ['documents/notes.md'], budget: { requests: 4, tools: 3 } });
 async function fixture() {
-  const f = await testStorage(); cleanups.push(f.cleanup); const workspace = new WorkspaceService(f.files, f.metadata, randomUUID);
+  const f = await testStorage(); cleanups.push(f.cleanup); const workspace = createWorkspace(f.files, f.metadata, randomUUID);
   const project = await workspace.create('只读委派'); const original = await workspace.readText(project.id, 'documents/notes.md');
-  const repository = new RunRepository(f.metadata); const settings = defaultAgentSettings(); const abort = new AbortController();
-  const root: RunRecord = { schemaVersion: 2, id: 'root', rootRunId: 'root', kind: 'root', depth: 0, state: 'running', projectId: project.id, conversationId: 'conversation',
-    prompt: '父任务秘密上下文', response: '', events: [], createdAt: new Date().toISOString(), mode: 'demo', agentSettingsSnapshot: settings, agentDefinitionId: 'main', agentDefinitionRevision: 1, launchSnapshotRef: 'root' };
-  await repository.save(root, { id: 'root', settings }); workspace.claim(project.id, root.id);
+  const repository = new RunRepository(f.metadata); const settings = defaultAgentSettings(); const abort = new RunStopController('root');
+  const root: RunRecord = { schemaVersion: 3, id: 'root', rootRunId: 'root', kind: 'root', depth: 0, state: 'running', projectId: project.id, conversationId: 'conversation',
+    prompt: '父任务秘密上下文', response: '', createdAt: new Date().toISOString(), mode: 'demo', agentSettingsSnapshot: settings, agentDefinitionId: 'main', agentDefinitionRevision: 1, launchSnapshotRef: 'root' };
+  await repository.save(root, { id: 'root', settings, agent: builtinAgents[0] }); workspace.claim(project.id, root.id);
   const budget = new GroupBudget(f.metadata, root.id, settings.limits); await budget.start(); const scheduler = new RequestScheduler(2, 2);
   const inputs: EngineInput[] = []; const reads: string[] = []; const gates = new Map<string, { release(): void; promise: Promise<void> }>();
   const factory = async (prompt: string) => {
@@ -38,15 +41,27 @@ async function fixture() {
       await gate.promise;
       if (cancelled) return { stopReason: 'aborted' };
       receive({ type: 'content', round: 1, index: 0, kind: 'text', text: prompt + '结果', response: prompt + '结果', ended: true });
-      receive({ type: 'assistant_end', round: 1, response: prompt + '结果', transcript: { goal: prompt } }); return { stopReason: 'stop' };
+      receive({ type: 'transcript_frame', ordinal: 0, schemaVersion: 1, payload: { role: 'user', content: prompt } }); receive({ type: 'assistant_end', round: 1, response: prompt + '结果' }); return { stopReason: 'stop' };
     } }; } };
-    return { engine, resources: { codec: contentCodec } };
+    return { engine, resources: { codec: contentCodec, notifications: testNotifications } };
   };
   const prepared: PreparedRun = { launch: { mode: 'demo', imageInput: false, contextTokens: 32000, outputTokens: 4096 }, engine: { create() { throw new Error('unused'); } },
-    resources: { codec: contentCodec }, release: async () => {}, createChild: factory };
+    resources: { codec: contentCodec, notifications: testNotifications }, release: async () => {}, createChild: factory };
   const delegation = new DelegationSession(root, prepared, workspace, repository, budget, scheduler, defaultSchedulerLimits, abort, randomUUID);
   return { ...f, workspace, project, original, repository, budget, scheduler, delegation, gates, inputs, reads, abort };
 }
+
+it('子控制器截止计时器终止整组，持久化失败状态和祖先截止原因而非用户取消', async () => {
+  const f = await fixture(); vi.useFakeTimers();
+  const id = await f.delegation.spawn('deadline', request('截止探针'));
+  await vi.waitFor(() => expect(f.reads).toHaveLength(1));
+  await vi.advanceTimersByTimeAsync(f.budget.remainingMs() + 1);
+  const [result] = await f.delegation.settle(false);
+  expect(result.state).toBe('failed');
+  expect((await f.repository.get(id))).toMatchObject({ state: 'failed', stopReason: { kind: 'ancestor_stopped', cause: 'deadline', originRunId: 'root' } });
+  expect(f.abort.reason?.kind).toBe('deadline');
+  expect(f.scheduler.getSnapshot()).toMatchObject({ active: 0, queued: 0 });
+});
 
 it('异步委派两个独立只读上下文，固定共享快照不受父写入影响，去重/范围/数量受宿主限制', async () => {
   const f = await fixture(); const a = await f.delegation.spawn('1:a', request('A'));
@@ -69,12 +84,12 @@ it('异步委派两个独立只读上下文，固定共享快照不受父写入�
   const traces = (await f.repository.children('root')).flatMap((child) => child.trace!);
   expect(new Set(traces.map((item) => item.groupSequence)).size).toBe(traces.length);
   expect(traces.every((item) => item.rootRunId === 'root' && item.parentRunId === 'root' && item.runSequence! > 0)).toBe(true);
-  expect((await f.repository.list(f.project.id)).runs.map((run) => run.id)).toEqual(['root']); expect(await f.repository.transcript(a)).toEqual({ goal: 'A' });
+  expect((await f.repository.list(f.project.id)).runs.map((run) => run.id)).toEqual(['root']); expect(await f.repository.transcript(a)).toMatchObject([{ ordinal: 0, schemaVersion: 1, payload: { role: 'user', content: 'A' } }]);
 });
 
 it('子创建/回执/额度事务中断不会留下部分预算或运行，重试只创建一份', async () => {
-  const f = await fixture(); const batch = f.metadata.batch!; let fail = true;
-  f.metadata.batch = async (entries) => { if (fail && entries.some((entry) => entry.bucket === 'run-delegations')) { fail = false; throw new Error('creation interrupted'); } await batch(entries); };
+  const f = await fixture(); const writeBusiness = f.metadata.writeBusiness; let fail = true;
+  f.metadata.writeBusiness = async batch => { if (fail && batch.metadata?.some(entry => entry.bucket === 'run-delegations')) { fail = false; throw new Error('creation interrupted'); } await writeBusiness(batch); };
   await expect(f.delegation.spawn('retry', request('A'))).rejects.toThrow('creation interrupted');
   expect((await f.repository.group('root')).map((run) => run.id)).toEqual(['root']); expect(f.budget.snapshot().allocations ?? {}).toEqual({});
   const id = await f.delegation.spawn('retry', request('A')); await vi.waitFor(() => expect(f.inputs).toHaveLength(1));
@@ -101,7 +116,7 @@ it('最多两个并行/四个总数，定向取消与根递归取消都先保存
   await expect(f.delegation.spawn('call:E', request('E'))).rejects.toMatchObject({ code: 'LIMIT' });
   await f.delegation.cancel(ids[0]); await vi.waitFor(() => expect(f.inputs).toHaveLength(3));
   expect((await f.repository.get(ids[0]))!.state).toBe('cancelled'); expect((await f.repository.get(ids[1]))!.state).toBe('running');
-  f.abort.abort(); const results = await f.delegation.settle(true);
+  f.abort.cancelUser(); const results = await f.delegation.settle(true);
   expect(results).toHaveLength(4); expect(results.every((item) => item.state === 'cancelled')).toBe(true);
   expect(f.scheduler.getSnapshot()).toMatchObject({ active: 0, queued: 0 }); expect(f.budget.snapshot().allocations).toEqual({});
   expect((await f.workspace.readText(f.project.id, 'documents/notes.md')).revision).toBe(f.original.revision);
