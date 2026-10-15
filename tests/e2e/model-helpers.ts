@@ -2,7 +2,7 @@ import { expect, type Page } from '@playwright/test';
 import type { ModelProtocol } from '../../src/core/models/types';
 
 export async function openModels(page: Page) {
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
   await expect(page.getByRole('button', { name: '添加连接', exact: true })).toBeVisible();
 }
@@ -45,7 +45,8 @@ export async function returnToWorkbench(page: Page) {
     await page.getByRole('button', { name: '返回', exact: true }).click();
     await page.waitForTimeout(160);
   }
-  await expect(page.getByRole('tab', { name: '会话', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '对话', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
 }
 export async function configureModel(
   page: Page,

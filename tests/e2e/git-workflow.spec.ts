@@ -1,21 +1,23 @@
+import { openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 
 async function create(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('Git 工作流');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
 }
 async function edit(page: Page, text: string) {
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '编辑', exact: true }).click();
   await page.getByLabel('正文', { exact: true }).fill(text);
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
 }
 
 test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 Git 行为', async ({ page }) => {
@@ -36,7 +38,7 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
     page.getByRole('button', { name: '取消暂存 documents/notes.md', exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await page
     .getByRole('button', { name: '查看未暂存差异 documents/notes.md', exact: true })
     .click();
@@ -64,7 +66,7 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
   await page.getByRole('button', { name: '丢弃更改 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改', exact: true }).click();
   await expect(page.getByRole('button', { name: '更改', exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await expect(page.getByText('已暂存的内容。', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
@@ -116,22 +118,22 @@ test('取消暂存不丢文件，历史恢复只改变工作区且阻止覆盖�
 test('手机 Git 面板支持深浅主题、短视口、提交输入与未跟踪文件丢弃', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 844 });
   await create(page);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '新建文件', exact: true }).click();
   await page.getByLabel('文件名称', { exact: true }).fill('draft.md');
   await page.getByLabel('正文', { exact: true }).fill('手机资料。');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await page.getByRole('button', { name: '暂存 documents/draft.md', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '取消暂存 documents/draft.md', exact: true }),
   ).toBeVisible();
   await page.getByLabel('提交说明', { exact: true }).fill('手机新增资料');
   await page.screenshot({ path: 'work/git-mobile-light.png' });
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await page.screenshot({ path: 'work/git-mobile-dark.png' });
   await page.setViewportSize({ width: 360, height: 500 });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
@@ -140,7 +142,7 @@ test('手机 Git 面板支持深浅主题、短视口、提交输入与未跟踪
   await page.getByRole('button', { name: '丢弃更改', exact: true }).click();
   await expect(page.getByRole('button', { name: '更改', exact: true })).toBeVisible();
   await page.reload();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/draft.md', exact: true }),
   ).toHaveCount(0);

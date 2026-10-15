@@ -72,7 +72,7 @@ async function open() {
   await waitFor('设置');
 }
 async function create(name) {
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', name);
@@ -104,7 +104,7 @@ if (!process.argv.includes('--fault')) {
   await waitFor('隔离写作提案 · 编辑中');
   await waitFor('Native isolated notes.');
   await tap('关闭');
-  await tap('资料');
+  await tap('文件');
   if ((await dump()).includes('打开 documents/proposal.md'))
     throw new Error('未合入候选提前出现在真实工作区');
   await tap('打开 documents/notes.md');
@@ -112,7 +112,7 @@ if (!process.argv.includes('--fault')) {
   await tap('关闭文件');
   await fetch('http://127.0.0.1:4181/release');
   await waitFor('打开 documents/proposal.md');
-  await tap('会话');
+  await tap('对话');
   await waitFor('已完成');
   await stop();
   await pull();
@@ -148,7 +148,7 @@ if (!process.argv.includes('--fault')) {
   await tap('查看变化');
   await tap('撤销修改');
   await tap('确认恢复');
-  await tap('资料');
+  await tap('文件');
   if ((await dump()).includes('打开 documents/proposal.md'))
     throw new Error('根任务撤销没有撤回合入文稿');
 }
@@ -186,7 +186,7 @@ await pull();
 await install();
 await open();
 await waitFor('已中断');
-await tap('资料');
+await tap('文件');
 await waitFor('打开 documents/proposal.md');
 await stop();
 await pull();

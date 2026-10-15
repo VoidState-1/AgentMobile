@@ -23,7 +23,7 @@ async function open() {
   await waitFor('设置');
 }
 async function create(name) {
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', name);

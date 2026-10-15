@@ -1,8 +1,10 @@
+import { selectProject, openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel } from './model-helpers';
 import { answerEvents, sse } from '../protocol-fixtures';
 
 async function project(page: Page, name: string) {
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -56,7 +58,7 @@ test('两个项目并行，当前对话停止只取消自身；其他项目的�
   await expect(page.getByTestId('run-activity')).toHaveCount(0);
   expect(JSON.stringify(requests[0])).not.toContain('TASK_B');
   expect(JSON.stringify(requests[1])).not.toContain('TASK_A');
-  await page.getByRole('button', { name: '切换到 并行甲', exact: true }).click();
+  await selectProject(page, '并行甲');
   await page.reload();
   await expect(page.getByText('TASK_A完成', { exact: true })).toBeVisible();
 });

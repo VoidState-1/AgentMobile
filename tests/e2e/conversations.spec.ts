@@ -1,9 +1,11 @@
+import { addReference, openProjectTree, conversationActions } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel, openModels, addModel, returnToWorkbench } from './model-helpers';
 import { answerEvents, sse } from '../protocol-fixtures';
 
 async function project(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('多对话项目');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -12,11 +14,11 @@ async function project(page: Page) {
 async function rename(page: Page, title: string) {
   await page.getByRole('button', { name: '重命名当前对话', exact: true }).click();
   await page.getByLabel('对话名称', { exact: true }).fill(title);
-  await page.getByRole('button', { name: '保存对话名称', exact: true }).click();
+  await page.getByLabel('对话名称', { exact: true }).press('Enter');
   await expect(page.getByTestId('conversation-bar')).toContainText(title);
 }
 async function select(page: Page, title: string) {
-  await page.getByRole('button', { name: '切换对话', exact: true }).click();
+  await openProjectTree(page);
   await page
     .getByRole('button', { name: '切换对话 ' + title, exact: true })
     .last()
@@ -29,15 +31,15 @@ test('手机：独立草稿与附件、刷新选择、归档与恢复、项目�
   await project(page);
   await rename(page, '写作');
   await page.getByLabel('任务目标', { exact: true }).fill('仅属于写作的草稿');
-  await page.getByRole('button', { name: '添加参考资料', exact: true }).click();
+  await addReference(page);
   await page.getByRole('button', { name: '引用 documents/notes.md', exact: true }).click();
-  await expect(page.getByText(/草稿已保存/)).toBeVisible();
+  await expect(page.getByLabel('草稿已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '新建对话', exact: true }).click();
   await rename(page, '阅读');
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('');
   await expect(page.getByRole('button', { name: '移除参考文件', exact: true })).toHaveCount(0);
   await page.getByLabel('任务目标', { exact: true }).fill('仅属于阅读的草稿');
-  await expect(page.getByText(/草稿已保存/)).toBeVisible();
+  await expect(page.getByLabel('草稿已保存', { exact: true })).toBeVisible();
   await select(page, '写作');
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('仅属于写作的草稿');
   await expect(page.getByRole('button', { name: '移除参考文件', exact: true })).toBeVisible();
@@ -46,24 +48,24 @@ test('手机：独立草稿与附件、刷新选择、归档与恢复、项目�
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('仅属于写作的草稿');
   await select(page, '阅读');
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('仅属于阅读的草稿');
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/notes.md', exact: true }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
-  await page.getByRole('button', { name: '切换对话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await conversationActions(page, '阅读');
   await page.getByRole('button', { name: '归档对话 阅读', exact: true }).click();
   await page.getByRole('button', { name: '归档对话', exact: true }).click();
   await expect(page.getByTestId('conversation-bar')).toContainText('写作');
-  await page.getByRole('button', { name: '切换对话', exact: true }).click();
+  await openProjectTree(page);
   await page.getByRole('button', { name: '已归档', exact: true }).click();
   await page.getByRole('button', { name: '恢复对话 阅读', exact: true }).first().click();
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('仅属于阅读的草稿');
   await page.screenshot({ path: 'work/conversations-mobile-light.png' });
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('button', { name: '切换对话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await openProjectTree(page);
   await page.screenshot({ path: 'work/conversations-mobile-dark.png' });
   expect(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)).toBe(false);
 });
@@ -104,11 +106,11 @@ test('真实 Agent 上下文和模型按对话隔离，切换对话不取消任�
   await page.getByRole('button', { name: '新建对话', exact: true }).click();
   await rename(page, '乙对话');
   await expect(page.getByText('A_PRIVATE', { exact: true })).toHaveCount(0);
-  await expect(page.getByText(/另一个对话的任务仍在运行/)).toBeVisible();
+  await expect(page.getByText('此项目有任务执行中，发送后排队。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '模型设置', exact: true }).click();
   await page.getByRole('button', { name: '选择模型 模拟服务 · 备用模型', exact: true }).click();
   await page.getByLabel('任务目标', { exact: true }).fill('B_PRIVATE');
-  await expect(page.getByText(/草稿已保存/)).toBeVisible();
+  await expect(page.getByLabel('草稿已保存', { exact: true })).toBeVisible();
   release();
   await expect(page.getByRole('button', { name: '发送任务', exact: true })).toBeEnabled();
   await expect(page.getByText('甲对话独有回答', { exact: true })).toHaveCount(0);
@@ -130,4 +132,26 @@ test('真实 Agent 上下文和模型按对话隔离，切换对话不取消任�
   expect(JSON.stringify(requests[2])).toContain('A_PRIVATE');
   expect(JSON.stringify(requests[2])).not.toContain('B_PRIVATE');
   await page.screenshot({ path: 'work/conversations-desktop.png' });
+});
+
+test('树形侧栏跨项目恢复归档对话时保护当前文件编辑', async ({ page }) => {
+  await project(page);
+  await rename(page, '待恢复');
+  await conversationActions(page, '待恢复');
+  await page.getByRole('button', { name: '归档对话 待恢复', exact: true }).click();
+  await page.getByRole('button', { name: '归档对话', exact: true }).click();
+  await openProjectTree(page);
+  await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
+  await page.getByLabel('项目名称', { exact: true }).fill('编辑中的项目');
+  await page.getByRole('button', { name: '创建工作区', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
+  await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await page.getByLabel('正文', { exact: true }).fill('跨项目恢复之前必须保存。');
+  await page.getByRole('button', { name: '已归档', exact: true }).click();
+  await page.getByRole('button', { name: '恢复对话 待恢复', exact: true }).click();
+  await expect(page.getByText('有尚未保存的修改', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '保存后离开', exact: true }).click();
+  await expect(page.getByTestId('conversation-bar')).toContainText('待恢复');
+  await expect(page.getByRole('button', { name: '关闭文件', exact: true })).toHaveCount(0);
 });

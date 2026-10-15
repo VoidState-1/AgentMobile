@@ -310,7 +310,7 @@ for (const spec of samples.filter(sample => !selectedSample || sample.name === s
       await waitFor('Native-Bench-' + spec.name);
     });
     const refresh = await measure(async () => {
-      await tap('资料');
+      await tap('文件');
       await waitFor(spec.files - 1 + ' 个文件 · 保存在此设备', 120000);
     });
     // Large samples have image rows above the text list. Selecting a document

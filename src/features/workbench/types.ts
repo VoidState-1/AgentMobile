@@ -43,15 +43,7 @@ export type Confirmation = {
   saveFirst?: boolean;
 };
 export type WorkbenchSheet =
-  | 'create'
-  | 'projects'
-  | 'settings'
-  | 'attach'
-  | 'rename'
-  | 'models'
-  | 'conversations'
-  | 'conversation-name'
-  | 'skills';
+  'create' | 'attach' | 'rename' | 'models' | 'conversation-name' | 'skills';
 export type WorkbenchUi = ReturnType<typeof useWorkbenchUi.getState>;
 export interface ActionContext {
   runtime?: AppServices;

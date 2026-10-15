@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import type { RunsApi } from '@/application/services';
-import { ActivityIndicator, Pressable, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import type { RunView, DisplayTrace } from '@/core/runs/queries';
 import type { ContentTrace, ToolTrace } from '@/core/trace';
 import {
@@ -12,6 +12,11 @@ import {
   FileText,
   Image,
   Search,
+  Pencil,
+  GitCommitHorizontal,
+  Layers,
+  Plug,
+  Users,
 } from '@/shared/ui/icons';
 import { Button, T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
@@ -20,6 +25,18 @@ import { toolLabels } from '@/shared/format';
 import { traceView } from './trace-view';
 import { terminalRun } from '@/core/runs/records';
 import { textEnd, traceLimits } from '@/core/runs/trace-storage';
+import { groupTrace, toolCategory, toolCategoryNames, type ToolCategory } from './trace-groups';
+
+const categoryIcons = {
+  read: FileText,
+  search: Search,
+  image: Image,
+  write: Pencil,
+  git: GitCommitHorizontal,
+  skill: Layers,
+  remote: Plug,
+  agent: Users,
+};
 
 function FinalResponse({ text }: { text: string }) {
   const [characters, setCharacters] = useState<number>(traceLimits.textCharacters);
@@ -205,17 +222,16 @@ function ToolStep({
   const [expanded, setExpanded] = useState(false);
   const label = item.label ?? toolLabels[item.tool] ?? item.tool;
   const running = item.state === 'running';
-  const Icon =
-    item.tool === 'inspect_image' ? Image : item.tool === 'search_text' ? Search : FileText;
+  const Icon = categoryIcons[toolCategory(item.tool)];
   const failed = ['error', 'cancelled', 'interrupted', 'unknown'].includes(item.state);
   return (
-    <View testID="trace-tool" style={{ paddingVertical: 5 }}>
+    <View testID="trace-tool" style={{ paddingVertical: 1 }}>
       <Pressable
         accessibilityRole="button"
         accessibilityLabel={'查看工具详情 ' + label + (item.target ? ' ' + item.target : '')}
         accessibilityState={{ expanded }}
         onPress={() => setExpanded(!expanded)}
-        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 36, gap: 7 }}
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 7 }}
       >
         {running ? (
           <ActivityIndicator size={14} color={theme.accent} />
@@ -327,6 +343,81 @@ function ToolStep({
     </View>
   );
 }
+function ToolGroup({
+  items,
+  ...rest
+}: Omit<Parameters<typeof ToolStep>[0], 'item'> & { items: ToolTrace[] }) {
+  const theme = useWorkbenchTheme();
+  const [expanded, setExpanded] = useState<boolean>();
+  const failed = items.some(item =>
+    ['error', 'unknown', 'cancelled', 'interrupted'].includes(item.state),
+  );
+  const running = items.some(item => item.state === 'running');
+  const shown = expanded ?? (failed || items.some(item => !!item.childRunIds?.length));
+  if (items.length === 1) return <ToolStep item={items[0]} {...rest} />;
+  const categories = new Map<ToolCategory, number>();
+  for (const item of items) {
+    const category = toolCategory(item.tool);
+    categories.set(category, (categories.get(category) ?? 0) + 1);
+  }
+  return (
+    <View testID="trace-tool-group">
+      <Pressable
+        accessibilityRole="button"
+        accessibilityLabel={(shown ? '收起' : '展开') + '连续工具调用 ' + items.length + ' 次'}
+        accessibilityState={{ expanded: shown }}
+        onPress={() => setExpanded(!shown)}
+        style={{ flexDirection: 'row', alignItems: 'center', minHeight: 44, gap: 7 }}
+      >
+        <View
+          style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 9, alignItems: 'center' }}
+        >
+          {[...categories].map(([category, count]) => {
+            const Icon = categoryIcons[category];
+            return (
+              <View key={category} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                <Icon size={15} color={failed ? theme.warning : theme.secondary} />
+                <T tone={failed ? 'warning' : 'secondary'} style={{ fontSize: 12 }}>
+                  {toolCategoryNames[category]}
+                  {count > 1 ? ' ×' + count : ''}
+                </T>
+              </View>
+            );
+          })}
+          {failed && (
+            <T tone="warning" style={{ fontSize: 12 }}>
+              {items.some(item => item.state === 'unknown') ? '远端结果未知' : '含未完成操作'}
+            </T>
+          )}
+        </View>
+        {running && <ActivityIndicator size={12} color={theme.accent} />}
+        {shown ? (
+          <ChevronDown size={13} color={theme.muted} />
+        ) : (
+          <ChevronRight size={13} color={theme.muted} />
+        )}
+      </Pressable>
+      {shown && (
+        <ScrollView
+          nestedScrollEnabled
+          keyboardShouldPersistTaps="handled"
+          style={{
+            marginLeft: 6,
+            maxHeight: 280,
+            paddingLeft: 12,
+            borderLeftWidth: 1,
+            borderColor: theme.border,
+          }}
+        >
+          {items.map(item => (
+            <ToolStep key={item.id} item={item} {...rest} />
+          ))}
+        </ScrollView>
+      )}
+    </View>
+  );
+}
+
 function ChildTrace({
   task,
   cancel,
@@ -435,7 +526,6 @@ export function TaskTrace({
   runsApi?: RunsApi;
 }) {
   const theme = useWorkbenchTheme();
-  const [expanded, setExpanded] = useState(true);
   const [older, setOlder] = useState<DisplayTrace[]>([]);
   const [cursor, setCursor] = useState<string>();
   const [busy, setBusy] = useState(false);
@@ -454,103 +544,56 @@ export function TaskTrace({
       setBusy(false);
     }
   };
-  if (!task.trace)
-    return (
-      <View style={{ gap: 8, marginTop: 14 }}>
-        {!!task.response && <FinalResponse text={task.response} />}
-      </View>
-    );
-  const operations = task.trace.filter(item => item.kind === 'tool').length;
-  const end = task.trace.reduce(
-    (time, item) => Math.max(time, new Date(item.endedAt ?? item.startedAt).getTime()),
-    new Date(task.createdAt).getTime(),
-  );
-  const hasReasoning = task.trace.some(item => item.kind === 'reasoning');
-  const items = [...task.trace, ...older];
   const completed = terminalRun(task.state);
-  // The final answer is independent of step paging. Once all steps are loaded,
-  // render its last text node here only once, with a bounded initial display.
+  const items = [...(task.trace ?? []), ...older];
   const finalNode =
-    completed && !next ? items.filter(item => item.kind === 'text').at(-1)?.id : undefined;
+    completed && !!task.response && !next
+      ? items.filter(item => item.kind === 'text').at(-1)?.id
+      : undefined;
   return (
-    <View testID="task-trace" style={{ marginTop: 10 }}>
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="查看工作轨迹"
-        accessibilityState={{ expanded }}
-        onPress={() => setExpanded(!expanded)}
-        style={{
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 6,
-          minHeight: 30,
-          marginBottom: 5,
-        }}
-      >
-        <T tone="muted" style={{ fontSize: 10, flex: 1 }}>
-          工作轨迹 · {operations} 个操作
-          {task.state !== 'running'
-            ? ' · ' + duration(end - new Date(task.createdAt).getTime())
-            : ''}
-        </T>
-        {expanded ? (
-          <ChevronDown size={12} color={theme.muted} />
-        ) : (
-          <ChevronRight size={12} color={theme.muted} />
-        )}
-      </Pressable>
-      {expanded && (
-        <View style={{ gap: 9 }}>
-          {items
-            .filter(item => item.id !== finalNode)
-            .map(item =>
-              item.kind === 'tool' ? (
-                <ToolStep
-                  key={item.id}
-                  item={item}
-                  childRuns={task.children}
-                  cancelChild={cancelChild}
-                  inspectProposal={inspectProposal}
-                  runsApi={runsApi}
-                />
-              ) : item.kind === 'reasoning' ? (
-                <Reasoning key={item.id} item={item} runsApi={runsApi} />
-              ) : item.text ? (
-                <View testID="trace-text" key={item.id} style={{ paddingVertical: 3 }}>
-                  <TraceText item={item} runsApi={runsApi} />
-                </View>
-              ) : null,
-            )}
-          {!!next && (
-            <Button
-              label="加载更多工作步骤"
-              compact
-              variant="ghost"
-              busy={busy}
-              onPress={() => {
-                void more();
-              }}
+    <View testID="task-trace" style={{ marginTop: 4 }}>
+      {groupTrace(items.filter(item => item.id !== finalNode)).map(group => {
+        if (group.kind === 'tools')
+          return (
+            <ToolGroup
+              key={group.id}
+              items={group.items}
+              childRuns={task.children}
+              cancelChild={cancelChild}
+              inspectProposal={inspectProposal}
+              runsApi={runsApi}
             />
-          )}
-          {!!error && <T tone="warning">{error}</T>}
-          {['running', 'waiting_children'].includes(task.state) && (
-            <View
-              style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 7 }}
-            >
-              <ActivityIndicator size={12} color={theme.accent} />
-              <T tone="muted" style={{ fontSize: 11 }}>
-                {task.state === 'waiting_children' ? '等待子 Agent 收束…' : 'Agent 正在处理…'}
-              </T>
-            </View>
-          )}
-          {!hasReasoning && task.mode === 'remote' && task.state !== 'running' && (
-            <T tone="muted" style={{ fontSize: 10 }}>
-              服务未返回可展示的推理内容
-            </T>
-          )}
+          );
+        const item = group.item;
+        return item.kind === 'reasoning' ? (
+          <Reasoning key={item.id} item={item} runsApi={runsApi} />
+        ) : item.kind === 'text' && item.text ? (
+          <View key={item.id} testID="trace-text" style={{ paddingVertical: 3 }}>
+            <TraceText item={item} runsApi={runsApi} />
+          </View>
+        ) : null;
+      })}
+      {!!next && (
+        <Button
+          label="加载更多工作步骤"
+          compact
+          variant="ghost"
+          busy={busy}
+          onPress={() => {
+            void more();
+          }}
+        />
+      )}
+      {!!error && <T tone="warning">{error}</T>}
+      {['running', 'waiting_children'].includes(task.state) && (
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingVertical: 6 }}>
+          <ActivityIndicator size={12} color={theme.accent} />
+          <T tone="muted" style={{ fontSize: 12 }}>
+            {task.state === 'waiting_children' ? '等待子 Agent' : '处理中…'}
+          </T>
         </View>
       )}
-      {(completed || !expanded) && !!task.response && <FinalResponse text={task.response} />}
+      {completed && !!task.response && <FinalResponse text={task.response} />}
     </View>
   );
 }

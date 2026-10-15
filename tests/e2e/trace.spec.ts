@@ -1,3 +1,4 @@
+import { openProjectTree } from './workbench-helpers';
 import { test, expect } from '@playwright/test';
 import { protocols, snapshot, answerEvents, toolEvents, sse } from '../protocol-fixtures';
 import { openModels, addConnection, addModel, returnToWorkbench } from './model-helpers';
@@ -5,6 +6,7 @@ import { readCurrentRuns } from './current-records';
 
 test('超过一页的工作轨迹独立展示最终回答，并按需展开长回答', async ({ page }) => {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('长轨迹');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -73,6 +75,8 @@ test('超过一页的工作轨迹独立展示最终回答，并按需展开长�
   await expect(page.getByTestId('run-response')).not.toContainText('回答尾部');
   await page.getByRole('button', { name: '展开更多回答', exact: true }).click();
   await expect(page.getByTestId('run-response')).toContainText('回答尾部');
+  await expect(page.getByTestId('trace-tool')).toHaveCount(0);
+  await page.getByRole('button', { name: '展开连续工具调用 50 次', exact: true }).click();
   await expect(page.getByTestId('trace-tool')).toHaveCount(50);
   await page.getByRole('button', { name: '加载更多工作步骤', exact: true }).click();
   await expect(page.getByTestId('trace-tool')).toHaveCount(62);
@@ -84,6 +88,7 @@ for (const protocol of protocols)
     const errors: string[] = [];
     page.on('pageerror', error => errors.push(error.message));
     await page.goto('/');
+    await openProjectTree(page);
     await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
     await page.getByLabel('项目名称', { exact: true }).fill('轨迹工作区');
     await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -178,18 +183,16 @@ for (const protocol of protocols)
     expect(await page.locator('body').innerText()).not.toContain('never-display-signature');
     await page.getByRole('button', { name: '查看工具详情 浏览项目文件', exact: true }).click();
     await page.screenshot({ path: 'work/trace-mobile-' + protocol + '-light.png' });
-    await page.getByRole('button', { name: '查看工作轨迹', exact: true }).click();
-    await expect(page.getByTestId('trace-tool')).toHaveCount(0);
+    await expect(page.getByTestId('trace-reasoning')).toHaveCount(1);
     await expect(
       trace.getByText('项目文件已核对，可继续整理笔记。', { exact: true }),
     ).toBeVisible();
-    await page.getByRole('button', { name: '查看工作轨迹', exact: true }).click();
     await page.reload();
     await expect(page.getByText('我先查看项目文件。', { exact: true })).toBeVisible();
     await expect(page.getByTestId('trace-reasoning')).toHaveCount(1);
-    await page.getByRole('button', { name: '设置', exact: true }).click();
+    await page.getByRole('tab', { name: '设置', exact: true }).click();
     await page.getByRole('button', { name: '深色', exact: true }).click();
-    await page.getByRole('button', { name: '关闭', exact: true }).click();
+    await page.getByRole('tab', { name: '对话', exact: true }).click();
     await expect(page.getByTestId('workbench-dark')).toBeVisible();
     await page.getByRole('button', { name: '展开' + reasoningLabel, exact: true }).click();
     await page.screenshot({ path: 'work/trace-mobile-' + protocol + '-dark.png' });
@@ -204,6 +207,7 @@ for (const protocol of protocols)
 
 test('重启收束正在生成的轨迹，并保留收到的推理摘要', async ({ page }) => {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('轨迹恢复');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();

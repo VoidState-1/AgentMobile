@@ -47,19 +47,19 @@ async function fill(label, text) {
   await adb('shell', 'input', 'text', text);
 }
 async function edit(text) {
-  await tap('资料');
+  await tap('文件');
   await tap('打开 documents/notes.md');
   await tap('编辑');
   await fill('正文', text);
   await tap('保存');
   await waitFor('所有修改已保存');
   await tap('关闭文件');
-  await tap('版本');
+  await tap('Git');
 }
 
 if (process.argv.includes('--recover')) {
   await openApp();
-  await tap('版本');
+  await tap('Git');
   await waitFor('提交历史 · 2');
   await waitFor('查看未暂存差异 documents/notes.md');
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
@@ -67,7 +67,7 @@ if (process.argv.includes('--recover')) {
   process.stdout.write('Android Git receipt recovery passed without duplication.\n');
 } else {
   await openApp();
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'GitNative-' + Date.now());
@@ -77,7 +77,7 @@ if (process.argv.includes('--recover')) {
   await waitFor('取消暂存 documents/notes.md');
   await screenshot('git-android-staged.png');
   await openApp();
-  await tap('版本');
+  await tap('Git');
   await waitFor('取消暂存 documents/notes.md');
   await edit('Git_v2');
   await tap('查看未暂存差异 documents/notes.md');
@@ -90,21 +90,21 @@ if (process.argv.includes('--recover')) {
   await waitFor('提交历史 · 2');
   await waitFor('查看未暂存差异 documents/notes.md');
   await screenshot('git-android-light.png');
-  await tap('会话');
+  await tap('对话');
   await fill('任务目标', 'Make%sa%snote.');
   await tap('发送任务');
   await waitFor('已完成');
   await openApp();
   await tap('设置');
   await tap('深色');
-  await tap('关闭');
-  await tap('版本');
+  await tap('对话');
+  await tap('Git');
   await waitFor('查看未暂存差异 documents/summary.md');
   await screenshot('git-android-dark.png');
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
   await verifyGitRecords(process.argv[2], true);
   await openApp();
-  await tap('版本');
+  await tap('Git');
   await waitFor('提交历史 · 2');
   await waitFor('查看未暂存差异 documents/notes.md');
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');

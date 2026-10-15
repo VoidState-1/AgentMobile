@@ -18,7 +18,7 @@ import {
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { X, Command, type LucideProps } from '@/shared/ui/icons';
-import { useWorkbenchTheme } from '@/shared/theme';
+import { useWorkbenchTheme, workbenchMetrics } from '@/shared/theme';
 
 export type IconComponent = ComponentType<LucideProps>;
 
@@ -73,6 +73,7 @@ export function Button({
   style,
   compact,
   testID,
+  accessibilityLabel,
 }: {
   label: string;
   onPress: () => void;
@@ -83,6 +84,7 @@ export function Button({
   style?: StyleProp<ViewStyle>;
   compact?: boolean;
   testID?: string;
+  accessibilityLabel?: string;
 }) {
   const theme = useWorkbenchTheme();
   const fg =
@@ -90,15 +92,15 @@ export function Button({
   return (
     <Pressable
       accessibilityRole="button"
-      accessibilityLabel={label}
+      accessibilityLabel={accessibilityLabel ?? label}
       disabled={disabled || busy}
       testID={testID}
       onPress={onPress}
       style={({ pressed }) => [
         {
-          minHeight: compact ? 34 : 44,
+          minHeight: 44,
           paddingHorizontal: compact ? 11 : 15,
-          borderRadius: 9,
+          borderRadius: workbenchMetrics.radius,
           borderWidth: variant === 'secondary' ? 1 : 0,
           borderColor: theme.border,
           backgroundColor:
@@ -134,7 +136,7 @@ export function IconButton({
   onPress,
   disabled,
   selected,
-  size = 40,
+  size = 44,
 }: {
   icon: IconComponent;
   label: string;
@@ -183,11 +185,11 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
             borderWidth: 1,
             borderColor: theme.border,
             backgroundColor: theme.inset,
-            borderRadius: 9,
+            borderRadius: workbenchMetrics.radius,
             paddingHorizontal: 12,
             paddingVertical: 11,
             color: theme.text,
-            fontSize: 14,
+            fontSize: 16,
           },
           style,
         ]}

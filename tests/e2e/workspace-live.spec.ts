@@ -1,13 +1,11 @@
+import { openProjectTree, selectProject } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel } from './model-helpers';
 import { sse, toolEvents, answerEvents } from '../protocol-fixtures';
 
 async function project(page: Page, name: string) {
-  await expect(page.getByRole('button', { name: '切换项目', exact: true })).toBeVisible();
-  if (!(await page.getByRole('button', { name: '新建项目', exact: true }).count())) {
-    await page.getByRole('button', { name: '切换项目', exact: true }).click();
-    await page.getByRole('dialog').getByRole('button', { name: '新建项目', exact: true }).click();
-  } else await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
+  await openProjectTree(page);
+  await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
@@ -42,13 +40,19 @@ test('发送后立即切到资料，启动完成不会把导航切回会话', as
   });
   await page.getByLabel('任务目标', { exact: true }).fill('检查项目资料');
   await page.getByRole('button', { name: '发送任务', exact: true }).dispatchEvent('click');
-  await page.getByRole('tab', { name: '资料', exact: true }).dispatchEvent('click');
+  await page.getByRole('tab', { name: '文件', exact: true }).dispatchEvent('click');
   await expect.poll(() => requests).toBe(1);
   await expect(page.getByRole('button', { name: '新建项目', exact: true }).first()).toBeEnabled();
-  await expect(page.getByText('项目资料', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   held.release();
   await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeEnabled();
-  await expect(page.getByText('项目资料', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
 });
 
 test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动、删除和版本均已更新', async ({ page }) => {
@@ -94,7 +98,7 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
   await page.getByLabel('任务目标', { exact: true }).fill('分步整理资料');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect.poll(() => requests).toBe(2);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/live.md', exact: true }),
   ).toBeVisible();
@@ -108,14 +112,14 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
   await expect(page.getByText('实时内容第二版。', { exact: true })).toBeVisible();
   await expect(page.getByText('实时内容第一版。', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'work/workspace-live-reading.png' });
-  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '查看未暂存差异 documents/live.md', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '全部暂存', exact: true })).toBeDisabled();
   await page.getByRole('button', { name: '提交历史 · 1', exact: true }).click();
   await expect(page.getByRole('button', { name: /^查看版本 / })).toHaveCount(1);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   holds[1].release();
   await expect.poll(() => requests).toBe(4);
   await expect(
@@ -131,7 +135,7 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
     page.getByRole('button', { name: '打开 documents/moved.md', exact: true }),
   ).toHaveCount(0);
   await expect(page.getByRole('button', { name: '新建文件', exact: true })).toBeDisabled();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByRole('button', { name: '停止任务', exact: true })).toBeVisible();
   await expect(page.getByText('已完成', { exact: true })).toHaveCount(0);
   holds[3].release();
@@ -145,8 +149,8 @@ test('手机切到其他项目时，后台 Agent 的资料变更不覆盖当前�
   await project(page, '后台项目');
   await configureModel(page);
   await project(page, '当前项目');
-  await page.getByRole('button', { name: '切换项目', exact: true }).click();
-  await page.getByRole('button', { name: '切换到 后台项目', exact: true }).click();
+  await openProjectTree(page);
+  await selectProject(page, '后台项目');
   const held = gate();
   const final = gate();
   let requests = 0;
@@ -169,9 +173,9 @@ test('手机切到其他项目时，后台 Agent 的资料变更不覆盖当前�
   await page.getByLabel('任务目标', { exact: true }).fill('整理后台项目');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect.poll(() => requests).toBe(1);
-  await page.getByRole('button', { name: '切换项目', exact: true }).click();
-  await page.getByRole('button', { name: '切换到 当前项目', exact: true }).click();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await openProjectTree(page);
+  await selectProject(page, '当前项目');
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '编辑', exact: true }).click();
   await page.getByLabel('正文', { exact: true }).fill('必须保留的未保存草稿。');
@@ -183,21 +187,21 @@ test('手机切到其他项目时，后台 Agent 的资料变更不覆盖当前�
   await expect(
     page.getByRole('button', { name: '打开 documents/background.md', exact: true }),
   ).toHaveCount(0);
-  await page.getByRole('button', { name: '切换项目', exact: true }).click();
-  await page.getByRole('button', { name: '切换到 后台项目', exact: true }).click();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await openProjectTree(page);
+  await selectProject(page, '后台项目');
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/background.md', exact: true }),
   ).toBeVisible();
   final.release();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
 });
 
 test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，任务仍在继续', async ({ page }) => {
   await page.goto('/');
   await project(page, '图片刷新');
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '导入', exact: true }).click();
   await (
@@ -218,7 +222,7 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await configureModel(page);
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   const deleting = gate();
   const final = gate();
   let requests = 0;
@@ -250,7 +254,7 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
   await page.getByLabel('任务目标', { exact: true }).fill('删除项目图片');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect.poll(() => requests).toBe(2);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await expect(page.getByRole('img', { name: '项目引用图', exact: true })).toBeVisible();
   deleting.release();
@@ -262,6 +266,6 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
   ).toBeVisible();
   final.release();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
 });

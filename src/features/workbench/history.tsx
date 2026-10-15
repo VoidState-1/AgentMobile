@@ -23,7 +23,7 @@ export const HistoryPane = memo(function HistoryPane({
     controller.busy || !!controller.projectActive || controller.dirty || controller.projectLoading;
   const message = controller.commitDrafts[controller.projectId ?? ''] ?? '';
   const section = (files: GitFileStatus[], area: 'staged' | 'unstaged') => (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 2 }}>
       <View
         style={{
           flexDirection: 'row',
@@ -62,15 +62,16 @@ export const HistoryPane = memo(function HistoryPane({
               flexDirection: 'row',
               alignItems: 'center',
               gap: 5,
-              paddingVertical: 5,
+              minHeight: 44,
+              paddingVertical: 0,
               borderBottomWidth: 1,
               borderColor: theme.border,
             }}
           >
             <T
               style={{
-                width: 30,
-                fontSize: 10,
+                width: 26,
+                fontSize: 11,
                 color: file[area] === 'deleted' ? theme.danger : theme.success,
               }}
             >
@@ -85,15 +86,15 @@ export const HistoryPane = memo(function HistoryPane({
               onPress={() => {
                 void controller.reviewGit(area, [file.path]);
               }}
-              style={{ flex: 1, minWidth: 0, paddingVertical: 8 }}
+              style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' }}
             >
-              <T numberOfLines={2} style={{ fontSize: 12 }}>
+              <T numberOfLines={2} style={{ fontSize: 13 }}>
                 {file.path}
               </T>
             </Pressable>
             {area === 'unstaged' && (
               <IconButton
-                size={36}
+                size={44}
                 icon={RotateCcw}
                 label={'丢弃更改 ' + file.path}
                 disabled={disabled}
@@ -101,7 +102,7 @@ export const HistoryPane = memo(function HistoryPane({
               />
             )}
             <IconButton
-              size={36}
+              size={44}
               icon={area === 'staged' ? X : Plus}
               label={(area === 'staged' ? '取消暂存 ' : '暂存 ') + file.path}
               disabled={disabled}
@@ -119,16 +120,14 @@ export const HistoryPane = memo(function HistoryPane({
       keyboardShouldPersistTaps="handled"
       style={{ flex: 1, backgroundColor: theme.surface }}
       contentContainerStyle={{
-        padding: 20,
-        gap: 18,
+        padding: 12,
+        gap: 10,
         maxWidth: 820,
         width: '100%',
         alignSelf: 'center',
       }}
     >
       <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-        <GitCommitHorizontal size={19} color={theme.secondary} />
-        <T style={{ fontSize: 16, fontWeight: '600' }}>Git</T>
         <T tone="muted" style={{ fontSize: 11 }}>
           main · {status?.head.slice(0, 7) ?? '…'}
         </T>
@@ -139,7 +138,7 @@ export const HistoryPane = memo(function HistoryPane({
           gap: 6,
           borderBottomWidth: 1,
           borderColor: theme.border,
-          paddingBottom: 10,
+          paddingBottom: 6,
         }}
       >
         <Button
@@ -169,31 +168,30 @@ export const HistoryPane = memo(function HistoryPane({
           )}
           {section(unstaged, 'unstaged')}
           {section(staged, 'staged')}
-          <View style={{ gap: 12, paddingTop: 6 }}>
-            <Field
-              label="提交说明"
-              placeholder="描述这次更改的目的"
-              value={message}
-              maxLength={4000}
-              multiline
-              editable={!controller.busy}
-              onChangeText={text => {
-                if (controller.projectId) controller.setCommitDraft(controller.projectId, text);
-              }}
-              style={{ minHeight: 76 }}
-            />
-            <Button
-              label="提交已暂存"
-              icon={GitCommitHorizontal}
-              disabled={disabled || !staged.length || !message.trim()}
-              onPress={() => {
-                void controller.commitGit(message);
-              }}
-            />
-            <T tone="muted" style={{ fontSize: 11 }}>
-              提交使用暂存时的内容。之后的编辑保留为未暂存更改。
-            </T>
-          </View>
+          {!!staged.length && (
+            <View style={{ gap: 8, paddingTop: 4 }}>
+              <Field
+                label="提交说明"
+                placeholder="描述这次更改的目的"
+                value={message}
+                maxLength={4000}
+                multiline
+                editable={!controller.busy}
+                onChangeText={text => {
+                  if (controller.projectId) controller.setCommitDraft(controller.projectId, text);
+                }}
+                style={{ minHeight: 76 }}
+              />
+              <Button
+                label="提交已暂存"
+                icon={GitCommitHorizontal}
+                disabled={disabled || !staged.length || !message.trim()}
+                onPress={() => {
+                  void controller.commitGit(message);
+                }}
+              />
+            </View>
+          )}
         </>
       ) : (
         controller.versions.map((version, index) => (
@@ -208,13 +206,13 @@ export const HistoryPane = memo(function HistoryPane({
             style={({ pressed }) => ({
               flexDirection: 'row',
               alignItems: 'flex-start',
-              gap: 12,
-              paddingVertical: 14,
+              gap: 8,
+              paddingVertical: 8,
               paddingHorizontal: 6,
               borderBottomWidth: 1,
               borderColor: theme.border,
               backgroundColor: pressed ? theme.inset : 'transparent',
-              borderRadius: 8,
+              borderRadius: 3,
             })}
           >
             <GitCommitHorizontal

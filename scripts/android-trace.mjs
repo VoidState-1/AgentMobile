@@ -8,6 +8,7 @@ import {
   metroPort,
   scrollTo,
   tapScrolled,
+  expandToolGroup,
 } from './android-ui.mjs';
 
 async function openApp() {
@@ -50,6 +51,7 @@ async function fill(label, value) {
 async function reveal(label) {
   for (let i = 0; i < 8; i++) {
     if ((await dump()).includes(label)) return;
+    if (await expandToolGroup()) continue;
     await adb('shell', 'input', 'swipe', '500', '650', '500', '1550', '300');
     await sleep(350);
   }
@@ -59,8 +61,8 @@ await adb('reverse', 'tcp:4181', 'tcp:4181');
 await openApp();
 await tap('设置');
 await tap('浅色');
-await tap('关闭');
-if (!(await dump()).includes('新建项目')) await tap('切换项目');
+await tap('对话');
+if (!(await dump()).includes('新建项目')) await tap('项目与对话');
 await tap('新建项目');
 await tap('项目名称');
 await adb('shell', 'input', 'text', 'Trace-' + Date.now());
@@ -106,7 +108,7 @@ await tap('展开推理摘要');
 await waitFor('服务返回的摘要');
 await tap('设置');
 await tap('深色');
-await tap('关闭');
+await tap('对话');
 await screenshot('trace-android-dark.png');
 await tap('新建对话');
 await fill('任务目标', 'PAUSE');

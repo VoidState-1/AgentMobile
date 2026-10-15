@@ -80,9 +80,28 @@ async function tap(label) {
   );
   await sleep(400);
 }
+async function longPress(label) {
+  const node = await waitFor(label);
+  const [left, top, right, bottom] = [...node.bounds.matchAll(/\d+/g)].map(item => Number(item[0]));
+  const x = String((left + right) / 2),
+    y = String((top + bottom) / 2);
+  await adb('shell', 'input', 'swipe', x, y, x, y, '650');
+  await sleep(400);
+}
+async function expandToolGroup(rows) {
+  const group = (rows ?? nodes(await dump())).find(node =>
+    node['content-desc']?.startsWith('展开连续工具调用 '),
+  );
+  if (!group) return false;
+  await tap(group['content-desc']);
+  return true;
+}
 async function scrollTo(label, inputOnly = false) {
   for (let i = 0; i < 12; i++) {
     const list = nodes(await dump());
+    if (label.startsWith('查看工具详情') && !list.some(node => node['content-desc'] === label)) {
+      if (await expandToolGroup(list)) continue;
+    }
     const footer = list.find(node =>
       ['保存连接', '保存模型', '保存 Agent 设置', '保存 MCP 连接', '保存技能'].includes(
         node['content-desc'],
@@ -129,4 +148,17 @@ async function screenshot(name) {
     await adb('shell', 'rm', '-f', file).catch(() => {});
   }
 }
-export { adb, sleep, dump, nodes, waitFor, tap, scrollTo, tapScrolled, screenshot, metroPort };
+export {
+  adb,
+  sleep,
+  dump,
+  nodes,
+  waitFor,
+  tap,
+  longPress,
+  expandToolGroup,
+  scrollTo,
+  tapScrolled,
+  screenshot,
+  metroPort,
+};

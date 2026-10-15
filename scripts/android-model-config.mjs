@@ -58,9 +58,9 @@ if ((await dump()).includes('Continue')) await tap('Continue');
 if (!process.argv.includes('--verify-only')) {
   await tap('设置');
   await tap('浅色');
-  await tap('关闭');
-  if ((await dump()).includes('切换项目') && !(await dump()).includes('新建项目'))
-    await tap('切换项目');
+  await tap('对话');
+  if ((await dump()).includes('项目与对话') && !(await dump()).includes('新建项目'))
+    await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'NativeConfig-' + Date.now());
@@ -96,14 +96,14 @@ if (!process.argv.includes('--verify-only')) {
     await tap('返回');
     await fill('任务目标', 'Make%sa%snote.');
     await tap('发送任务');
-    await tap('资料');
+    await tap('文件');
     await waitFor('打开 documents/' + protocol + '.md');
     await tap('打开 documents/' + protocol + '.md');
     if (!(await dump()).includes('Android native tool loop passed'))
       throw new Error(protocol + ' 未保存正确文件。');
     await screenshot('config-android-' + protocol + '-result.png');
     await tap('关闭文件');
-    await tap('会话');
+    await tap('对话');
   }
 }
 await openApp();

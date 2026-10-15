@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -6,28 +6,25 @@ import {
   KeyboardAvoidingView,
   Platform,
   Pressable,
-  ScrollView,
+  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   Check,
-  ChevronDown,
-  Folder,
   FolderOpen,
-  HardDrive,
-  History,
+  GitCommitHorizontal,
   MessageSquare,
-  Pencil,
+  PanelLeft,
   Plus,
   Settings2,
   X,
 } from '@/shared/ui/icons';
 import { useWorkbench } from './use-workbench';
 import type { DialogsCapability } from './use-workbench';
-import { useWorkbenchTheme } from '@/shared/theme';
-import { RunActivity } from '@/features/workbench/run-activity';
+import { useWorkbenchTheme, workbenchMetrics as metrics } from '@/shared/theme';
+import { RunActivity } from './run-activity';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
 import { Conversation } from './conversation';
 import { FilesPane } from './files';
@@ -35,28 +32,28 @@ import { HistoryPane } from './history';
 import { Editor } from './editor';
 import { ReviewSheet } from './review';
 import { WorkbenchSheets } from './sheets';
-import type { WorkbenchTab } from '@/shared/workbench-state';
-import { dateLabel } from '@/shared/format';
+import { ProjectTree } from './project-tree';
+import { ProjectDrawer } from './project-drawer';
+import { WorkbenchSettings } from './settings';
 
 const tabs = [
-  { id: 'agent', name: '会话', icon: MessageSquare },
-  { id: 'files', name: '资料', icon: FolderOpen },
-  { id: 'history', name: '版本', icon: History },
+  { id: 'agent', name: '对话', icon: MessageSquare },
+  { id: 'files', name: '文件', icon: FolderOpen },
+  { id: 'history', name: 'Git', icon: GitCommitHorizontal },
+  { id: 'settings', name: '设置', icon: Settings2 },
 ] as const;
 
 function DevelopmentRebuild({ controller }: { controller: DialogsCapability }) {
   const [confirm, setConfirm] = useState(false);
   return (
-    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 30, gap: 18 }}>
-      <T style={{ fontSize: 20, fontWeight: '600' }}>开发数据需要重建</T>
-      <T tone="secondary" style={{ maxWidth: 440, fontSize: 13, lineHeight: 23 }}>
-        这个开发版本使用新的数据格式。重建将清除当前设备上此应用的项目、对话、资料和文件历史；设备凭证会保留。
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
+      <T style={{ fontSize: 18, fontWeight: '600' }}>开发数据需要重建</T>
+      <T tone="secondary" style={{ maxWidth: 440 }}>
+        重建将清除当前设备上此应用的项目、对话、资料和文件历史；设备凭证保留。
       </T>
       {confirm ? (
-        <View style={{ gap: 12 }}>
-          <T tone="danger" style={{ fontSize: 13 }}>
-            确认清除当前开发数据并重新开始？
-          </T>
+        <View style={{ gap: 10 }}>
+          <T tone="danger">确认清除当前开发数据？</T>
           <Button
             label="确认重建开发数据"
             busy={controller.busy}
@@ -64,310 +61,168 @@ function DevelopmentRebuild({ controller }: { controller: DialogsCapability }) {
               void controller.action(() => controller.rebuildData());
             }}
           />
-          <Button
-            label="取消"
-            variant="ghost"
-            disabled={controller.busy}
-            onPress={() => setConfirm(false)}
-          />
+          <Button label="取消" variant="ghost" onPress={() => setConfirm(false)} />
         </View>
       ) : (
-        <Button label="重建开发数据" disabled={controller.busy} onPress={() => setConfirm(true)} />
+        <Button label="重建开发数据" onPress={() => setConfirm(true)} />
       )}
     </View>
   );
 }
 
-function Navigation({ controller, mobile }: { controller: DialogsCapability; mobile: boolean }) {
+function Navigation({ controller, changes }: { controller: DialogsCapability; changes: number }) {
   const theme = useWorkbenchTheme();
   return (
     <View
+      accessibilityRole="tablist"
       style={{
         flexDirection: 'row',
         backgroundColor: theme.surface,
-        borderTopWidth: mobile ? 1 : 0,
-        borderBottomWidth: mobile ? 0 : 1,
+        borderTopWidth: 1,
         borderColor: theme.border,
-        paddingHorizontal: mobile ? 12 : 22,
-        gap: mobile ? 0 : 16,
+        paddingHorizontal: 6,
+        minHeight: 52,
       }}
     >
-      {tabs.map(({ id, name, icon: Icon }) => (
-        <Pressable
-          key={id}
-          accessibilityRole="tab"
-          accessibilityLabel={name}
-          accessibilityState={{ selected: controller.tab === id }}
-          onPress={() => controller.selectTab(id as WorkbenchTab)}
-          style={{
-            flex: mobile ? 1 : undefined,
-            minHeight: mobile ? 58 : 43,
-            alignItems: 'center',
-            justifyContent: 'center',
-            flexDirection: mobile ? 'column' : 'row',
-            paddingHorizontal: mobile ? 8 : 6,
-            gap: mobile ? 3 : 7,
-            borderBottomWidth: mobile ? 0 : 2,
-            borderBottomColor: controller.tab === id ? theme.accent : 'transparent',
-          }}
-        >
-          <Icon
-            size={mobile ? 19 : 15}
-            color={controller.tab === id ? theme.accent : theme.secondary}
-            strokeWidth={controller.tab === id ? 2 : 1.7}
-          />
-          <T
-            tone={controller.tab === id ? 'accent' : 'secondary'}
-            style={{
-              fontSize: mobile ? 10 : 12,
-              lineHeight: 15,
-              fontWeight: controller.tab === id ? '600' : '400',
-            }}
+      {tabs.map(({ id, name, icon: Icon }) => {
+        const selected = controller.tab === id;
+        return (
+          <Pressable
+            key={id}
+            accessibilityRole="tab"
+            accessibilityLabel={name}
+            accessibilityState={{ selected, disabled: id !== 'settings' && !controller.projectId }}
+            aria-selected={selected}
+            disabled={id !== 'settings' && !controller.projectId}
+            onPress={() => controller.selectTab(id)}
+            style={({ pressed }) => ({
+              flex: 1,
+              minHeight: 52,
+              alignItems: 'center',
+              justifyContent: 'center',
+              gap: 1,
+              borderTopWidth: 2,
+              borderTopColor: selected ? theme.accent : 'transparent',
+              backgroundColor: pressed ? theme.accentSoft : 'transparent',
+            })}
           >
-            {name}
-          </T>
-        </Pressable>
-      ))}
-    </View>
-  );
-}
-
-function Sidebar({ controller }: { controller: DialogsCapability }) {
-  const theme = useWorkbenchTheme();
-  return (
-    <View
-      style={{
-        width: 226,
-        backgroundColor: theme.sidebar,
-        borderRightWidth: 1,
-        borderColor: theme.border,
-      }}
-    >
-      <View
-        style={{
-          height: 70,
-          paddingHorizontal: 18,
-          flexDirection: 'row',
-          gap: 10,
-          alignItems: 'center',
-        }}
-      >
-        <Brand small />
-        <T style={{ fontSize: 14, fontWeight: '600' }}>Agent Mobile</T>
-      </View>
-      <View style={{ paddingHorizontal: 14, paddingTop: 3, paddingBottom: 16 }}>
-        <Button
-          label="新建项目"
-          icon={Plus}
-          variant="secondary"
-          compact
-          disabled={controller.busy}
-          onPress={controller.newProject}
-        />
-      </View>
-      <View
-        style={{
-          paddingHorizontal: 20,
-          marginBottom: 9,
-          flexDirection: 'row',
-          alignItems: 'center',
-          justifyContent: 'space-between',
-        }}
-      >
-        <T tone="muted" style={{ fontSize: 10, fontWeight: '500' }}>
-          项目
-        </T>
-        <T tone="muted" style={{ fontSize: 10 }}>
-          {controller.projects.length}
-        </T>
-      </View>
-      <ScrollView contentContainerStyle={{ paddingHorizontal: 10, gap: 4 }}>
-        {controller.projects.map(project => (
-          <View key={project.id}>
-            <Pressable
-              accessibilityRole="button"
-              accessibilityLabel={'切换到 ' + project.name}
-              disabled={controller.busy}
-              onPress={() => controller.selectProject(project.id)}
-              style={({ pressed }) => ({
-                paddingHorizontal: 10,
-                paddingVertical: 11,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 9,
-                borderRadius: 8,
-                backgroundColor:
-                  project.id === controller.projectId
-                    ? theme.accentSoft
-                    : pressed
-                      ? theme.inset
-                      : 'transparent',
-              })}
-            >
-              <Folder
-                size={16}
-                color={project.id === controller.projectId ? theme.accent : theme.secondary}
-                strokeWidth={1.6}
-              />
-              <View style={{ flex: 1 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Icon size={19} color={selected ? theme.accent : theme.secondary} />
+              {id === 'history' && changes > 0 && (
                 <T
-                  numberOfLines={1}
-                  tone={project.id === controller.projectId ? 'accent' : 'text'}
                   style={{
-                    fontSize: 12,
-                    fontWeight: project.id === controller.projectId ? '500' : '400',
+                    fontSize: 10,
+                    lineHeight: 14,
+                    paddingHorizontal: 3,
+                    borderRadius: 3,
+                    color: theme.accentText,
+                    backgroundColor: theme.accent,
                   }}
                 >
-                  {project.name}
+                  {changes}
                 </T>
-                <T tone="muted" style={{ fontSize: 10, marginTop: 2 }}>
-                  {dateLabel(project.updatedAt)}
-                </T>
-              </View>
-              {controller.runs.some(run => run.projectId === project.id) && (
-                <ActivityIndicator size={12} color={theme.accent} />
               )}
-            </Pressable>
-            {project.id === controller.projectId && (
-              <View style={{ paddingLeft: 15, paddingTop: 6, paddingBottom: 12, gap: 2 }}>
-                {controller.conversations
-                  .filter(item => !item.archivedAt)
-                  .map(item => (
-                    <Pressable
-                      key={item.id}
-                      accessibilityRole="button"
-                      accessibilityLabel={'切换对话 ' + item.title}
-                      disabled={controller.busy}
-                      onPress={() => {
-                        void controller.selectConversation(item.id);
-                      }}
-                      style={({ pressed }) => ({
-                        flexDirection: 'row',
-                        gap: 7,
-                        alignItems: 'center',
-                        minHeight: 40,
-                        paddingHorizontal: 10,
-                        borderRadius: 7,
-                        backgroundColor:
-                          item.id === controller.conversationId
-                            ? theme.inset
-                            : pressed
-                              ? theme.inset
-                              : 'transparent',
-                      })}
-                    >
-                      {controller.runs.some(run => run.conversationId === item.id) ? (
-                        <ActivityIndicator size={12} color={theme.accent} />
-                      ) : (
-                        <MessageSquare
-                          size={13}
-                          color={item.id === controller.conversationId ? theme.accent : theme.muted}
-                        />
-                      )}
-                      <T
-                        tone={item.id === controller.conversationId ? 'text' : 'secondary'}
-                        numberOfLines={1}
-                        style={{ flex: 1, fontSize: 11 }}
-                      >
-                        {item.title}
-                      </T>
-                    </Pressable>
-                  ))}
-                <Button
-                  label="新建对话"
-                  icon={Plus}
-                  compact
-                  variant="ghost"
-                  disabled={controller.busy}
-                  style={{ justifyContent: 'flex-start', paddingLeft: 10 }}
-                  onPress={() => {
-                    void controller.newConversation();
-                  }}
-                />
-              </View>
-            )}
-          </View>
-        ))}
-      </ScrollView>
-      <View style={{ padding: 14, gap: 12, borderTopWidth: 1, borderColor: theme.border }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 7, paddingHorizontal: 6 }}>
-          <HardDrive size={14} color={theme.muted} />
-          <T tone="muted" style={{ fontSize: 11 }}>
-            本地工作区
-          </T>
-        </View>
-        <Button
-          label="设置与模型"
-          icon={Settings2}
-          variant="ghost"
-          compact
-          style={{ justifyContent: 'flex-start' }}
-          onPress={() => {
-            void controller.openSettings();
-          }}
-        />
-      </View>
+            </View>
+            <T
+              style={{
+                fontSize: 11,
+                lineHeight: 17,
+                color: selected ? theme.accent : theme.secondary,
+                fontWeight: selected ? '600' : '400',
+              }}
+            >
+              {name}
+            </T>
+          </Pressable>
+        );
+      })}
     </View>
   );
 }
 
-function ConversationBar({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
+function WorkbenchHeader({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
   const theme = useWorkbenchTheme();
+  const [editing, setEditing] = useState<{ id: string; value: string }>();
+  const saving = useRef(false);
+  const current = controller.selectedConversation;
+  const finish = async () => {
+    if (!editing || !current || editing.id !== current.id || saving.current) return;
+    saving.current = true;
+    try {
+      if (
+        editing.value.trim() === current.title ||
+        (await controller.saveConversationTitle(current, editing.value))
+      )
+        setEditing(undefined);
+    } finally {
+      saving.current = false;
+    }
+  };
+  const title =
+    controller.tab === 'agent'
+      ? (current?.title ?? controller.selectedProject?.name ?? 'Agent Mobile')
+      : (tabs.find(tab => tab.id === controller.tab)?.name ?? 'Agent Mobile');
   return (
     <View
-      testID="conversation-bar"
+      testID="workbench-header"
       style={{
-        paddingHorizontal: wide ? 22 : 12,
-        minHeight: 48,
+        height: metrics.header,
+        paddingHorizontal: 4,
         flexDirection: 'row',
         alignItems: 'center',
-        gap: 8,
-        backgroundColor: theme.surface,
         borderBottomWidth: 1,
-        borderBottomColor: theme.border,
+        borderColor: theme.border,
+        backgroundColor: theme.surface,
       }}
     >
-      <Pressable
-        accessibilityRole="button"
-        accessibilityLabel="切换对话"
-        disabled={controller.busy}
-        onPress={() => controller.setSheet('conversations')}
-        style={{
-          flex: 1,
-          minWidth: 0,
-          minHeight: 44,
-          flexDirection: 'row',
-          alignItems: 'center',
-          gap: 7,
-        }}
-      >
-        <MessageSquare size={15} color={theme.secondary} />
-        <T numberOfLines={1} style={{ flexShrink: 1, fontSize: 12, fontWeight: '500' }}>
-          {controller.selectedConversation?.title ?? '打开对话…'}
-        </T>
-        <ChevronDown size={12} color={theme.muted} />
-        {wide && (
-          <T tone="muted" style={{ fontSize: 10 }}>
-            项目资料共享
-          </T>
-        )}
-      </Pressable>
-      <IconButton
-        icon={Pencil}
-        label="重命名当前对话"
-        size={36}
-        disabled={!controller.selectedConversation || controller.busy}
-        onPress={() => {
-          if (controller.selectedConversation)
-            controller.startRenameConversation(controller.selectedConversation);
-        }}
-      />
       {!wide && (
+        <IconButton
+          icon={PanelLeft}
+          label="项目与对话"
+          size={44}
+          onPress={() => controller.setDrawerOpen(true)}
+        />
+      )}
+      <View testID="conversation-bar" style={{ flex: 1, minWidth: 0, paddingHorizontal: 7 }}>
+        {editing && current?.id === editing.id ? (
+          <TextInput
+            autoFocus
+            selectTextOnFocus
+            accessibilityLabel="对话名称"
+            value={editing.value}
+            maxLength={60}
+            onChangeText={value => setEditing({ ...editing, value })}
+            onSubmitEditing={() => {
+              void finish();
+            }}
+            onBlur={() => {
+              void finish();
+            }}
+            onKeyPress={event => {
+              if (event.nativeEvent.key === 'Escape') setEditing(undefined);
+            }}
+            style={{ height: 44, fontSize: 16, color: theme.text, padding: 0 }}
+          />
+        ) : (
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel={controller.tab === 'agent' && current ? '重命名当前对话' : title}
+            disabled={controller.busy || controller.tab !== 'agent' || !current}
+            onPress={() => current && setEditing({ id: current.id, value: current.title })}
+            style={{ minHeight: 44, justifyContent: 'center' }}
+          >
+            <T numberOfLines={1} style={{ fontSize: 15, fontWeight: '600' }}>
+              {title}
+            </T>
+          </Pressable>
+        )}
+      </View>
+      {controller.tab === 'agent' && controller.projectId && (
         <IconButton
           icon={Plus}
           label="新建对话"
-          size={36}
-          disabled={!controller.selectedConversation || controller.busy}
+          size={44}
+          disabled={controller.busy}
           onPress={() => {
             void controller.newConversation();
           }}
@@ -383,8 +238,7 @@ export function WorkbenchScreen() {
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 1100;
-  const currentTab = controller.tab;
-  const selectTab = controller.selectTab;
+  const { drawerOpen, setDrawerOpen, tab, selectTab } = controller;
   const [keyboard, setKeyboard] = useState(false);
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboard(true));
@@ -396,184 +250,141 @@ export function WorkbenchScreen() {
   }, []);
   useEffect(() => {
     const back = BackHandler.addEventListener('hardwareBackPress', () => {
-      if (currentTab === 'agent') return false;
+      if (drawerOpen) {
+        setDrawerOpen(false);
+        return true;
+      }
+      if (tab === 'agent') return false;
       selectTab('agent');
       return true;
     });
     return () => back.remove();
-  }, [currentTab, selectTab]);
+  }, [drawerOpen, setDrawerOpen, tab, selectTab]);
 
   if (controller.loading)
     return (
-      <SafeAreaView style={{ flex: 1, backgroundColor: theme.background }}>
-        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 15 }}>
-          <Brand />
-          <ActivityIndicator color={theme.accent} />
-          <T tone="secondary" style={{ fontSize: 12 }}>
-            正在打开工作区…
-          </T>
-        </View>
+      <SafeAreaView
+        style={{
+          flex: 1,
+          alignItems: 'center',
+          justifyContent: 'center',
+          backgroundColor: theme.surface,
+          gap: 12,
+        }}
+      >
+        <Brand />
+        <ActivityIndicator color={theme.accent} />
       </SafeAreaView>
     );
-
   return (
-    <SafeAreaView
-      testID={theme.dark ? 'workbench-dark' : 'workbench-light'}
-      style={{ flex: 1, backgroundColor: theme.surface }}
-      edges={['top', 'bottom']}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={{ flex: 1, minHeight: 0 }}
+    <ProjectDrawer controller={controller} width={width} wide={wide}>
+      <SafeAreaView
+        testID={theme.dark ? 'workbench-dark' : 'workbench-light'}
+        style={{ flex: 1, backgroundColor: theme.surface }}
+        edges={['top', 'bottom']}
       >
-        <View style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}>
-          {wide && <Sidebar controller={controller} />}
-          <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
-            <View
-              style={{
-                height: wide ? 70 : 59,
-                backgroundColor: theme.surface,
-                borderBottomWidth: 1,
-                borderColor: theme.border,
-                paddingHorizontal: wide ? 24 : 14,
-                flexDirection: 'row',
-                alignItems: 'center',
-                gap: 10,
-              }}
-            >
-              {!wide && <Brand small />}
-              <Pressable
-                accessibilityRole="button"
-                accessibilityLabel="切换项目"
-                disabled={controller.busy}
-                onPress={() => controller.setSheet('projects')}
-                style={{
-                  flex: 1,
-                  minWidth: 0,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 7,
-                  minHeight: 42,
-                }}
-              >
-                <View style={{ minWidth: 0, flexShrink: 1 }}>
-                  <T numberOfLines={1} style={{ fontSize: wide ? 15 : 14, fontWeight: '600' }}>
-                    {controller.selectedProject?.name ?? 'Agent Mobile'}
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={{ flex: 1, minHeight: 0 }}
+        >
+          <View
+            aria-hidden={!wide && drawerOpen}
+            accessibilityElementsHidden={!wide && drawerOpen}
+            importantForAccessibility={!wide && drawerOpen ? 'no-hide-descendants' : 'auto'}
+            style={{ flex: 1, flexDirection: 'row', minHeight: 0 }}
+          >
+            {wide && (
+              <View style={{ width: 240, borderRightWidth: 1, borderColor: theme.border }}>
+                <ProjectTree controller={controller} />
+              </View>
+            )}
+            <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
+              <WorkbenchHeader controller={controller} wide={wide} />
+              {!!controller.error && !controller.editorOpen && (
+                <View
+                  accessibilityRole="alert"
+                  style={{
+                    flexDirection: 'row',
+                    paddingHorizontal: 12,
+                    alignItems: 'center',
+                    backgroundColor: theme.dangerSoft,
+                  }}
+                >
+                  <T tone="danger" style={{ flex: 1, fontSize: 12, lineHeight: 19 }}>
+                    {controller.error}
                   </T>
-                  <T tone="muted" style={{ fontSize: 10, lineHeight: 15 }}>
-                    {controller.selectedProject ? '本地项目' : '你的随身工作区'}
-                  </T>
+                  <IconButton
+                    icon={X}
+                    label="关闭提示"
+                    size={44}
+                    onPress={() => controller.setError('')}
+                  />
                 </View>
-                <ChevronDown size={14} color={theme.muted} />
-              </Pressable>
-              {controller.projectActive && <ActivityIndicator size="small" color={theme.accent} />}
-              <IconButton
-                icon={Settings2}
-                label="设置"
-                onPress={() => {
-                  void controller.openSettings();
-                }}
-              />
-            </View>
-            {!!controller.error && !controller.editorOpen && (
-              <View
-                accessibilityRole="alert"
-                style={{
-                  flexDirection: 'row',
-                  paddingHorizontal: 16,
-                  paddingVertical: 8,
-                  alignItems: 'center',
-                  gap: 8,
-                  backgroundColor: theme.dangerSoft,
-                }}
-              >
-                <T tone="danger" style={{ flex: 1, fontSize: 12, lineHeight: 19 }}>
-                  {controller.error}
-                </T>
-                <IconButton
-                  icon={X}
-                  label="关闭提示"
-                  size={30}
-                  onPress={() => controller.setError('')}
+              )}
+              {!!controller.notice && (
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                    paddingHorizontal: 12,
+                    paddingVertical: 5,
+                    backgroundColor: theme.successSoft,
+                  }}
+                >
+                  <Check size={12} color={theme.success} />
+                  <T style={{ fontSize: 12, color: theme.success }}>{controller.notice}</T>
+                </View>
+              )}
+              {controller.formatMismatch ? (
+                <DevelopmentRebuild controller={controller} />
+              ) : controller.tab === 'settings' ? (
+                <WorkbenchSettings controller={controller} />
+              ) : !controller.projectId ? (
+                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
+                  <T style={{ fontSize: 18, fontWeight: '600' }}>创建第一个项目</T>
+                  <Button label="新建项目" icon={Plus} onPress={controller.newProject} />
+                </View>
+              ) : (
+                <>
+                  {controller.runs.some(
+                    run => run.conversationId !== controller.conversationId,
+                  ) && <RunActivity controller={capabilities.runs} />}
+                  <View style={{ flex: 1, minHeight: 0 }}>
+                    {controller.tab === 'agent' ? (
+                      <Conversation
+                        key={controller.conversationId}
+                        controller={capabilities.conversation}
+                      />
+                    ) : controller.tab === 'files' ? (
+                      <FilesPane key={controller.projectId} controller={capabilities.files} />
+                    ) : (
+                      <HistoryPane controller={capabilities.git} />
+                    )}
+                  </View>
+                </>
+              )}
+              {!keyboard && !controller.formatMismatch && (
+                <Navigation
+                  controller={controller}
+                  changes={capabilities.git.gitStatus?.files.length ?? 0}
                 />
-              </View>
-            )}
-            {!!controller.notice && (
-              <View
-                style={{
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 7,
-                  paddingHorizontal: 18,
-                  paddingVertical: 8,
-                  backgroundColor: theme.successSoft,
-                }}
-              >
-                <Check size={13} color={theme.success} />
-                <T style={{ fontSize: 12, color: theme.success }}>{controller.notice}</T>
-              </View>
-            )}
-            {controller.formatMismatch ? (
-              <DevelopmentRebuild controller={controller} />
-            ) : !controller.projectId ? (
-              <View
-                style={{
-                  flex: 1,
-                  backgroundColor: theme.surface,
-                  alignItems: 'center',
-                  justifyContent: 'center',
-                  padding: 30,
-                  gap: 16,
-                }}
-              >
-                <View style={{ padding: 20, borderRadius: 16, backgroundColor: theme.inset }}>
-                  <FolderOpen size={32} color={theme.secondary} strokeWidth={1.5} />
-                </View>
-                <T style={{ fontSize: 22, fontWeight: '600', marginTop: 4 }}>创建你的第一个项目</T>
-                <T tone="secondary" style={{ fontSize: 13, textAlign: 'center', lineHeight: 23 }}>
-                  把文字和图片放在一起，{'\n'}让 Agent 帮你整理与修改。
-                </T>
-                <Button label="新建项目" icon={Plus} onPress={controller.newProject} />
-                <T tone="muted" style={{ fontSize: 11 }}>
-                  资料本地保存 · 按需暂存与提交
-                </T>
-              </View>
-            ) : (
-              <>
-                {wide && <Navigation controller={controller} mobile={false} />}
-                {controller.tab === 'agent' && (
-                  <ConversationBar controller={controller} wide={wide} />
-                )}
-                <RunActivity controller={capabilities.runs} />
-                <View style={{ flex: 1, minHeight: 0 }}>
-                  {controller.tab === 'agent' ? (
-                    <Conversation
-                      key={controller.conversationId}
-                      controller={capabilities.conversation}
-                    />
-                  ) : controller.tab === 'files' ? (
-                    <FilesPane key={controller.projectId} controller={capabilities.files} />
-                  ) : (
-                    <HistoryPane controller={capabilities.git} />
-                  )}
-                </View>
-                {!wide && !keyboard && <Navigation controller={controller} mobile />}
-              </>
+              )}
+            </View>
+            {wide && controller.editorOpen && (
+              <Editor controller={capabilities.editor} mobile={false} />
             )}
           </View>
-          {wide && controller.editorOpen && (
-            <Editor controller={capabilities.editor} mobile={false} />
-          )}
-        </View>
-      </KeyboardAvoidingView>
-      {!wide && controller.editorOpen && <Editor controller={capabilities.editor} mobile />}
-      {controller.reviewOpen && <ReviewSheet controller={capabilities.git} />}
-      <WorkbenchSheets
-        controller={controller}
-        editor={capabilities.editor}
-        files={capabilities.files}
-        conversation={capabilities.conversation}
-      />
-    </SafeAreaView>
+        </KeyboardAvoidingView>
+        {!wide && controller.editorOpen && <Editor controller={capabilities.editor} mobile />}
+        {controller.reviewOpen && <ReviewSheet controller={capabilities.git} />}
+        <WorkbenchSheets
+          controller={controller}
+          editor={capabilities.editor}
+          files={capabilities.files}
+          conversation={capabilities.conversation}
+        />
+      </SafeAreaView>
+    </ProjectDrawer>
   );
 }

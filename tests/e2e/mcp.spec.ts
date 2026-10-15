@@ -1,3 +1,4 @@
+import { openProjectTree, expandToolGroups } from './workbench-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { mcpFixture, fixtureTools } from '../mcp-fixtures';
 import { configureModel, returnToWorkbench } from './model-helpers';
@@ -5,13 +6,14 @@ import { answerEvents, toolEvents, sse } from '../protocol-fixtures';
 
 async function project(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('远程资料项目');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
 }
 async function openMcp(page: Page) {
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '远程 MCP', exact: true }).click();
 }
 async function addMcp(page: Page) {
@@ -79,7 +81,7 @@ for (const modern of [false, true])
       await page.setViewportSize({ width: 390, height: 844 });
       await page.screenshot({ path: 'work/mcp-mobile-light.png', fullPage: true });
       await returnToWorkbench(page);
-      await page.getByRole('button', { name: '设置', exact: true }).click();
+      await page.getByRole('tab', { name: '设置', exact: true }).click();
       await page.getByRole('button', { name: '深色', exact: true }).click();
       await page.getByRole('button', { name: '远程 MCP', exact: true }).click();
       await page.getByRole('button', { name: '配置 MCP 资料搜索', exact: true }).click();
@@ -90,6 +92,7 @@ for (const modern of [false, true])
     await page.getByLabel('任务目标', { exact: true }).fill('搜索并保存远程资料');
     await page.getByRole('button', { name: '发送任务', exact: true }).click();
     await expect(page.getByText('已保存远程资料。', { exact: true })).toBeVisible();
+    await expandToolGroups(page);
     await page
       .getByRole('button', { name: '查看工具详情 MCP · 资料搜索 · 资料查询 notes', exact: true })
       .click();
@@ -99,7 +102,7 @@ for (const modern of [false, true])
       modelRequests[0].tools.filter((tool: any) => tool.function.name.startsWith('mcp_')),
     ).toHaveLength(1);
     expect(JSON.stringify(modelRequests)).not.toContain('fixture-mcp-token');
-    await page.getByRole('tab', { name: '资料', exact: true }).click();
+    await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/mcp.md', exact: true }).click();
     await expect(page.getByText('远程资料：MCP 查询成功。', { exact: true }).last()).toBeVisible();
     await page.reload();

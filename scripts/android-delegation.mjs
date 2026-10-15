@@ -66,7 +66,7 @@ async function open() {
 if (!process.argv.includes('--verify')) {
   await adb('reverse', 'tcp:4181', 'tcp:4181');
   await open();
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'R3Native-' + Date.now());

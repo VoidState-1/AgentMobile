@@ -56,7 +56,7 @@ async function allowTool() {
 await adb('reverse', 'tcp:4181', 'tcp:4181');
 if (!process.argv.includes('--continue')) {
   await openApp();
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'MCP-' + Date.now());
@@ -102,7 +102,7 @@ if (process.argv.includes('--retry')) {
 await tapScrolled('查看工具详情 MCP · MCP-native · 资料查询 notes');
 await waitFor('结果');
 await screenshot('mcp-android-tool.png');
-await tap('资料');
+await tap('文件');
 await tap('打开 documents/mcp.md');
 await waitFor('远程资料：MCP 查询成功。');
 await openApp();
@@ -121,9 +121,9 @@ await tap('返回');
 await tap('返回');
 await fill('任务目标', 'Legacy%stask');
 await tap('发送任务');
-await tap('资料');
+await tap('文件');
 await waitFor('打开 documents/mcp-legacy.md');
-await tap('会话');
+await tap('对话');
 const stats = await (await fetch('http://127.0.0.1:4181/stats')).json();
 if (!stats.modernCalls || !stats.legacyCalls) throw new Error('两代原生 MCP 调用未完成。');
 await tap('设置');

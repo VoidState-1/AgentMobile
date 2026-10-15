@@ -3,16 +3,16 @@ import { useWorkbenchUi } from '@/shared/workbench-state';
 
 const light = {
   dark: false,
-  background: '#F5F6F8',
+  background: '#F7F8FC',
   surface: '#FFFFFF',
-  sidebar: '#F9FAFC',
-  inset: '#F1F3F7',
+  sidebar: '#F5F6FB',
+  inset: '#EFF1F8',
   text: '#1C2330',
   secondary: '#687286',
-  muted: '#929AAB',
+  muted: '#788397',
   border: '#E5E9F0',
-  accent: '#5264DE',
-  accentSoft: '#EEF0FE',
+  accent: '#5365C5',
+  accentSoft: '#EDF0FC',
   accentText: '#FFFFFF',
   success: '#228064',
   successSoft: '#EAF6F0',
@@ -33,7 +33,7 @@ const dark: typeof light = {
   inset: '#22262F',
   text: '#ECEFF6',
   secondary: '#A3ACBD',
-  muted: '#707C91',
+  muted: '#93A0B5',
   border: '#2B303C',
   accent: '#8D99FF',
   accentSoft: '#252D4C',
@@ -50,6 +50,15 @@ const dark: typeof light = {
   code: '#15181F',
 };
 export type WorkbenchTheme = typeof light;
+
+export const workbenchMetrics = {
+  header: 48,
+  touch: 44,
+  gutter: 12,
+  radius: 6,
+  composerRadius: 8,
+  body: 14,
+} as const;
 
 export function useWorkbenchTheme(): WorkbenchTheme {
   const appearance = useWorkbenchUi(state => state.appearance);

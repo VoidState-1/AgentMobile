@@ -45,7 +45,7 @@ test('旧开发格式阻断启动；确认重建前数据保留，确认后只�
   expect(await retained('agent-mobile-prototype')).toBeDefined();
   await page.getByRole('button', { name: '重建开发数据', exact: true }).click();
   await page.getByRole('button', { name: '确认重建开发数据', exact: true }).click();
-  await expect(page.getByText('创建你的第一个项目', { exact: true })).toBeVisible();
+  await expect(page.getByText('创建第一个项目', { exact: true })).toBeVisible();
   expect(await retained('agent-mobile-prototype')).toBeUndefined();
   expect(await retained('other-app-fixture')).toMatchObject({ privateText: 'fixture-only' });
 });

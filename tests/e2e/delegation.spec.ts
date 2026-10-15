@@ -1,3 +1,4 @@
+import { openProjectTree } from './workbench-helpers';
 import { readCurrentRuns } from './current-records';
 import { test, expect } from '@playwright/test';
 import { configureModel } from './model-helpers';
@@ -10,6 +11,7 @@ for (const explicitWait of [false, true])
       : '主 Agent 异步委派两个只读子任务，等待期间释放请求槽，汇总后再完成，轨迹和结果重启保留',
     async ({ page }) => {
       await page.goto('/');
+      await openProjectTree(page);
       await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
       await page.getByLabel('项目名称', { exact: true }).fill('子任务工作区');
       await page.getByRole('button', { name: '创建工作区', exact: true }).click();

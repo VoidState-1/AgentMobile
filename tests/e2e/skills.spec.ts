@@ -1,3 +1,4 @@
+import { openProjectTree, expandToolGroups } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { Buffer } from 'node:buffer';
 import { zipSync, unzipSync } from 'fflate';
@@ -8,13 +9,14 @@ import { configureModel, returnToWorkbench } from './model-helpers';
 
 async function project(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('技能项目');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
 }
 async function openSkills(page: Page) {
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: 'Agent Skills', exact: true }).click();
 }
 async function createSkill(page: Page) {
@@ -89,10 +91,12 @@ test('Skills 导入、按需加载、明确调用和工作区 Git 结果', async
   expect(JSON.stringify(requests[0])).not.toContain('VERSION_ONE');
   expect(JSON.stringify(requests[1])).toContain('VERSION_ONE');
   expect(JSON.stringify(requests[2])).toContain('RESOURCE_ONE');
+  await expandToolGroups(page);
   await page
     .getByRole('button', { name: '查看工具详情 加载技能 note-workflow', exact: true })
     .click();
   await expect(page.getByText(/VERSION_ONE/).first()).toBeVisible();
+  await page.getByRole('button', { name: '添加', exact: true }).click();
   await page.getByRole('button', { name: '选择技能', exact: true }).click();
   await page.getByRole('button', { name: '使用技能 note-workflow', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('$note-workflow ');
@@ -101,7 +105,7 @@ test('Skills 导入、按需加载、明确调用和工作区 Git 结果', async
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已按技能整理资料。', { exact: true })).toHaveCount(2);
   expect(JSON.stringify(requests[nextIndex])).toContain('VERSION_ONE');
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/skill-auto.md', exact: true }),
   ).toBeVisible();
@@ -154,7 +158,7 @@ test('Skills 编辑、资源、启用撤销、历史恢复、导出、未保存�
   await page.getByLabel('SKILL.md 内容', { exact: true }).scrollIntoViewIfNeeded();
   await page.screenshot({ path: 'work/skills-mobile-light.png' });
   await returnToWorkbench(page);
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('button', { name: 'Agent Skills', exact: true }).click();
   await page.getByRole('button', { name: '管理技能 note-workflow', exact: true }).click();

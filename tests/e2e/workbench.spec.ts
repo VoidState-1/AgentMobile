@@ -1,7 +1,9 @@
+import { selectProject, openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel } from './model-helpers';
 
 async function createProject(page: Page, name: string) {
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -9,7 +11,7 @@ async function createProject(page: Page, name: string) {
 }
 
 async function openNote(page: Page) {
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '编辑', exact: true }).click();
 }
@@ -17,14 +19,14 @@ async function openNote(page: Page) {
 test('切换项目后新查询被阻塞，旧项目的文件和对话也不进入新视图', async ({ page }) => {
   await page.goto('/');
   await createProject(page, '范围 A');
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '新建文件', exact: true }).click();
   await page.getByLabel('文件名称', { exact: true }).fill('alpha-only.md');
   await page.getByLabel('正文', { exact: true }).fill('仅属于 A');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.getByLabel('任务目标', { exact: true }).fill('Alpha 独立任务');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
@@ -32,7 +34,7 @@ test('切换项目后新查询被阻塞，旧项目的文件和对话也不进�
   await page.getByLabel('任务目标', { exact: true }).fill('Beta 独立任务');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '切换到 范围 A', exact: true }).click();
+  await selectProject(page, '范围 A');
   await expect(page.getByTestId('task-trace')).toHaveCount(1);
   await page.evaluate(async () => {
     const db = await new Promise<IDBDatabase>(resolve => {
@@ -52,10 +54,12 @@ test('切换项目后新查询被阻塞，旧项目的文件和对话也不进�
     transaction.oncomplete = () => db.close();
     pump();
   });
-  await page.getByRole('button', { name: '切换到 范围 B', exact: true }).click();
+  await selectProject(page, '范围 B');
   await expect(page.getByTestId('task-trace')).toHaveCount(0);
-  await expect(page.getByText('Alpha 独立任务', { exact: true })).toHaveCount(0);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await expect(
+    page.getByTestId('conversation-scroll').getByText('Alpha 独立任务', { exact: true }),
+  ).toHaveCount(0);
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/alpha-only.md', exact: true }),
   ).toHaveCount(0);
@@ -63,9 +67,11 @@ test('切换项目后新查询被阻塞，旧项目的文件和对话也不进�
   await expect(
     page.getByRole('button', { name: '打开 documents/notes.md', exact: true }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByTestId('task-trace')).toHaveCount(1);
-  await expect(page.getByText('Alpha 独立任务', { exact: true })).toHaveCount(0);
+  await expect(
+    page.getByTestId('conversation-scroll').getByText('Alpha 独立任务', { exact: true }),
+  ).toHaveCount(0);
 });
 
 test('保存期间继续输入，旧回执只更新保存基线，新输入与未保存状态保留', async ({ page }) => {
@@ -121,7 +127,7 @@ test('编辑、会话、逐行变化、恢复和刷新持久化', async ({ page 
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.getByRole('button', { name: '整理资料', exact: true }).click();
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
@@ -131,7 +137,7 @@ test('编辑、会话、逐行变化、恢复和刷新持久化', async ({ page 
   await page.getByRole('button', { name: '撤销修改', exact: true }).click();
   await page.getByRole('button', { name: '确认恢复', exact: true }).click();
   await expect(page.getByText('内容已恢复，历史记录已保留。')).toBeVisible();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(page.getByRole('button', { name: '打开 documents/summary.md' })).toHaveCount(0);
   await page.reload();
   await openNote(page);
@@ -155,7 +161,7 @@ test('未保存保护、独立编辑器和文件搜索', async ({ page }) => {
   await page.getByRole('button', { name: '保存后离开', exact: true }).click();
   await expect(page.getByRole('button', { name: '关闭文件', exact: true })).toHaveCount(0);
   await page.getByLabel('搜索文件', { exact: true }).fill('does-not-exist');
-  await expect(page.getByText('没有找到匹配的文件', { exact: true })).toBeVisible();
+  await expect(page.getByText('没有匹配的文件', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '清除文件搜索' }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md' }).click();
   await expect(page.getByText('这份草稿需要保留。', { exact: true })).toBeVisible();
@@ -165,20 +171,20 @@ test('未保存编辑切换项目，保存或放弃后都执行原来的导航�
   await page.goto('/');
   await createProject(page, '编辑项目');
   await createProject(page, '目标项目');
-  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click();
+  await selectProject(page, '编辑项目');
   await openNote(page);
   await page.getByLabel('正文', { exact: true }).fill('保存后应切换项目。');
-  await page.getByRole('button', { name: '切换到 目标项目', exact: true }).click();
+  await selectProject(page, '目标项目');
   await page.getByRole('button', { name: '保存后离开', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click();
+  await selectProject(page, '编辑项目');
   await openNote(page);
   await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');
   await page.getByLabel('正文', { exact: true }).fill('应放弃的内容。');
-  await page.getByRole('button', { name: '切换到 目标项目', exact: true }).click();
+  await selectProject(page, '目标项目');
   await page.getByRole('button', { name: '放弃修改', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '切换到 编辑项目', exact: true }).click();
+  await selectProject(page, '编辑项目');
   await openNote(page);
   await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');
 });
@@ -188,15 +194,15 @@ test('深浅外观、项目切换和草稿保留', async ({ page }) => {
   await createProject(page, '项目一');
   await page.getByLabel('任务目标').fill('第一份未发送的任务');
   await createProject(page, '项目二');
-  await page.getByRole('button', { name: '切换到 项目一', exact: true }).click();
+  await selectProject(page, '项目一');
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('第一份未发送的任务');
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await expect(page.getByTestId('workbench-dark')).toBeVisible();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.reload();
   await expect(page.getByTestId('workbench-dark')).toBeVisible();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '浅色', exact: true }).click();
   await expect(page.getByTestId('workbench-light')).toBeVisible();
   await page.getByRole('button', { name: '跟随系统', exact: true }).click();
@@ -204,7 +210,7 @@ test('深浅外观、项目切换和草稿保留', async ({ page }) => {
   await expect(page.getByTestId('workbench-dark')).toBeVisible();
   await page.emulateMedia({ colorScheme: 'light' });
   await expect(page.getByTestId('workbench-light')).toBeVisible();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
 });
 
 test('360px 手机：输入区固定、全屏编辑、短视口无横向溢出', async ({ page }) => {
@@ -226,17 +232,17 @@ test('360px 手机：输入区固定、全屏编辑、短视口无横向溢出',
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('所有修改已保存')).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
-  await page.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.screenshot({ path: 'work/workbench-mobile-dark.png' });
 });
 
 test('图片导入与真实模型协议、文件结果直达', async ({ page }) => {
   await page.goto('/');
   await createProject(page, '模型协议验证');
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '导入', exact: true }).click();
   await (
@@ -289,12 +295,12 @@ test('图片导入与真实模型协议、文件结果直达', async ({ page }) 
       body: 'data: ' + JSON.stringify(event) + '\n\ndata: [DONE]\n\n',
     });
   });
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.getByLabel('任务目标', { exact: true }).fill('创建一份新文档');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
   expect(rounds).toBe(2);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/remote.md' }).click();
   await expect(page.getByText('兼容服务工具调用成功', { exact: true })).toBeVisible();
   await page.setViewportSize({ width: 1440, height: 940 });
@@ -312,7 +318,7 @@ test('键盘输入、快捷保存、新建重命名与删除', async ({ page }) 
   await expect(page.getByRole('button', { name: '发送任务', exact: true })).toBeEnabled();
   await input.press('Enter');
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '新建文件', exact: true }).click();
   await page.getByLabel('文件名称', { exact: true }).fill('ideas.md');
   await page.getByLabel('正文', { exact: true }).fill('# 新想法\n\n需要保存的内容。');

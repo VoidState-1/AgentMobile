@@ -49,13 +49,13 @@ try {
   await tap('返回');
   await tap('返回');
   await tap('返回');
-  if ((await dump()).includes('切换项目') && !(await dump()).includes('新建项目'))
-    await tap('切换项目');
+  if ((await dump()).includes('项目与对话') && !(await dump()).includes('新建项目'))
+    await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'DeepSeekAndroid-' + Date.now());
   await tap('创建工作区');
-  await tap('资料');
+  await tap('文件');
   await tap('打开 documents/notes.md');
   await tap('编辑');
   await tap('正文');
@@ -66,7 +66,7 @@ try {
   await tap('保存');
   await waitFor('所有修改已保存');
   await tap('关闭文件');
-  await tap('会话');
+  await tap('对话');
   await tap('任务目标');
   await adb(
     'shell',
@@ -75,7 +75,7 @@ try {
     'Read%sdocuments/notes.md%sand%screate%sdocuments/native-result.md.%sWrite%sa%sshort%sChinese%ssummary,%spreserve%sthe%sreference%sidentifier%sexactly,%sand%ssave.',
   );
   await tap('发送任务');
-  await tap('资料');
+  await tap('文件');
   // Native accessibility trees only include visible rows. Verify the new file,
   // rather than counting completed messages that may be outside the viewport.
   await waitFor('打开 documents/native-result.md', 145000);
@@ -92,13 +92,13 @@ try {
     'Read%syour%slast%ssaved%sdocument%sand%sput%sthe%ssame%sreference%sidentifier%sinto%sdocuments/native-followup.md.%sSave%sthe%sfile.',
   );
   await tap('发送任务');
-  await tap('资料');
+  await tap('文件');
   await waitFor('打开 documents/native-followup.md', 145000);
   await tap('打开 documents/native-followup.md');
   if (!(await dump()).includes('ZK-742')) throw new Error('重启后模型未正确读取资料。');
   await screenshot('deepseek-android-followup.png');
   await tap('关闭文件');
-  await tap('会话');
+  await tap('对话');
   await screenshot('deepseek-android-conversation.png');
   process.stdout.write(
     'Android DeepSeek passed: real SSE, files, Git, SecureStore, restart, follow-up.\n',

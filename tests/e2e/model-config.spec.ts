@@ -1,3 +1,4 @@
+import { openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { protocols, toolEvents, answerEvents, sse } from '../protocol-fixtures';
 import {
@@ -10,6 +11,7 @@ import {
 
 async function createProject(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('配置器验证');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -85,7 +87,7 @@ for (const protocol of protocols)
     await page.getByLabel('任务目标', { exact: true }).fill('创建一份文档');
     await page.getByRole('button', { name: '发送任务', exact: true }).click();
     await expect(page.getByText('已完成', { exact: true })).toBeVisible();
-    await page.getByRole('tab', { name: '资料', exact: true }).click();
+    await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/native-e2e.md', exact: true }).click();
     await expect(page.getByText('三协议浏览器工具闭环', { exact: true })).toBeVisible();
     expect(calls).toBe(6);
@@ -181,7 +183,7 @@ test('两份连接不串密钥，收藏搜索、复制、未保存保护与刷�
   await page.getByRole('button', { name: '复制连接', exact: true }).click();
   await expect(page.getByText('凭证缺失 · 可先保存连接，稍后补填', { exact: true })).toBeVisible();
   await returnToWorkbench(page);
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
   await expect(page.getByTestId('config-dark')).toBeVisible();

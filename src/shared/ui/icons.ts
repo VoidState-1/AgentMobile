@@ -37,4 +37,8 @@ export { default as Sun } from 'lucide-react-native/icons/sun';
 export { default as Trash2 } from 'lucide-react-native/icons/trash';
 export { default as Upload } from 'lucide-react-native/icons/upload';
 export { default as X } from 'lucide-react-native/icons/x';
+export { default as PanelLeft } from 'lucide-react-native/icons/panel-left';
+export { default as Archive } from 'lucide-react-native/icons/archive';
+export { default as Users } from 'lucide-react-native/icons/users';
+export { default as Plug } from 'lucide-react-native/icons/plug';
 export type { LucideProps } from 'lucide-react-native';

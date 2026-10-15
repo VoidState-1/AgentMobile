@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 
 export type AppearanceMode = 'system' | 'light' | 'dark';
-export type WorkbenchTab = 'agent' | 'files' | 'history';
+export type WorkbenchTab = 'agent' | 'files' | 'history' | 'settings';
 
 interface WorkbenchUi {
   projectId?: string;

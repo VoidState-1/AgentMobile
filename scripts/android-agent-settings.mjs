@@ -55,8 +55,8 @@ async function settings() {
 await openApp();
 await tap('设置');
 await tap('浅色');
-await tap('关闭');
-if (!(await dump()).includes('新建项目')) await tap('切换项目');
+await tap('对话');
+if (!(await dump()).includes('新建项目')) await tap('项目与对话');
 await tap('新建项目');
 await tap('项目名称');
 await adb('shell', 'input', 'text', 'AgentSettings-' + Date.now());

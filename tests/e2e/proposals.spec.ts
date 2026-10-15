@@ -1,3 +1,4 @@
+import { openProjectTree } from './workbench-helpers';
 import { test, expect } from '@playwright/test';
 import { configureModel } from './model-helpers';
 import { answerEvents, toolEvents, sse } from '../protocol-fixtures';
@@ -8,17 +9,18 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
   page,
 }) => {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('写作提案工作区');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '编辑', exact: true }).click();
   await page.getByLabel('正文', { exact: true }).fill('用户原有未提交资料');
   await page.getByRole('button', { name: '保存', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await configureModel(page);
   let release!: () => void;
   const held = new Promise<void>(resolve => {
@@ -81,7 +83,7 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
   await expect(page.getByText('隔离写作提案 · 编辑中', { exact: true })).toBeVisible();
   await expect(page.getByText('提案改写后的资料', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/proposal.md', exact: true }),
   ).toHaveCount(0);
@@ -92,15 +94,15 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
   await expect(
     page.getByRole('button', { name: '打开 documents/proposal.md', exact: true }),
   ).toBeVisible();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toHaveCount(1);
-  await page.getByRole('tab', { name: '版本', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await expect(page.getByText('提交历史 · 1', { exact: true })).toBeVisible();
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.getByRole('button', { name: '查看变化', exact: true }).click();
   await page.getByRole('button', { name: '撤销修改', exact: true }).click();
   await page.getByRole('button', { name: '确认恢复', exact: true }).click();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/proposal.md', exact: true }),
   ).toHaveCount(0);

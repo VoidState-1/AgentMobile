@@ -50,7 +50,7 @@ async function fill(label, value) {
 await adb('reverse', 'tcp:4181', 'tcp:4181');
 if (!process.argv.includes('--resume')) {
   await openApp();
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'Live-' + Date.now());
@@ -73,7 +73,7 @@ if (!process.argv.includes('--resume')) {
   await fill('任务目标', 'Make%slive%snotes.');
   await tap('发送任务');
 }
-await tap('资料');
+await tap('文件');
 await waitFor('打开 documents/live.md');
 await tap('打开 documents/live.md');
 await waitFor('原生实时内容第一版。');
@@ -83,12 +83,12 @@ await waitFor('原生实时内容第二版。');
 if ((await dump()).includes('原生实时内容第一版。')) throw new Error('原生资料仍显示旧版本。');
 await screenshot('workspace-live-android-reading.png');
 await tap('关闭文件');
-await tap('会话');
+await tap('对话');
 await waitFor('停止任务');
 await fetch('http://127.0.0.1:4181/release/finish');
 await waitFor('已完成');
 await openApp();
-await tap('资料');
+await tap('文件');
 await tap('打开 documents/live.md');
 await waitFor('原生实时内容第二版。');
 process.stdout.write(

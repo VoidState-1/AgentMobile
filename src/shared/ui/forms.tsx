@@ -105,8 +105,8 @@ export function ConfigPage({
             width: '100%',
             maxWidth: 960,
             alignSelf: 'center',
-            paddingHorizontal: 12,
-            minHeight: 66,
+            paddingHorizontal: 6,
+            minHeight: 48,
             flexDirection: 'row',
             alignItems: 'center',
             gap: 8,
@@ -163,7 +163,7 @@ export function FormScroll({ children }: { children: ReactNode }) {
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: 18, gap: 16 }}
+      contentContainerStyle={{ padding: 12, gap: 12 }}
     >
       {children}
     </ScrollView>
@@ -183,10 +183,10 @@ export function Section({
   return (
     <View
       style={{
-        gap: 14,
-        padding: 16,
+        gap: 12,
+        padding: 12,
         backgroundColor: theme.surface,
-        borderRadius: 12,
+        borderRadius: 6,
         borderWidth: 1,
         borderColor: theme.border,
       }}
@@ -266,7 +266,7 @@ export function Choices<TValue extends string>({
             onPress={() => onChange(option.value)}
             disabled={disabled}
             style={{
-              minHeight: 40,
+              minHeight: 44,
               paddingHorizontal: 12,
               justifyContent: 'center',
               borderRadius: 8,

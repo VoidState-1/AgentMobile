@@ -1,3 +1,4 @@
+import { addReference, openProjectTree } from '../e2e/workbench-helpers';
 import { readCurrentRuns } from '../e2e/current-records';
 import fs from 'node:fs/promises';
 import { test, expect, type Page } from '@playwright/test';
@@ -7,7 +8,7 @@ const apiKey = process.env.DEEPSEEK_API_KEY ?? '';
 test.skip(!apiKey, '显式设置 DEEPSEEK_API_KEY 才会执行付费测试。');
 
 async function readDocument(page: Page, path: string): Promise<string> {
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 ' + path, exact: true }).click({ timeout: 10000 });
   await page.getByRole('button', { name: '编辑', exact: true }).click();
   const value = await page.getByLabel('正文', { exact: true }).inputValue();
@@ -17,7 +18,7 @@ async function readDocument(page: Page, path: string): Promise<string> {
 
 async function task(page: Page, prompt: string, completed: number) {
   process.stdout.write('真实任务 ' + completed + ' 开始。\n');
-  await page.getByRole('tab', { name: '会话', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   await page.getByLabel('任务目标', { exact: true }).fill(prompt);
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await Promise.race([
@@ -98,12 +99,13 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
   });
   try {
     await page.goto('/');
+    await openProjectTree(page);
     await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
     await page.getByLabel('项目名称', { exact: true }).fill('DeepSeek 图文实测');
     await page.getByRole('button', { name: '创建工作区', exact: true }).click();
     const original =
       '# 周六杭州行程\n\n9:00 到西湖，午饭吃素食，预算 300 元，不安排住宿。\n联系人称呼是小林。';
-    await page.getByRole('tab', { name: '资料', exact: true }).click();
+    await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
     await page.getByRole('button', { name: '编辑', exact: true }).click();
     await page.getByLabel('正文', { exact: true }).fill(original);
@@ -143,7 +145,7 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     expect(revised).toContain('250');
     expect(revised).toContain('小林');
     expect(await readDocument(page, 'documents/notes.md')).toBe(original);
-    await page.getByRole('tab', { name: '会话', exact: true }).click();
+    await page.getByRole('tab', { name: '对话', exact: true }).click();
     await page.getByRole('button', { name: '查看变化', exact: true }).last().click();
     await expect(page.getByText('修改 · documents/plan.md', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '撤销修改', exact: true }).click();
@@ -175,8 +177,8 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     await expect(
       page.getByRole('button', { name: '打开 assets/meeting.png', exact: true }),
     ).toBeVisible();
-    await page.getByRole('tab', { name: '会话', exact: true }).click();
-    await page.getByRole('button', { name: '添加参考资料', exact: true }).click();
+    await page.getByRole('tab', { name: '对话', exact: true }).click();
+    await addReference(page);
     await page.getByRole('button', { name: '引用 assets/meeting.png', exact: true }).click();
     await task(
       page,
@@ -189,7 +191,7 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     expect(note).toMatch(/6|六/);
     await page.reload();
     expect(await readDocument(page, 'documents/image-note.md')).toBe(note);
-    await page.getByRole('tab', { name: '会话', exact: true }).click();
+    await page.getByRole('tab', { name: '对话', exact: true }).click();
     await page.screenshot({ path: 'work/deepseek-live-conversation.png', fullPage: true });
   } finally {
     await Promise.race([

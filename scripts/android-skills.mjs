@@ -66,7 +66,7 @@ if (
   !process.argv.includes('--saved-resource')
 ) {
   await openApp();
-  if (!(await dump()).includes('新建项目')) await tap('切换项目');
+  if (!(await dump()).includes('新建项目')) await tap('项目与对话');
   await tap('新建项目');
   await tap('项目名称');
   await adb('shell', 'input', 'text', 'Skills-' + Date.now());
@@ -113,7 +113,7 @@ if (!process.argv.includes('--edit') && !process.argv.includes('--saved-resource
   await tapScrolled('查看工具详情 加载技能 note-workflow');
   await waitFor('结果');
   await screenshot('skills-android-trace.png');
-  await tap('资料');
+  await tap('文件');
   await tap('打开 documents/skill-auto.md');
   await waitFor('Skill workflow: RESOURCE_ONE');
 }
@@ -136,10 +136,11 @@ if ((await waitFor('启用技能 note-workflow')).checked !== 'true')
 await tap('返回');
 await tap('返回');
 await fill('任务目标', 'Use%sthe%sskill%sagain.');
+await tap('添加');
 await tap('选择技能');
 await tap('使用技能 note-workflow');
 await tap('发送任务');
-await tap('资料');
+await tap('文件');
 await waitFor('打开 documents/skill-explicit.md');
 const stats = await (await fetch('http://127.0.0.1:4181/stats')).json();
 if (!stats.seenInstructions || !stats.seenResource || !stats.seenUpdatedResource)

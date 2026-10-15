@@ -1,4 +1,4 @@
-import { adb, dump, tap, waitFor, screenshot, sleep, metroPort } from './android-ui.mjs';
+import { adb, dump, tap, longPress, waitFor, screenshot, sleep, metroPort } from './android-ui.mjs';
 
 async function openApp() {
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
@@ -37,10 +37,11 @@ async function input(label, text) {
 async function rename(title) {
   await tap('重命名当前对话');
   await input('对话名称', title);
-  await tap('保存对话名称');
+  await adb('shell', 'input', 'keyevent', '66');
+  await waitFor('重命名当前对话');
 }
 async function select(title) {
-  await tap('切换对话');
+  await tap('项目与对话');
   await tap('切换对话 ' + title);
 }
 async function waitContains(value) {
@@ -55,7 +56,7 @@ await tap('设置');
 await tap('模型与供应商');
 await tap('运行模式：演示模式');
 await tap('返回');
-if (!(await dump()).includes('新建项目')) await tap('切换项目');
+if (!(await dump()).includes('新建项目')) await tap('项目与对话');
 await tap('新建项目');
 await tap('项目名称');
 await adb('shell', 'input', 'text', 'NativeChat-' + Date.now());
@@ -68,6 +69,7 @@ await tap('新建对话');
 await rename('Chat-B');
 if ((await dump()).includes('A_ONLY')) throw new Error('新对话显示了另一对话的消息。');
 await input('任务目标', 'B_DRAFT');
+await tap('添加');
 await tap('添加参考资料');
 await tap('引用 documents/notes.md');
 await waitFor('移除参考文件');
@@ -87,20 +89,21 @@ await waitContains('B_DRAFT');
 await select('Chat-A');
 await waitFor('A_ONLY');
 if ((await dump()).includes('B_DRAFT')) throw new Error('另一对话的任务串入当前对话。');
-await tap('切换对话');
+await tap('项目与对话');
+await longPress('切换对话 Chat-B');
 await tap('归档对话 Chat-B');
 await tap('归档对话');
-await tap('切换对话');
+await tap('项目与对话');
 await tap('已归档');
 await tap('恢复对话 Chat-B');
 await waitContains('B_DRAFT');
 await tap('设置');
 await tap('深色');
-await tap('关闭');
-await tap('切换对话');
+await tap('对话');
+await tap('项目与对话');
 await sleep(800);
 await screenshot('conversations-android-dark.png');
-await tap('关闭');
+await tap('收起侧栏');
 await openApp();
 await waitContains('B_DRAFT');
 process.stdout.write(

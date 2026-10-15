@@ -2,21 +2,22 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                     |
-| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路由、六组视图能力、订阅范围、编辑并发、主题与安全预览。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                           |
+| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------ |
+| 1.1.0    | 2026-10-15T22:25:24+08:00 | 5cbd3ef007f5742ee48147e91286ab1ca073a900 | 补充尚未提交源码中的紧凑工作台、树形侧栏、四区底栏及工具分组展示。 |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路由、六组视图能力、订阅范围、编辑并发、主题与安全预览。       |
 
 ## 1. 路由与页面责任
 
 Expo Router 的 `src/app` 只处理页面映射和布局，业务界面在 features。`_layout` 组装 SafeAreaProvider、导航 ThemeProvider、StatusBar 和 Stack。
 
-| 路由                                             | 业务范围                             |
-| ------------------------------------------------ | ------------------------------------ |
-| `/`                                              | workbench 项目/会话/资料/Git/编辑器  |
-| `/models`、`/models/connection`、`/models/model` | 供应商连接与模型配置                 |
-| `/mcp`、`/mcp/server`                            | 远程服务器、发现与项目授权、未知回执 |
-| `/skills`、`/skills/edit`                        | 技能管理、包/资源编辑和版本          |
-| `/settings/agent`                                | 系统提示词与执行限制                 |
+| 路由                                             | 业务范围                                  |
+| ------------------------------------------------ | ----------------------------------------- |
+| `/`                                              | 工作台：对话、文件、Git、设置四区及编辑器 |
+| `/models`、`/models/connection`、`/models/model` | 供应商连接与模型配置                      |
+| `/mcp`、`/mcp/server`                            | 远程服务器、发现与项目授权、未知回执      |
+| `/skills`、`/skills/edit`                        | 技能管理、包/资源编辑和版本               |
+| `/settings/agent`                                | 系统提示词与执行限制                      |
 
 路由不创建独立工作区或独立 RunKernel，使用同一 bootstrap 服务。进入配置页不会终止活跃任务。UI 不引用 adapters、SQL、GitPort 或凭证存储，文件选择/导出也走 AppServices.io。
 
@@ -31,22 +32,28 @@ Expo Router 的 `src/app` 只处理页面映射和布局，业务界面在 featu
 | files        | 文件列表、搜索、导入、新建、打开                    |
 | git          | 状态、差异、暂存、提交、历史加载与恢复/撤销预览     |
 | runs         | 当前/历史任务、详情、轨迹、子任务和提案查看         |
-| dialogs      | 项目/对话/设置弹层、确认与页面切换                  |
+| dialogs      | 项目对话树、设置导航、输入弹层、确认与页面切换      |
 
 命令通过稳定引用与最新状态桥接，视图能力按实际依赖更新。优化时不要把一个大型 controller 再传遍全部组件，也不要为每个简单按钮新建空壳 hook。
 
-工作台宽度 >=1,100 时采用宽布局，窄屏以会话/资料/版本页签和独立全屏编辑器工作。固定输入区、键盘与短视口回归是手机端主要约束，桌面预览不能替代移动视口测试。
+工作台使用单层 48px 顶栏，底部为“对话 / 文件 / Git / 设置”四区，键盘弹出时收起底栏。宽度 >=1,100 时项目对话树常驻左侧；窄屏使用 [侧栏覆盖层](../src/features/workbench/project-drawer.tsx)，通过顶栏入口打开、关闭按钮/遮罩/系统返回关闭。当前没有注册侧栏滑动手势，也不覆盖系统边缘返回。文件编辑仍为手机全屏、宽屏侧栏。
+
+[ProjectTree](../src/features/workbench/project-tree.tsx) 直接投影全部项目与其对话，通过缩进表达归属。对话点击切换、长按展开重命名/归档操作，归档模式直接在同一树内恢复。顶栏点击当前对话标题原位修改，项目和对话列表不再使用旧弹窗。侧栏展开时背景从可访问树隐藏；输入型确认仍使用 Sheet。
+
+当前对话的卡片输入框外边距 8px、圆角 8px；添加入口展开资料/技能动作，模型选择与草稿保存状态留在同一工具行。文件列表使用真实目录树、搜索、类型过滤及 Git 标记；项目与对话的切换仍先 flush 草稿，跨项目受编辑 guard 保护。
+
+固定输入区、键盘与短视口回归是手机端主要约束，Web 不能替代 Android/iOS 验收。
 
 ## 3. 状态归属
 
-| 状态                                                          | 归属                                               |
-| ------------------------------------------------------------- | -------------------------------------------------- |
-| 项目/会话、配置、文件、Git、任务、轨迹                        | AppServices 的业务事实；hook 保存查询投影          |
-| 目标草稿与附件                                                | ConversationService 持久化；输入 hook 跟踪保存状态 |
-| projectId/conversationId/tab/appearance/commitDrafts          | Zustand 界面状态                                   |
-| 项目选择/主题持久偏好                                         | PreferencesService；Zustand 只是投影               |
-| EditorDocument、弹层、review、confirmation、busy/error/notice | React 内存                                         |
-| Agent 活跃执行                                                | RunKernel；页面不拥有执行生命周期                  |
+| 状态                                                                      | 归属                                               |
+| ------------------------------------------------------------------------- | -------------------------------------------------- |
+| 项目/会话、配置、文件、Git、任务、轨迹                                    | AppServices 的业务事实；hook 保存查询投影          |
+| 目标草稿与附件                                                            | ConversationService 持久化；输入 hook 跟踪保存状态 |
+| projectId/conversationId/tab/appearance/commitDrafts                      | Zustand 界面状态                                   |
+| 项目选择/主题持久偏好                                                     | PreferencesService；Zustand 只是投影               |
+| EditorDocument、drawerOpen、弹层、review、confirmation、busy/error/notice | React 内存                                         |
+| Agent 活跃执行                                                            | RunKernel；页面不拥有执行生命周期                  |
 
 commitDrafts 是按项目分开的界面说明草稿，当前没有写入 PreferencesService；对话目标草稿则是真正持久化的数据。不要因为两者都叫草稿而假设行为相同。
 
@@ -88,9 +95,13 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。原生�
 
 ## 7. 运行与轨迹视图
 
-会话时间线按目标、执行步骤、最终结果组织，text/reasoning/tool 轨迹内联展示。历史先查询摘要，展开再读取详情、节点和长正文；子任务通过 childRunIds 关联步骤，writer 提案可查看独立差异。
+会话时间线按目标、执行步骤、最终结果组织，text/reasoning/tool 轨迹内联展示。历史先查询摘要，初始三条渲染项预取详情，避免路由切换期间可见性回调尚未触发而一直显示加载；其余项进入可见区后读取详情。节点和长正文仍分页读取，子任务通过 childRunIds 关联步骤，writer 提案可查看独立差异。
 
 最终 response 单独来自 RunDetail，不依赖前 50 个节点已全部载入。推理标签使用 visibility，不通过模型名称推断开源/闭源身份；unavailable 显示不可用状态。
+
+[trace-groups](../src/features/workbench/trace-groups.ts) 只合并相邻 tool 节点。正文和公开推理始终构成分组边界，不能为折叠工具而挪动顺序。读取、搜索、图片、修改、Git、Skills、MCP、子 Agent 使用各自图标；单调用直接展开详情，多调用以次数摘要默认折叠，展开内容最高 280px 并可独立滚动。含子任务或异常回执的组默认展开，收起后仍显示异常摘要。分页追加沿用首个节点 ID，保留展开状态；原始轨迹与持久化结构不变。
+
+产物使用紧凑文件行：文件名打开当前项目文件，变化图标查看该任务的历史差异。已移动/删除的文件不能直接打开，历史差异仍可查看。
 
 当前实现仍有活跃运行的内存 trace 和内部完整读取路径，UI 分页不能代替整个内核的长任务内存审计。
 
@@ -104,7 +115,7 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。原生�
 
 ## 9. 主题与交互约定
 
-[theme](../src/shared/theme.ts) 提供语义 token；appearance 为 system/light/dark，持久化选择并同步导航与状态栏。业务组件取 theme token，避免只适配浅色的硬编码背景和文字。
+[theme](../src/shared/theme.ts) 提供语义颜色与 workbenchMetrics（顶栏、热区、边距、正文和圆角）；appearance 为 system/light/dark，持久化选择并同步导航与状态栏。业务组件取 theme token，避免只适配浅色的硬编码背景和文字。
 
 shared/ui 提供基础文本、按钮、输入、图标等。保持紧凑、清晰的工具风格，关键按钮可访问名称应稳定，便于屏幕阅读器与 Playwright/ADB 定位。模型 Key 等秘密字段不以普通结果文字展示。
 
@@ -116,4 +127,4 @@ busyRef 防止同一个界面 action 重复执行；这只是交互约束，服�
 
 影响保存/切换/订阅需覆盖：等待期间继续输入、同路径重开、旧查询迟到、跨项目通知、草稿切换、深浅主题、360px/短视口、键盘与未保存保护。避免只测试渲染了某个按钮。
 
-验证：[workbench E2E](../tests/e2e/workbench.spec.ts)、[workspace-live E2E](../tests/e2e/workspace-live.spec.ts)、[trace E2E](../tests/e2e/trace.spec.ts)、[conversations E2E](../tests/e2e/conversations.spec.ts)。
+验证：[轨迹分组单元测试](../tests/trace-groups.test.ts)、[workbench E2E](../tests/e2e/workbench.spec.ts)、[workspace-live E2E](../tests/e2e/workspace-live.spec.ts)、[trace E2E](../tests/e2e/trace.spec.ts)、[conversations E2E](../tests/e2e/conversations.spec.ts)。

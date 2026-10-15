@@ -29,6 +29,7 @@ function useWorkbenchState() {
   const editorSession = useEditorSession();
   const { editor, editorRef, setEditor, dirty } = editorSession;
   const [sheet, setSheet] = useState<WorkbenchSheet>();
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
   const [conversationToRename, setConversationToRename] = useState<string>();
@@ -76,13 +77,6 @@ function useWorkbenchState() {
   const projectActive = runs.find(run => run.projectId === ui.projectId && run.state !== 'queued');
   const selectedConversation = conversationState.conversations.find(
     item => item.id === ui.conversationId && item.projectId === ui.projectId && !item.archivedAt,
-  );
-  const conversations = useMemo(
-    () =>
-      conversationState.conversations
-        .filter(item => item.projectId === ui.projectId)
-        .sort((a, b) => b.updatedAt.localeCompare(a.updatedAt)),
-    [conversationState.conversations, ui.projectId],
   );
   const conversationActive = runs.find(
     run => run.projectId === ui.projectId && run.conversationId === ui.conversationId,
@@ -144,44 +138,53 @@ function useWorkbenchState() {
     }
   }
 
-  function selectProject(id: string) {
-    guard(() => {
-      void action(async () => {
-        if (!runtime) return;
+  async function selectConversation(id: string, projectId = ui.projectId) {
+    const select = () =>
+      action(async () => {
+        if (!runtime || !projectId) return;
         await flushDraft();
-        const conversation = await runtime.conversations.ensureProject(id);
+        if (runtime.conversations.getSnapshot().selected[projectId] !== id)
+          await runtime.conversations.select(id, projectId);
+        const conversation = runtime.conversations
+          .getSnapshot()
+          .conversations.find(item => item.id === id)!;
         installConversation(conversation);
-        setEditor(undefined);
+        if (projectId !== ui.projectId) {
+          setEditor(undefined);
+          ui.selectProject(projectId, id);
+        } else ui.selectConversation(id);
         setSheet(undefined);
-        ui.selectProject(id, conversation.id);
+        setDrawerOpen(false);
+        setError('');
       });
-    });
+    if (projectId !== ui.projectId)
+      guard(() => {
+        void select();
+      });
+    else await select();
   }
-  async function selectConversation(id: string) {
-    await action(async () => {
-      if (!runtime || !ui.projectId) return;
-      await flushDraft();
-      await runtime.conversations.select(id, ui.projectId);
-      const conversation = runtime.conversations
-        .getSnapshot()
-        .conversations.find(item => item.id === id)!;
-      installConversation(conversation);
-      ui.selectConversation(id);
-      setSheet(undefined);
-      setError('');
-    });
-  }
-  async function newConversation() {
-    await action(async () => {
-      if (!runtime || !ui.projectId) return;
-      await flushDraft();
-      const conversation = await runtime.conversations.create(ui.projectId);
-      installConversation(conversation);
-      ui.selectConversation(conversation.id);
-      setSheet(undefined);
-    });
+  async function newConversation(projectId = ui.projectId) {
+    const create = () =>
+      action(async () => {
+        if (!runtime || !projectId) return;
+        await flushDraft();
+        const conversation = await runtime.conversations.create(projectId);
+        installConversation(conversation);
+        if (projectId !== ui.projectId) {
+          setEditor(undefined);
+          ui.selectProject(projectId, conversation.id);
+        } else ui.selectConversation(conversation.id);
+        setSheet(undefined);
+        setDrawerOpen(false);
+      });
+    if (projectId !== ui.projectId)
+      guard(() => {
+        void create();
+      });
+    else await create();
   }
   function startRenameConversation(conversation: Conversation) {
+    setDrawerOpen(false);
     setConversationToRename(conversation.id);
     setConversationName(conversation.title);
     setSheet('conversation-name');
@@ -194,7 +197,14 @@ function useWorkbenchState() {
       setNotice('对话名称已保存。');
     });
   }
+  async function saveConversationTitle(conversation: Conversation, title: string) {
+    return action(async () => {
+      if (!runtime) return;
+      await runtime.conversations.rename(conversation.id, title);
+    });
+  }
   function archiveConversation(conversation: Conversation) {
+    setDrawerOpen(false);
     setConfirmation({
       title: '归档“' + conversation.title + '”？',
       description: '归档后保留消息和草稿，可在已归档列表恢复。',
@@ -214,15 +224,23 @@ function useWorkbenchState() {
     });
   }
   async function restoreConversation(conversation: Conversation) {
-    await action(async () => {
-      if (!runtime) return;
-      await flushDraft();
-      await runtime.conversations.restore(conversation.id);
-      installConversation(conversation);
-      ui.selectConversation(conversation.id);
-      setSheet(undefined);
-      setNotice('对话已恢复。');
-    });
+    const restore = () =>
+      action(async () => {
+        if (!runtime) return;
+        await flushDraft();
+        await runtime.conversations.restore(conversation.id);
+        installConversation(conversation);
+        if (conversation.projectId !== ui.projectId) setEditor(undefined);
+        ui.selectProject(conversation.projectId, conversation.id);
+        setSheet(undefined);
+        setDrawerOpen(false);
+        setNotice('对话已恢复。');
+      });
+    if (conversation.projectId !== ui.projectId)
+      guard(() => {
+        void restore();
+      });
+    else await restore();
   }
   function returnToActiveConversation(target = active) {
     if (!target?.conversationId) return;
@@ -262,6 +280,7 @@ function useWorkbenchState() {
 
   function newProject() {
     guard(() => {
+      setDrawerOpen(false);
       setEditor(undefined);
       setProjectName('');
       setSheet('create');
@@ -307,9 +326,6 @@ function useWorkbenchState() {
     await action(beginTask);
   }
 
-  function openSettings() {
-    setSheet('settings');
-  }
   async function reviewProposal(rootId: string, proposalId: string) {
     if (!runtime?.proposals) return;
     await action(async () => {
@@ -441,7 +457,10 @@ function useWorkbenchState() {
     runs,
     projectActive,
     conversationActive,
-    conversations,
+    allConversations: conversationState.conversations,
+    conversationDrafts: conversationState.drafts,
+    drawerOpen,
+    setDrawerOpen,
     selectedConversation,
     operations,
     loading,
@@ -478,12 +497,12 @@ function useWorkbenchState() {
     selectConversation,
     startRenameConversation,
     renameConversation,
+    saveConversationTitle,
     archiveConversation,
     restoreConversation,
     returnToActiveConversation,
     confirmation,
     setConfirmation,
-    selectProject,
     createProject,
     newProject,
     openFile,
@@ -498,7 +517,6 @@ function useWorkbenchState() {
         setError('停止状态保存失败，请重新打开应用恢复。'),
       );
     },
-    openSettings,
     openModelConfig,
     openAgentSettings,
     openMcpConfig,
@@ -616,6 +634,8 @@ export function useWorkbench() {
       loadOlderRuns: commands.loadOlderRuns,
       modelLabel: state.modelLabel,
       openModels: commands.openModels,
+      openFile: commands.openFile,
+      files: state.files,
       projectActive: projectActive,
       projectLoading: state.projectLoading,
       prompt: state.prompt,
@@ -647,6 +667,8 @@ export function useWorkbench() {
       commands.loadOlderRuns,
       state.modelLabel,
       commands.openModels,
+      commands.openFile,
+      state.files,
       projectActive,
       state.projectLoading,
       state.prompt,
@@ -708,6 +730,7 @@ export function useWorkbench() {
   const files = useMemo(
     () => ({
       busy: state.busy,
+      gitStatus: state.gitStatus,
       files: state.files,
       importFile: commands.importFile,
       newFile: commands.newFile,
@@ -722,6 +745,7 @@ export function useWorkbench() {
       state.busy,
       state.files,
       commands.importFile,
+      state.gitStatus,
       commands.newFile,
       commands.openFile,
       state.editor?.path,
@@ -798,6 +822,8 @@ export function useWorkbench() {
   const dialogs = useMemo(
     () => ({
       action: commands.action,
+      allConversations: state.allConversations,
+      conversationDrafts: state.conversationDrafts,
       appearance: state.appearance,
       archiveConversation: commands.archiveConversation,
       busy: state.busy,
@@ -806,7 +832,7 @@ export function useWorkbench() {
       confirmation: state.confirmation,
       conversationId: state.conversationId,
       conversationName: state.conversationName,
-      conversations: state.conversations,
+      drawerOpen: state.drawerOpen,
       createProject: commands.createProject,
       editorOpen: editorOpen,
       error: state.error,
@@ -819,7 +845,6 @@ export function useWorkbench() {
       openAgentSettings: commands.openAgentSettings,
       openMcpConfig: commands.openMcpConfig,
       openModelConfig: commands.openModelConfig,
-      openSettings: commands.openSettings,
       openSkills: commands.openSkills,
       projectActive: projectActive,
       projectId: state.projectId,
@@ -827,12 +852,12 @@ export function useWorkbench() {
       projects: state.projects,
       rebuildData: commands.rebuildData,
       renameConversation: commands.renameConversation,
+      saveConversationTitle: commands.saveConversationTitle,
       restoreConversation: commands.restoreConversation,
       reviewOpen: reviewOpen,
       runs: activity,
       saveAndLeave: commands.saveAndLeave,
       selectConversation: commands.selectConversation,
-      selectProject: commands.selectProject,
       selectTab: commands.selectTab,
       selectedConversation: state.selectedConversation,
       selectedProject: state.selectedProject,
@@ -840,6 +865,7 @@ export function useWorkbench() {
       setConfirmation: commands.setConfirmation,
       setConversationName: commands.setConversationName,
       setError: commands.setError,
+      setDrawerOpen: commands.setDrawerOpen,
       setProjectName: commands.setProjectName,
       setSheet: commands.setSheet,
       sheet: state.sheet,
@@ -848,6 +874,8 @@ export function useWorkbench() {
     }),
     [
       commands.action,
+      state.allConversations,
+      state.conversationDrafts,
       state.appearance,
       commands.archiveConversation,
       state.busy,
@@ -856,7 +884,7 @@ export function useWorkbench() {
       state.confirmation,
       state.conversationId,
       state.conversationName,
-      state.conversations,
+      state.drawerOpen,
       commands.createProject,
       editorOpen,
       state.error,
@@ -869,7 +897,6 @@ export function useWorkbench() {
       commands.openAgentSettings,
       commands.openMcpConfig,
       commands.openModelConfig,
-      commands.openSettings,
       commands.openSkills,
       projectActive,
       state.projectId,
@@ -877,12 +904,12 @@ export function useWorkbench() {
       state.projects,
       commands.rebuildData,
       commands.renameConversation,
+      commands.saveConversationTitle,
       commands.restoreConversation,
       reviewOpen,
       activity,
       commands.saveAndLeave,
       commands.selectConversation,
-      commands.selectProject,
       commands.selectTab,
       state.selectedConversation,
       state.selectedProject,
@@ -890,6 +917,7 @@ export function useWorkbench() {
       commands.setConfirmation,
       commands.setConversationName,
       commands.setError,
+      commands.setDrawerOpen,
       commands.setProjectName,
       commands.setSheet,
       state.sheet,

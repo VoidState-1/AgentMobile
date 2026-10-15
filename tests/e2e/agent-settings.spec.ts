@@ -1,15 +1,17 @@
+import { openProjectTree } from './workbench-helpers';
 import { readCurrentRuns } from './current-records';
 import { test, expect, type Page } from '@playwright/test';
-import { configureModel } from './model-helpers';
+import { configureModel, returnToWorkbench } from './model-helpers';
 import { sse, toolEvents, answerEvents } from '../protocol-fixtures';
 
 async function openSettings(page: Page) {
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: 'Agent 设置', exact: true }).click();
   await expect(page.getByRole('button', { name: '保存 Agent 设置', exact: true })).toBeVisible();
 }
 async function createProject(page: Page) {
   await page.goto('/');
+  await openProjectTree(page);
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('长任务工作区');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
@@ -43,7 +45,7 @@ test('手机：设置保存与刷新、错误校验、未保存保护和深浅�
   await expect(page.getByLabel('系统提示词', { exact: true })).toHaveValue('尚未保存的系统提示词');
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '放弃修改并离开', exact: true }).click();
-  await page.getByRole('button', { name: '设置', exact: true }).click();
+  await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('button', { name: 'Agent 设置', exact: true }).click();
   await expect(page.getByTestId('config-dark')).toBeVisible();
@@ -63,6 +65,7 @@ test('运行中修改 Agent 设置，旧任务跨轮保持原提示词和预算�
   await page.getByRole('button', { name: '保存 Agent 设置', exact: true }).click();
   await expect(page.getByText('Agent 设置已保存，下次任务生效。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '返回', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
   let release!: () => void;
   const held = new Promise<void>(resolve => {
     release = resolve;
@@ -89,7 +92,7 @@ test('运行中修改 Agent 设置，旧任务跨轮保持原提示词和预算�
   await page.getByLabel('模型请求轮数', { exact: true }).fill('80');
   await page.getByRole('button', { name: '保存 Agent 设置', exact: true }).click();
   await expect(page.getByText('Agent 设置已保存，下次任务生效。', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '返回', exact: true }).click();
+  await returnToWorkbench(page);
   release();
   await expect(page.getByText('已完成', { exact: true })).toHaveCount(1);
   expect(bodies).toHaveLength(2);
@@ -115,7 +118,7 @@ test('运行中修改 Agent 设置，旧任务跨轮保持原提示词和预算�
 
 test('超过旧 5 MB 上限的图片可以导入，并在刷新后保留', async ({ page }) => {
   await createProject(page);
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   const chooser = page.waitForEvent('filechooser');
   await page.getByRole('button', { name: '导入', exact: true }).click();
   const png = Buffer.from(
@@ -133,7 +136,7 @@ test('超过旧 5 MB 上限的图片可以导入，并在刷新后保留', async
     page.getByRole('button', { name: '打开 assets/large.png', exact: true }),
   ).toBeVisible();
   await page.reload();
-  await page.getByRole('tab', { name: '资料', exact: true }).click();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 assets/large.png', exact: true }),
   ).toBeVisible();

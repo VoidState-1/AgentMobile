@@ -15,7 +15,6 @@ import {
   Download,
   FileText,
   Image as ImageIcon,
-  Pencil,
   Save,
   Trash2,
   X,
@@ -70,11 +69,11 @@ export const Editor = memo(function Editor({
     >
       <View
         style={{
-          minHeight: 62,
+          minHeight: 48,
           flexDirection: 'row',
           alignItems: 'center',
-          paddingHorizontal: 14,
-          gap: 8,
+          paddingHorizontal: 6,
+          gap: 5,
           borderBottomWidth: 1,
           borderColor: theme.border,
         }}
@@ -86,9 +85,17 @@ export const Editor = memo(function Editor({
           disabled={controller.busy}
         />
         <View style={{ flex: 1, minWidth: 0 }}>
-          <T numberOfLines={1} style={{ fontSize: 14, fontWeight: '600' }}>
-            {document.fresh ? '新建文字资料' : document.name}
-          </T>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityLabel="重命名文件"
+            disabled={document.fresh || controller.busy || readonly || controller.dirty}
+            hitSlop={{ top: 8, bottom: 8 }}
+            onPress={() => controller.setSheet('rename')}
+          >
+            <T numberOfLines={1} style={{ fontSize: 14, fontWeight: '600' }}>
+              {document.fresh ? '新建文字资料' : document.name}
+            </T>
+          </Pressable>
           <T tone={controller.dirty ? 'warning' : 'muted'} style={{ fontSize: 11 }}>
             {controller.dirty ? '未保存的修改' : document.image ? '图片预览' : '所有修改已保存'}
           </T>
@@ -158,8 +165,8 @@ export const Editor = memo(function Editor({
           style={{
             flexDirection: 'row',
             alignItems: 'center',
-            paddingHorizontal: 20,
-            paddingVertical: 9,
+            paddingHorizontal: 12,
+            paddingVertical: 0,
             gap: 5,
             borderBottomWidth: 1,
             borderColor: theme.border,
@@ -173,7 +180,8 @@ export const Editor = memo(function Editor({
               onPress={() => update({ reading: mode === 'reading' })}
               style={{
                 paddingHorizontal: 12,
-                paddingVertical: 7,
+                minHeight: 44,
+                justifyContent: 'center',
                 borderRadius: 6,
                 backgroundColor:
                   document.reading === (mode === 'reading') ? theme.inset : 'transparent',
@@ -211,7 +219,7 @@ export const Editor = memo(function Editor({
           />
         </View>
       ) : document.reading ? (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 22 }}>
+        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
           <Markdown content={document.text} loadImage={loadImage} />
         </ScrollView>
       ) : (
@@ -230,12 +238,12 @@ export const Editor = memo(function Editor({
           placeholderTextColor={theme.muted}
           style={{
             flex: 1,
-            paddingHorizontal: 20,
-            paddingTop: 19,
+            paddingHorizontal: 14,
+            paddingTop: 12,
             paddingBottom: 30,
             color: theme.text,
             fontSize: 14,
-            lineHeight: 25,
+            lineHeight: 24,
             fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
           }}
         />
@@ -245,8 +253,8 @@ export const Editor = memo(function Editor({
           flexDirection: 'row',
           alignItems: 'center',
           gap: 7,
-          paddingHorizontal: 14,
-          paddingVertical: 8,
+          paddingHorizontal: 8,
+          paddingVertical: 0,
           borderTopWidth: 1,
           borderColor: theme.border,
         }}
@@ -268,12 +276,6 @@ export const Editor = memo(function Editor({
               onPress={() => {
                 void controller.exportEditor();
               }}
-            />
-            <IconButton
-              icon={Pencil}
-              label="重命名文件"
-              disabled={controller.busy || readonly || controller.dirty}
-              onPress={() => controller.setSheet('rename')}
             />
             <IconButton
               icon={Trash2}
