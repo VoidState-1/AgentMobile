@@ -9,6 +9,7 @@ import {
   scrollTo,
   tapScrolled,
 } from './android-ui.mjs';
+import { configureWorkspaceFixture } from './android-fixture-model.mjs';
 
 async function openApp() {
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
@@ -61,6 +62,7 @@ await tap('新建项目');
 await tap('项目名称');
 await adb('shell', 'input', 'text', 'AgentSettings-' + Date.now());
 await tap('创建工作区');
+await configureWorkspaceFixture();
 await settings();
 await fill('系统提示词', 'native_style');
 await fill('模型请求轮数', '80');
@@ -103,5 +105,5 @@ if ((await waitFor('模型请求轮数')).text !== '50') throw new Error('恢复
 if ((await waitFor('系统提示词')).text !== 'native_style')
   throw new Error('恢复预算改变了系统提示词。');
 process.stdout.write(
-  'Android Agent settings passed: prompt and budget persistence, restart, unsaved guard, demo run, light/dark, independent budget reset.\n',
+  'Android Agent settings passed: prompt and budget persistence, restart, unsaved guard, model run, light/dark, independent budget reset.\n',
 );

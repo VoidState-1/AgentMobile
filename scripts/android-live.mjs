@@ -31,8 +31,7 @@ try {
   if ((await dump()).includes('Go home')) await tap('Close');
   await tap('设置');
   await tap('模型与供应商');
-  await tap('添加连接');
-  await tap('DeepSeek');
+  await tap('DeepSeek · 未保存连接');
   await scrollTo('API Key', true);
   await tap('API Key');
   // Clear an existing saved key without printing it or placing it in a log.

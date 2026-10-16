@@ -261,7 +261,7 @@ export class DelegationSession implements DelegationPort {
         selectedPaths: paths,
       };
       const record: RunRecord = {
-        schemaVersion: 3,
+        schemaVersion: 4,
         id,
         rootRunId: this.parent.rootRunId,
         parentRunId: this.parent.id,
@@ -273,7 +273,7 @@ export class DelegationSession implements DelegationPort {
         prompt: input.prompt,
         response: '',
         createdAt: new Date().toISOString(),
-        mode: this.parent.mode,
+
         agentDefinitionId: definition.id,
         agentDefinitionRevision: definition.revision,
         launchSnapshotRef: id,

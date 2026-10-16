@@ -88,8 +88,6 @@ if (!process.argv.includes('--verify')) {
       );
       configuration.models = configuration.models.filter(model => model.id !== 'r3-model');
       configuration.revision++;
-      configuration.mode = 'remote';
-      configuration.sessionModes = {};
       configuration.connections.push({
         id: 'r3-local',
         name: 'R3 Fixture',

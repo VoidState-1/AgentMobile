@@ -1,6 +1,7 @@
 import { selectProject, openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel } from './model-helpers';
+import { configureWorkspaceFixture } from './workspace-fixture';
 
 async function createProject(page: Page, name: string) {
   await openProjectTree(page);
@@ -8,6 +9,7 @@ async function createProject(page: Page, name: string) {
   await page.getByLabel('项目名称', { exact: true }).fill(name);
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+  await configureWorkspaceFixture(page);
 }
 
 async function openNote(page: Page) {
@@ -179,14 +181,26 @@ test('未保存编辑切换项目，保存或放弃后都执行原来的导航�
   await page.getByLabel('正文', { exact: true }).fill('保存后应切换项目。');
   await selectProject(page, '目标项目');
   await page.getByRole('button', { name: '保存后离开', exact: true }).click();
-  await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    page.getByRole('button', { name: '打开 documents/notes.md', exact: true }),
+  ).toBeVisible();
   await selectProject(page, '编辑项目');
   await openNote(page);
   await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');
   await page.getByLabel('正文', { exact: true }).fill('应放弃的内容。');
   await selectProject(page, '目标项目');
   await page.getByRole('button', { name: '放弃修改', exact: true }).click();
-  await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(
+    page.getByRole('button', { name: '打开 documents/notes.md', exact: true }),
+  ).toBeVisible();
   await selectProject(page, '编辑项目');
   await openNote(page);
   await expect(page.getByLabel('正文', { exact: true })).toHaveValue('保存后应切换项目。');

@@ -1,6 +1,6 @@
 import { workbenchMetrics as metrics, useWorkbenchTheme } from '@/shared/theme';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View } from 'react-native';
+import { Pressable, StyleSheet, View, type PressableProps } from 'react-native';
 import { T } from './primitives';
 
 /** One interactive object row, shared by navigation, selection and reference lists. */
@@ -15,6 +15,9 @@ export function ActionRow({
   selected,
   disabled,
   onPress,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   label: string;
   title: string;
@@ -26,6 +29,9 @@ export function ActionRow({
   selected?: boolean;
   disabled?: boolean;
   onPress: () => void;
+  onLongPress?: () => void;
+  accessibilityActions?: PressableProps['accessibilityActions'];
+  onAccessibilityAction?: PressableProps['onAccessibilityAction'];
 }) {
   const theme = useWorkbenchTheme();
   return (
@@ -35,6 +41,9 @@ export function ActionRow({
       accessibilityState={{ selected, disabled }}
       disabled={disabled}
       onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       style={({ pressed }) => [
         styles.row,
         {

@@ -516,20 +516,18 @@ function ModelEditor({
                   }}
                 />
               )}
-              {conversationId &&
-                (config.defaults.sessions[conversationId] ||
-                  config.sessionModes?.[conversationId]) && (
-                  <Button
-                    label="清除会话选择"
-                    variant="ghost"
-                    disabled={busy}
-                    onPress={() => {
-                      void action(() =>
-                        runtime!.models.setSelection('session', undefined, conversationId),
-                      );
-                    }}
-                  />
-                )}
+              {conversationId && config.defaults.sessions[conversationId] && (
+                <Button
+                  label="清除会话选择"
+                  variant="ghost"
+                  disabled={busy}
+                  onPress={() => {
+                    void action(() =>
+                      runtime!.models.setSelection('session', undefined, conversationId),
+                    );
+                  }}
+                />
+              )}
             </Section>
           </>
         )}

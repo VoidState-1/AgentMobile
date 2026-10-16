@@ -1,8 +1,9 @@
+import { contentCodec } from '../src/adapters/storage/codec';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { ConversationService } from '@/application/conversations/service';
 import { ModelConfigurationService } from '@/application/models/configuration';
-import { selectedModelId, selectedModelMode } from '../src/core/models/rules';
+import { selectedModelId } from '../src/core/models/rules';
 import { createTestRuntime } from './agent-runtime';
 import { createWorkspace } from '../src/bootstrap/workspace';
 import type { Project } from '../src/core/projects';
@@ -45,8 +46,8 @@ describe('项目与多对话元数据', () => {
     expect(restarted.getSnapshot().conversations).toHaveLength(1);
     expect(restarted.getSnapshot().selected[project.id]).toBe(id);
     const config = {
-      mode: 'remote' as const,
-      schemaVersion: 1 as const,
+      schemaVersion: 2 as const,
+      providerOrder: [],
       revision: 1,
       connections: [],
       models: [],
@@ -111,7 +112,7 @@ describe('项目与多对话元数据', () => {
     const repository = new RunRepository(f.metadata);
     await repository.save(
       {
-        schemaVersion: 3,
+        schemaVersion: 4,
         id: 'accepted',
         projectId: project.id,
         conversationId: a.id,
@@ -125,7 +126,7 @@ describe('项目与多对话元数据', () => {
         prompt: draft.text,
         response: '',
         state: 'queued',
-        mode: 'demo',
+
         createdAt: new Date().toISOString(),
       },
       { id: 'accepted', agent: builtinAgents[0] },
@@ -160,6 +161,7 @@ it('实际 Agent 仅携带本对话历史，独立选择模型和模式，任务
     storage.metadata,
     { get: async () => '', set: async () => {} },
     randomUUID,
+    contentCodec,
   );
   await models.initialize();
   const connection = await models.saveConnection({
@@ -213,8 +215,5 @@ it('实际 Agent 仅携带本对话历史，独立选择模型和模式，任务
   expect(JSON.stringify(requests[1])).not.toContain('A_ONLY');
   expect(JSON.stringify(requests[2])).toContain('A_ONLY');
   expect(JSON.stringify(requests[2])).not.toContain('B_ONLY');
-  await models.setMode('demo', b.id);
-  expect(selectedModelMode(models.getSnapshot(), a.id)).toBe('remote');
-  expect(selectedModelMode(models.getSnapshot(), b.id)).toBe('demo');
   await expect(manager.start('wrong-project', 'invalid', false, a.id)).rejects.toThrow('不存在');
 });

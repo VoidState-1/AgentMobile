@@ -30,10 +30,7 @@ export async function executeChild(
   nextGroupSequence: () => number,
   proposals: ProposalService,
 ): Promise<ExecutionView> {
-  const binding = await prepared.createChild!(
-    record.prompt,
-    definition.workspace === 'proposal' ? 'proposal' : 'snapshot',
-  );
+  const binding = await prepared.createChild!(record.prompt);
   const overlay = definition.workspace === 'proposal' ? await proposals.create(record) : undefined;
   const task: ExecutionView = {
     ...record,
@@ -93,7 +90,7 @@ export async function executeChild(
       codec: binding.resources.codec,
       skillRun: binding.resources.skills,
       baseline: { head: record.baseCommit ?? '', working: record.inputSnapshotRef!, index: '' },
-      settings: { mode: record.mode, imageInput: !!launch.model?.parameters.allowImages },
+      settings: { imageInput: !!launch.model?.parameters.allowImages },
       round,
     }),
   ];
@@ -127,7 +124,7 @@ export async function executeChild(
       acquire: signal =>
         scheduler.acquire(
           record.rootRunId,
-          launch.model?.connectionId ?? 'demo',
+          launch.model?.connectionId ?? record.rootRunId,
           signal ?? stop.signal,
         ),
       reserve: resource => budget.reserve(record.id, resource, true),

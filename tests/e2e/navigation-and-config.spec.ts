@@ -52,8 +52,7 @@ test('360px 短屏：配置与输入弹层可操作，深色页面无横向溢�
 
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
   await verify();
-  await page.getByRole('button', { name: '添加连接', exact: true }).click();
-  await page.getByRole('button', { name: '自定义服务', exact: true }).click();
+  await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
   await verify();
   await expect(page.getByRole('button', { name: '保存连接', exact: true })).toBeInViewport();
   await page.getByLabel('连接名称', { exact: true }).fill('尚未保存');

@@ -13,7 +13,7 @@ async function fixture() {
   const repository = new RunRepository(storage.metadata);
   const id = randomUUID();
   const run: RunRecord = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id,
     projectId: 'project',
     conversationId: 'conversation',
@@ -24,7 +24,7 @@ async function fixture() {
     agentDefinitionRevision: 1,
     launchSnapshotRef: id,
     state: 'running',
-    mode: 'demo',
+
     prompt: 'test',
     response: '',
     createdAt: new Date().toISOString(),

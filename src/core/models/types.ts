@@ -1,6 +1,21 @@
 import { defaultOutputTokens } from '../agent/settings';
 export type ModelProtocol = 'chat-completions' | 'anthropic-messages' | 'gemini';
-export type ProviderPresetId = 'deepseek' | 'anthropic' | 'gemini' | 'custom';
+export type ProviderPresetId =
+  | 'openai'
+  | 'deepseek'
+  | 'anthropic'
+  | 'gemini'
+  | 'qwen'
+  | 'kimi'
+  | 'zhipu'
+  | 'doubao'
+  | 'minimax'
+  | 'siliconflow'
+  | 'openrouter'
+  | 'groq'
+  | 'mistral'
+  | 'xai'
+  | 'custom';
 export type ModelSupport = 'supported' | 'unsupported' | 'unknown';
 export type CapabilityName = 'tools' | 'images' | 'reasoning';
 export type EvidenceSource = 'preset' | 'discovery' | 'user' | 'verified';
@@ -42,12 +57,17 @@ export interface ProviderConnection {
   compatibility: 'standard' | 'deepseek';
   apiVersion: string;
   enabled: boolean;
+  icon?: ProviderIcon;
   revision: number;
   createdAt: string;
   updatedAt: string;
   check?: DiagnosticResult;
   checkHistory?: DiagnosticResult[];
   catalogAt?: string;
+}
+export interface ProviderIcon {
+  mediaType: 'image/png' | 'image/jpeg' | 'image/webp';
+  base64: string;
 }
 export interface ModelEntry {
   id: string;
@@ -67,10 +87,9 @@ export interface ModelEntry {
   updatedAt: string;
 }
 export interface ModelConfiguration {
-  schemaVersion: 1;
+  schemaVersion: 2;
   revision: number;
-  mode: 'demo' | 'remote';
-  sessionModes?: Record<string, 'demo' | 'remote'>;
+  providerOrder: string[];
   connections: ProviderConnection[];
   models: ModelEntry[];
   defaults: { global?: string; projects: Record<string, string>; sessions: Record<string, string> };
@@ -108,13 +127,13 @@ export interface ModelRunLease {
 
 export function emptyModelConfiguration(): ModelConfiguration {
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     revision: 0,
-    mode: 'demo',
     connections: [],
     models: [],
     defaults: { projects: {}, sessions: {} },
     recent: [],
+    providerOrder: [],
   };
 }
 export const defaultModelParameters: ModelParameters = {

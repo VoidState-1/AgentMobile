@@ -1,3 +1,4 @@
+import { contentCodec } from '../src/adapters/storage/codec';
 import { randomUUID } from 'node:crypto';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext, type Message } from '@earendil-works/pi-ai';
@@ -267,7 +268,12 @@ describe.each(protocols)('%s 原生协议模拟', protocol => {
         else keys.delete(r);
       },
     };
-    const service = new ModelConfigurationService(storage.metadata, credentials, randomUUID);
+    const service = new ModelConfigurationService(
+      storage.metadata,
+      credentials,
+      randomUUID,
+      contentCodec,
+    );
     await service.initialize();
     const connection = await service.saveConnection(
       { ...connectionFor(protocol), id: undefined },

@@ -113,8 +113,7 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
     await page.getByRole('button', { name: '关闭文件', exact: true }).click();
     await openModels(page);
-    await page.getByRole('button', { name: '添加连接', exact: true }).click();
-    await page.getByRole('button', { name: 'DeepSeek', exact: true }).click();
+    await page.getByRole('button', { name: 'DeepSeek · 未配置连接', exact: true }).click();
     await page.getByLabel('API Key', { exact: true }).fill(apiKey);
     await page.getByRole('button', { name: '保存连接', exact: true }).click();
     await page.getByRole('button', { name: '检测连接并发现模型', exact: true }).click();

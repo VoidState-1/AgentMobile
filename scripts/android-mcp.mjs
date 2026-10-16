@@ -63,8 +63,7 @@ if (!process.argv.includes('--continue')) {
   await tap('创建工作区');
   await tap('设置');
   await tap('模型与供应商');
-  await tap('添加连接');
-  await tap('自定义服务');
+  await tap('添加其他供应商');
   await fill('连接名称', 'MCP-model');
   await fill('服务基础地址', 'http://127.0.0.1:4181');
   await fill('API Key', 'fixture-model-key');

@@ -189,12 +189,7 @@ export function Composer({
               minHeight: 44,
             }}
           >
-            <T
-              tone={controller.settings.mode === 'demo' ? 'warning' : 'secondary'}
-              numberOfLines={1}
-              variant="caption"
-              style={{ flexShrink: 1 }}
-            >
+            <T tone="secondary" numberOfLines={1} variant="caption" style={{ flexShrink: 1 }}>
               {controller.modelLabel}
             </T>
             <ChevronDown size={12} color={theme.muted} />

@@ -3,12 +3,10 @@ import type { RunResourceFactory, PreparedRun } from '@/application/runs/resourc
 import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { SkillService } from '@/application/skills/library';
 import type { ModelRunLease } from '@/core/models/types';
-import { selectedModelMode } from '@/core/models/rules';
 import type { McpRun, McpRuntime } from '@/adapters/mcp/runtime';
 import { createSkillRun } from '@/adapters/skills/run';
 import { contentCodec } from '@/adapters/storage/codec';
 import { protocolModel, protocolTransport } from '@/adapters/model/protocols';
-import { demoTransport } from './demo';
 import { PiEngineAdapter } from './pi-engine';
 import type { NotificationScheduler } from '@/core/agent/engine';
 
@@ -33,75 +31,51 @@ export function runResourceFactory(
           }
         })());
       try {
-        const mode = selectedModelMode(models.getSnapshot(), request.conversationId);
-        const skillRun = createSkillRun(
-          skills.repository,
-          await skills.capture(request.projectId, request.prompt),
-        );
-        if (mode === 'remote') {
-          lease = await models.acquireSelection(request.projectId, request.conversationId);
-          mcpRun = mcp.createRun(await mcp.configuration.acquireProject(request.projectId));
-        }
-        const snapshot = lease?.snapshot;
-        if (request.imageAttached && mode === 'remote' && !snapshot?.parameters.allowImages)
+        lease = await models.acquireSelection(request.projectId, request.conversationId);
+        const snapshot = lease.snapshot;
+        if (request.imageAttached && !snapshot.parameters.allowImages)
           throw new AppError(
             'VALIDATION',
             '所选模型配置未开启图片输入。请开启图片输入，或移除图片后发送；草稿已保留。',
           );
-        const transport = snapshot
-          ? {
-              model: protocolModel(snapshot),
-              streamFn: protocolTransport(
-                snapshot,
-                lease!.secret,
-                web,
-                request.settings.limits.requestTimeoutMs,
-              ),
-            }
-          : demoTransport(request.prompt);
+        const skillRun = createSkillRun(
+          skills.repository,
+          await skills.capture(request.projectId, request.prompt),
+        );
+        mcpRun = mcp.createRun(await mcp.configuration.acquireProject(request.projectId));
+        const transport = {
+          model: protocolModel(snapshot),
+          streamFn: protocolTransport(
+            snapshot,
+            lease.secret,
+            web,
+            request.settings.limits.requestTimeoutMs,
+          ),
+        };
+        const reasoningDisplay =
+          snapshot.parameters.reasoningDisplay ??
+          (snapshot.protocol !== 'chat-completions' ? 'summary' : 'reasoning');
         return {
           launch: {
-            mode,
-            imageInput: snapshot?.parameters.allowImages ?? false,
+            imageInput: snapshot.parameters.allowImages,
             modelSnapshot: snapshot,
             contextTokens: transport.model.contextWindow,
             outputTokens: transport.model.maxTokens,
           },
-          engine: new PiEngineAdapter(
-            transport,
-            snapshot?.parameters.reasoningDisplay ??
-              (snapshot && snapshot.protocol !== 'chat-completions' ? 'summary' : 'reasoning'),
-          ),
+          engine: new PiEngineAdapter(transport, reasoningDisplay),
           resources: { codec: contentCodec, notifications, mcp: mcpRun, skills: skillRun },
           release,
-          createChild: async (prompt, workspace = 'snapshot') => {
-            const childTransport = snapshot
-              ? {
-                  model: protocolModel(snapshot),
-                  streamFn: protocolTransport(
-                    snapshot,
-                    lease!.secret,
-                    web,
-                    request.settings.limits.requestTimeoutMs,
-                  ),
-                }
-              : demoTransport(prompt, workspace === 'snapshot');
-            return {
-              engine: new PiEngineAdapter(
-                childTransport,
-                snapshot?.parameters.reasoningDisplay ??
-                  (snapshot && snapshot.protocol !== 'chat-completions' ? 'summary' : 'reasoning'),
-              ),
-              resources: {
-                codec: contentCodec,
-                notifications,
-                skills: createSkillRun(skills.repository, {
-                  skills: skillRun.snapshots,
-                  explicit: [],
-                }),
-              },
-            };
-          },
+          createChild: async () => ({
+            engine: new PiEngineAdapter(transport, reasoningDisplay),
+            resources: {
+              codec: contentCodec,
+              notifications,
+              skills: createSkillRun(skills.repository, {
+                skills: skillRun.snapshots,
+                explicit: [],
+              }),
+            },
+          }),
         };
       } catch (error) {
         await release();

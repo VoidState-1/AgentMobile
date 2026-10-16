@@ -12,7 +12,7 @@ export interface RunToolsContext {
   baseline: GitBaseline;
   task: ExecutionView;
   codec: ContentCodec;
-  settings: { mode: 'demo' | 'remote'; imageInput: boolean };
+  settings: { imageInput: boolean };
   round(): number;
   mcpRun?: McpRunPort;
   skillRun?: SkillRunPort;

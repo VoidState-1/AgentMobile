@@ -4,7 +4,7 @@ import type { ModelProtocol } from '../../src/core/models/types';
 export async function openModels(page: Page) {
   await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
-  await expect(page.getByRole('button', { name: '添加连接', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '添加其他供应商', exact: true })).toBeVisible();
 }
 export async function addConnection(
   page: Page,
@@ -12,9 +12,7 @@ export async function addConnection(
   protocol: ModelProtocol = 'chat-completions',
   key = 'fixture-key',
 ) {
-  const add = page.getByRole('button', { name: '添加连接', exact: true });
-  if (await add.count()) await add.click();
-  await page.getByRole('button', { name: '自定义服务', exact: true }).click();
+  await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
   await page.getByLabel('连接名称', { exact: true }).fill(name);
   if (protocol !== 'chat-completions')
     await page

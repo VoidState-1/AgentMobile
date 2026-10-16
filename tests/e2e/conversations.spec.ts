@@ -1,4 +1,9 @@
-import { addReference, openProjectTree, conversationActions } from './workbench-helpers';
+import {
+  addReference,
+  openProjectTree,
+  closeProjectTree,
+  conversationActions,
+} from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel, openModels, addModel, returnToWorkbench } from './model-helpers';
 import { answerEvents, sse } from '../protocol-fixtures';
@@ -24,6 +29,7 @@ async function select(page: Page, title: string) {
     .last()
     .click();
   await expect(page.getByTestId('conversation-bar')).toContainText(title);
+  await closeProjectTree(page);
 }
 
 test('手机：独立草稿与附件、刷新选择、归档与恢复、项目共享文件', async ({ page }) => {
@@ -62,6 +68,7 @@ test('手机：独立草稿与附件、刷新选择、归档与恢复、项目�
   await page.getByRole('button', { name: '恢复对话 阅读', exact: true }).first().click();
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('仅属于阅读的草稿');
   await page.screenshot({ path: 'work/conversations-mobile-light.png' });
+  await closeProjectTree(page);
   await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
   await page.getByRole('tab', { name: '对话', exact: true }).click();
@@ -120,7 +127,7 @@ test('真实 Agent 上下文和模型按对话隔离，切换对话不取消任�
   expect(requests[1].model).toBe('alternate-model');
   expect(JSON.stringify(requests[1])).not.toContain('A_PRIVATE');
   await page.getByRole('button', { name: '模型设置', exact: true }).click();
-  await page.getByRole('button', { name: '演示模式', exact: true }).click();
+  await page.getByRole('button', { name: '使用项目或全局默认', exact: true }).click();
   await select(page, '甲对话');
   await expect(page.getByRole('button', { name: '模型设置', exact: true })).toContainText(
     '模拟模型',
@@ -152,6 +159,11 @@ test('树形侧栏跨项目恢复归档对话时保护当前文件编辑', async
   await page.getByRole('button', { name: '恢复对话 待恢复', exact: true }).click();
   await expect(page.getByText('有尚未保存的修改', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '保存后离开', exact: true }).click();
-  await expect(page.getByTestId('conversation-bar')).toContainText('待恢复');
+  await expect(page.getByRole('tab', { name: '文件', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await expect(page.getByRole('button', { name: '关闭文件', exact: true })).toHaveCount(0);
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await expect(page.getByTestId('conversation-bar')).toContainText('待恢复');
 });

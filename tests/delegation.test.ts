@@ -38,7 +38,7 @@ async function fixture() {
   const settings = defaultAgentSettings();
   const abort = new RunStopController('root');
   const root: RunRecord = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: 'root',
     rootRunId: 'root',
     kind: 'root',
@@ -49,7 +49,7 @@ async function fixture() {
     prompt: '父任务秘密上下文',
     response: '',
     createdAt: new Date().toISOString(),
-    mode: 'demo',
+
     agentSettingsSnapshot: settings,
     agentDefinitionId: 'main',
     agentDefinitionRevision: 1,
@@ -134,7 +134,7 @@ async function fixture() {
     return { engine, resources: { codec: contentCodec, notifications: testNotifications } };
   };
   const prepared: PreparedRun = {
-    launch: { mode: 'demo', imageInput: false, contextTokens: 32000, outputTokens: 4096 },
+    launch: { imageInput: false, contextTokens: 32000, outputTokens: 4096 },
     engine: {
       create() {
         throw new Error('unused');

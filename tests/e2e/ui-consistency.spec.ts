@@ -2,7 +2,7 @@ import { expect, test } from '@playwright/test';
 import { openProjectTree } from './workbench-helpers';
 import { configureModel } from './model-helpers';
 
-test('首次配置只有一个添加入口，侧栏空状态与设置摘要可直接操作', async ({ page }) => {
+test('供应商模板直接进入配置，侧栏空状态与设置摘要可直接操作', async ({ page }) => {
   await page.setViewportSize({ width: 390, height: 740 });
   await page.goto('/');
   await openProjectTree(page);
@@ -12,17 +12,26 @@ test('首次配置只有一个添加入口，侧栏空状态与设置摘要可�
   await page.getByRole('button', { name: '收起侧栏', exact: true }).click();
   await page.getByRole('tab', { name: '设置', exact: true }).click();
   await expect(page.getByRole('button', { name: '模型与供应商', exact: true })).toContainText(
-    '演示模式',
+    '选择模型',
   );
   await expect(page.getByRole('button', { name: '远程 MCP', exact: true })).toContainText(
     '已启用 0',
   );
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
-  await expect(page.getByRole('button', { name: '添加连接', exact: true })).toHaveCount(1);
-  await expect(page.getByLabel('搜索连接', { exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '添加连接', exact: true })).toHaveCount(0);
+  for (const name of ['DeepSeek', 'Anthropic', 'Gemini'])
+    await expect(
+      page.getByRole('button', { name: name + ' · 未保存连接', exact: true }),
+    ).toBeVisible();
+  await expect(page.getByLabel('搜索供应商', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'work/mobile-ui/unified-onboarding-light.png' });
-  await page.getByRole('button', { name: '添加连接', exact: true }).click();
-  await page.getByRole('button', { name: '自定义服务', exact: true }).click();
+  await page.getByRole('button', { name: 'DeepSeek · 未保存连接', exact: true }).click();
+  await expect(page.getByLabel('连接名称', { exact: true })).toHaveValue('DeepSeek');
+  await expect(page.getByLabel('服务基础地址', { exact: true })).toHaveValue(
+    'https://api.deepseek.com',
+  );
+  await page.getByRole('button', { name: '返回', exact: true }).click();
+  await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
   await expect(page.getByRole('button', { name: '手工添加', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '返回', exact: true }).click();

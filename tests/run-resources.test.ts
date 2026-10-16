@@ -1,3 +1,4 @@
+import { contentCodec } from '../src/adapters/storage/codec';
 import { randomUUID } from 'node:crypto';
 import { expect, it, vi } from 'vitest';
 import { createWorkspace } from '../src/bootstrap/workspace';
@@ -5,6 +6,27 @@ import { ModelConfigurationService } from '@/application/models/configuration';
 import { createTestRuntime } from './agent-runtime';
 import { testStorage } from './storage';
 import { answerEvents, streamed, toolEvents } from './protocol-fixtures';
+
+it('未配置模型时拒绝任务，保留草稿且不产生执行记录或文件', async () => {
+  const storage = await testStorage();
+  try {
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('未配置模型');
+    const { kernel, conversations, repository } = await createTestRuntime(workspace, {
+      files: storage.files,
+    });
+    const conversationId = conversations.getSnapshot().selected[project.id];
+    const draft = await conversations.saveDraft(conversationId, { text: '保留这份草稿' });
+    await expect(
+      kernel.start(project.id, draft.text, false, conversationId, draft.revision),
+    ).rejects.toThrow('默认模型');
+    expect(conversations.getSnapshot().drafts[conversationId].text).toBe(draft.text);
+    expect((await repository.list(project.id)).runs).toHaveLength(0);
+    await expect(workspace.readText(project.id, 'documents/summary.md')).rejects.toThrow();
+  } finally {
+    await storage.cleanup();
+  }
+});
 
 it('界面取消订阅不取消任务，启动时配置跨工具轮次固定，完成后释放凭证', async () => {
   const storage = await testStorage();
@@ -22,6 +44,7 @@ it('界面取消订阅不取消任务，启动时配置跨工具轮次固定，�
         },
       },
       randomUUID,
+      contentCodec,
     );
     await models.initialize();
     const connection = await models.saveConnection(

@@ -8,7 +8,7 @@
 
 手机端本地 Agent harness：文字和图片保存在本地工作区，Pi Agent Core 经受控工具执行任务，标准 Git 管理明确提交，内部检查点与业务回执负责中断恢复。
 
-当前采用 React Native、Expo Development Build、TypeScript。原生使用 FileSystem + SQLite + SecureStore，Web 使用 IndexedDB，密钥只留在当前页面内存。真实模式连接用户提供的远程模型；默认演示模式执行预设步骤，无需 Key。
+当前采用 React Native、Expo Development Build、TypeScript。原生使用 FileSystem + SQLite + SecureStore，Web 使用 IndexedDB，密钥只留在当前页面内存。任务使用用户配置的模型服务；首次运行需先添加连接和模型并选择默认模型。
 
 ## 当前能力
 

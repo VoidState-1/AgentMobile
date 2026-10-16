@@ -1,7 +1,7 @@
 import { expect, it, vi } from 'vitest';
 import { Type } from 'typebox';
 import { PiEngineAdapter } from '../src/adapters/agent/pi-engine';
-import { demoTransport } from '../src/adapters/agent/demo';
+import { fixtureTransport } from './fixture-transport';
 import { RequestScheduler, type RequestPermit } from '../src/application/runs/request-scheduler';
 import { defineTool, result } from '../src/application/tools/common';
 
@@ -10,7 +10,9 @@ it('Pi 在工具等待前释放模型请求槽，正常结束和传输失败都�
   let permit: RequestPermit | undefined;
   const entered = Promise.withResolvers<void>();
   const waiting = Promise.withResolvers<void>();
-  const transport = demoTransport('request lifecycle');
+  const transport = fixtureTransport(round =>
+    round === 1 ? { calls: [{ name: 'list_files', arguments: {} }] } : { text: 'done' },
+  );
   const tools = [
     defineTool({
       effect: 'read',
@@ -65,7 +67,7 @@ it('取消尚在请求池排队的 Pi 实例会移除请求，不影响正在使
   const scheduler = new RequestScheduler(1, 1);
   const held = await scheduler.acquire('other', 'provider');
   let permit: RequestPermit | undefined;
-  const session = new PiEngineAdapter(demoTransport('cancel waiting')).create(
+  const session = new PiEngineAdapter(fixtureTransport(() => ({ text: 'done' }))).create(
     { prompt: 'test', history: [], tools: [], systemPrompt: '', reasoning: false },
     () => {},
     {

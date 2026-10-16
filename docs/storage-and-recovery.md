@@ -2,9 +2,10 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                     |
-| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 记录当前数据格式、数据库布局、事务边界、启动恢复与开发重建。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                     |
+| -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录 f5、物理版本 6、Run schema 4 与移除执行模式索引字段。 |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 记录当前数据格式、数据库布局、事务边界、启动恢复与开发重建。                 |
 
 ## 1. 存储分工
 
@@ -22,11 +23,11 @@ Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是 Host
 
 ## 2. 当前格式与实例身份
 
-[CURRENT_DATA_FORMAT](../src/core/storage/business-store.ts) 当前为 `agent-mobile-f4`。SQLite `PRAGMA user_version` 和 IndexedDB physical version 当前为 `5`。三种版本的职责不同：
+[CURRENT_DATA_FORMAT](../src/core/storage/business-store.ts) 当前为 `agent-mobile-f5`。SQLite `PRAGMA user_version` 和 IndexedDB physical version 当前为 `6`。三种版本的职责不同：
 
 - format 标识校验整个当前开发实例的可读结构。
 - physical version 表示平台数据库结构，不维护历史迁移链。
-- 记录中的 schemaVersion 表示当前 DTO 契约，如 OperationHeader 为 2，RunRecord/Header 为 3，TranscriptFrame 为 1。
+- 记录中的 schemaVersion 表示当前 DTO 契约，如 OperationHeader 为 2，RunRecord/Header 为 4，TranscriptFrame 为 1。
 
 数据库同时生成 `instanceId`。Run 和轨迹游标绑定该身份，数据重建后旧游标会被拒绝，而不是误读新实例中的同名记录。格式检查失败阻断正常 bootstrap，不用历史字段读取或自动升级兜底。
 

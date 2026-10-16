@@ -90,7 +90,7 @@ let operationCount;
   const db = new DatabaseSync(target);
   try {
     const source = readRuns(db)
-      .filter(run => run.schemaVersion === 3 && run.state === 'completed')
+      .filter(run => run.schemaVersion === 4 && run.state === 'completed')
       .sort((a, b) => a.createdAt.localeCompare(b.createdAt))
       .at(-1);
     if (!source) throw new Error('先在本模拟器完成 android-smoke.mjs');

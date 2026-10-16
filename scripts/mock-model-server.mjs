@@ -4,6 +4,7 @@ import { sourceModule } from './source-module.mjs';
 const { answerEvents, toolEvents, sse } = await import(
   await sourceModule('tests/protocol-fixtures.ts')
 );
+const { workspaceChatEvent } = await import(await sourceModule('tests/workspace-replies.ts'));
 
 // Local-only deterministic protocol fixture. Never contacts a paid provider.
 const server = http.createServer(async (request, response) => {
@@ -39,7 +40,9 @@ const server = http.createServer(async (request, response) => {
     return;
   }
   let events;
-  if (raw.includes('MOBILE_OK')) events = answerEvents(protocol, 'MOBILE_OK');
+  if (JSON.parse(raw).model === 'workspace-fixture')
+    events = [workspaceChatEvent(JSON.parse(raw).messages), '[DONE]'];
+  else if (raw.includes('MOBILE_OK')) events = answerEvents(protocol, 'MOBILE_OK');
   else if (raw.includes('四个色块')) events = answerEvents(protocol, 'red,green,blue,yellow');
   else if (raw.includes('diagnostic_echo')) {
     const marker = raw.match(/host_[a-z0-9]+/)?.[0];

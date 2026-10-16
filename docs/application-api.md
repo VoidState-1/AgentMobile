@@ -4,6 +4,8 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                             |
 | -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------- |
+| 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：删除 setMode，增加带配置修订校验的供应商排序接口。 |
+| 1.2.0    | 2026-10-16T22:42:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 补充尚未提交源码的 prepareIcon、连接 icon 和图片选择参数。           |
 | 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的 branch、类型化文件状态及 taskChangeSummary 查询。 |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 建立 AppServices 能力目录、DTO、并发预期、错误与变更规范。           |
 
@@ -69,7 +71,9 @@ RunSummary、RunDetail、RunView 与 RunRecord 分离；UI 不依赖冻结配置
 
 ### 3.4 `models`
 
-`saveConnection` 接收非秘密连接输入和单独 key 操作；留空通常保留现有凭证，remove 明确删除。`copyConnection` 不复制秘密值。`saveModel` 独立管理条目和能力/参数；`setSelection` 设置 global/project/session 默认；session 在当前业务中对应 conversationId。`setMode` 设置演示或远程模式，可按会话覆盖。
+`saveConnection` 接收非秘密连接输入和单独 key 操作；留空通常保留现有凭证，remove 明确删除。`copyConnection` 不复制秘密值。`saveModel` 独立管理条目和能力/参数；`setSelection` 设置 global/project/session 默认；session 在当前业务中对应 conversationId。`setProviderOrder(order, expectedRevision)` 原子保存供应商列表顺序，使用配置 revision 防止过期拖拽覆盖；order 必须是当前全部供应商节点的无重复排列。
+
+`prepareIcon({name, bytes})` 是本地同步校验/编码，返回 `{mediaType, base64}`，不会立即保存。`saveConnection` 的可选 icon 与连接原子持久化，设为 undefined 恢复默认；直接保存仍执行校验，限制见 [模型配置](model-providers.md)。
 
 `keyReady` 仅返回是否可用；`affectedDefaults` 支持删除影响提示；`diagnose` 执行 connection/text/tools/images 检测，connection 检测包含目录发现。它可以发网络请求，不能当作纯本地校验。`recoveryIssues` 用于凭证清理提示。
 
@@ -91,6 +95,8 @@ RunSummary、RunDetail、RunView 与 RunRecord 分离；UI 不依赖冻结配置
 `GitStatus.branch` 为实际当前分支名称，分离 HEAD 时为 `null`。`ReviewFile` 使用 `status: added | modified | deleted` 和可选 `stagedOnly`，不再用中文 `kind` 混合类型与范围；Git 工具及提案检查的差异结果同步使用这些字段。
 
 `workspace.taskChangeSummary(runId)` 返回该任务冻结前后快照的文件摘要：`path/status/stagedOnly/image` 与可选 `added/removed`。它不使用当前工作区推算历史，也不返回全文。图片、超出统计预算的文本不提供行数，UI 保留差异入口。该查询经 facade 解析 runId，统计库在 adapter 中使用，界面不直接读取 Git。
+
+图片上传复用 `io.pickFile('image')`，仅向系统/浏览器选择器提供 PNG/JPEG/WebP 类型；取消返回 undefined，结果仍是 `{name, bytes}`。普通文件导入继续调用无参数 pickFile。界面不直接访问平台文件或凭证存储。
 
 ## 4. 乐观并发与命令示例
 

@@ -347,7 +347,7 @@ describe('任务基线、保护与撤销', () => {
         prompt: '编辑',
         response: '',
         state: 'interrupted',
-        mode: 'demo',
+
         createdAt: new Date().toISOString(),
       },
       true,
@@ -406,7 +406,7 @@ describe('任务基线、保护与撤销', () => {
       prompt: '编辑',
       response: '',
       state: 'completed',
-      mode: 'demo',
+
       createdAt: new Date().toISOString(),
     });
     f.workspace.release(f.project.id, owner);
@@ -435,7 +435,7 @@ describe('任务基线、保护与撤销', () => {
       prompt: '写文档',
       response: '',
       state: 'running',
-      mode: 'demo',
+
       createdAt: new Date().toISOString(),
     };
     await f.workspace.write(f.project.id, 'a.md', Buffer.from('agent'), null, { owner });

@@ -48,7 +48,7 @@ it('根运行只构建冻结角色允许的工具，伪造未授权派发会失�
         projectId: project.id,
         conversationId: 'conversation',
         prompt: '阅读资料',
-        mode: 'demo',
+
         imageInput: false,
         agent: { ...builtinAgents[0], allowedEffects: ['read'], mayDelegate: false },
         agentSettings: defaultAgentSettings(),

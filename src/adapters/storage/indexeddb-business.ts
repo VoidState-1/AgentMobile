@@ -31,7 +31,7 @@ export async function openWebDatabase(name = 'agent-mobile-prototype'): Promise<
   const db = await new Promise<IDBDatabase>((resolve, reject) => {
     let formatMismatch = false;
     let rejected = false;
-    const request = indexedDB.open(name, 5);
+    const request = indexedDB.open(name, 6);
     request.onupgradeneeded = event => {
       if (event.oldVersion !== 0) {
         formatMismatch = true;
@@ -73,7 +73,6 @@ export async function openWebDatabase(name = 'agent-mobile-prototype'): Promise<
         'projectId',
         'conversationId',
         'kind',
-        'mode',
         'active',
         'admissionSequence',
       ]);
@@ -269,9 +268,9 @@ export async function createWebBusinessStore(db: IDBDatabase): Promise<BusinessS
       const store = db.transaction('run_headers').objectStore('run_headers');
       let index: IDBIndex;
       let prefix: IDBValidKey[];
-      if (query.projectId && query.conversationId && query.mode && query.active === false) {
+      if (query.projectId && query.conversationId && query.active === false) {
         index = store.index('history');
-        prefix = [query.projectId, query.conversationId, query.kind ?? 'root', query.mode, 0];
+        prefix = [query.projectId, query.conversationId, query.kind ?? 'root', 0];
       } else if (query.rootRunId) {
         index = store.index('root');
         prefix = [query.rootRunId];
@@ -304,7 +303,6 @@ export async function createWebBusinessStore(db: IDBDatabase): Promise<BusinessS
           const header = cursor.value as RunHeader;
           if (
             (!query.kind || header.kind === query.kind) &&
-            (!query.mode || header.mode === query.mode) &&
             (query.active === undefined || query.active === !terminalRun(header.state))
           )
             rows.push(publicRun(header));

@@ -1,9 +1,22 @@
+import { contentCodec } from '../src/adapters/storage/codec';
 import { describe, expect, it } from 'vitest';
 import type { CredentialStore, MetadataStore } from '../src/core/storage/contracts';
 import { ModelConfigurationService } from '@/application/models/configuration';
 import { configurationFingerprint, selectedModelId } from '../src/core/models/rules';
 import { defaultModelParameters } from '../src/core/models/types';
 import type { ModelEntry, ProviderConnection } from '../src/core/models/types';
+import { diagnosticImage } from '../src/adapters/model/diagnostics';
+import {
+  getProviderPreset,
+  providerPresets,
+  resolveProviderBrand,
+} from '../src/core/models/presets';
+import { providerIconMaxBytes } from '../src/core/models/provider-icon';
+import {
+  connectionKey,
+  mergeVisibleProviderOrder,
+  providerKey,
+} from '../src/core/models/provider-order';
 
 function fixture() {
   let index = 0;
@@ -32,7 +45,12 @@ function fixture() {
     },
   };
   const create = () =>
-    new ModelConfigurationService(metadata, credentials, () => 'config-id-' + ++index);
+    new ModelConfigurationService(
+      metadata,
+      credentials,
+      () => 'config-id-' + ++index,
+      contentCodec,
+    );
   return {
     records,
     keys,
@@ -84,6 +102,144 @@ function edit(model: ModelEntry) {
 }
 
 describe('多连接配置、凭证和运行快照', () => {
+  it('供应商排序原子持久化，重开保留，增删连接维护顺序，冲突和写入失败不覆盖', async () => {
+    const f = fixture();
+    const service = f.create();
+    await service.initialize();
+    const original = [...service.getSnapshot().providerOrder];
+    const reversed = [...original].reverse();
+    await service.setProviderOrder(reversed, service.getSnapshot().revision);
+    const restarted = f.create();
+    await restarted.initialize();
+    expect(restarted.getSnapshot().providerOrder).toEqual(reversed);
+    const revision = service.getSnapshot().revision;
+    const connection = await service.saveConnection(connectionInput('排序测试'));
+    expect(service.getSnapshot().providerOrder).toEqual([
+      ...reversed,
+      connectionKey(connection.id),
+    ]);
+    await expect(service.setProviderOrder(original, revision)).rejects.toThrow('列表已变化');
+    await expect(
+      service.setProviderOrder([...reversed, reversed[0]], service.getSnapshot().revision),
+    ).rejects.toThrow();
+    await expect(
+      service.setProviderOrder([...reversed, 'connection:unknown'], service.getSnapshot().revision),
+    ).rejects.toThrow();
+    await service.removeConnection(connection.id);
+    expect(service.getSnapshot().providerOrder).toEqual(reversed);
+    f.failGraph(true);
+    await expect(
+      service.setProviderOrder(original, service.getSnapshot().revision),
+    ).rejects.toThrow();
+    expect(service.getSnapshot().providerOrder).toEqual(reversed);
+  });
+
+  it('筛选排序只替换可见节点，拒绝重复或已删除节点', () => {
+    const order = ['openai', 'deepseek', 'anthropic', 'gemini'].map(providerKey);
+    expect(mergeVisibleProviderOrder(order, [order[3], order[1]])).toEqual([
+      order[0],
+      order[3],
+      order[2],
+      order[1],
+    ]);
+    expect(() => mergeVisibleProviderOrder(order, [order[0], order[0]])).toThrow();
+    expect(() => mergeVisibleProviderOrder(order, ['connection:deleted'])).toThrow();
+  });
+
+  it('图标随连接原子保存、重启、复制和清除，运行快照不携带图标', async () => {
+    const f = fixture();
+    const service = f.create();
+    await service.initialize();
+    const icon = service.prepareIcon({
+      name: 'brand.png',
+      bytes: contentCodec.decodeBase64(diagnosticImage),
+    });
+    expect(icon).toEqual({ mediaType: 'image/png', base64: diagnosticImage });
+    const connection = await service.saveConnection(
+      { ...connectionInput('图标'), icon },
+      { value: 'test-key' },
+    );
+    const model = await addModel(service, connection);
+    const lease = await service.acquireModel(model.id);
+    expect(lease.snapshot).not.toHaveProperty('icon');
+    await lease.release();
+
+    f.failGraph(true);
+    await expect(
+      service.saveConnection({ ...connection, icon: undefined }, {}, connection.revision),
+    ).rejects.toThrow();
+    expect(service.getSnapshot().connections[0].icon).toEqual(icon);
+    f.failGraph(false);
+
+    const restarted = f.create();
+    await restarted.initialize();
+    expect(restarted.getSnapshot().connections[0].icon).toEqual(icon);
+    const copied = await restarted.copyConnection(connection.id);
+    expect(copied.icon).toEqual(icon);
+    const cleared = await restarted.saveConnection(
+      { ...connection, icon: undefined },
+      {},
+      connection.revision,
+    );
+    expect(cleared.icon).toBeUndefined();
+    const reopened = f.create();
+    await reopened.initialize();
+    expect(
+      reopened.getSnapshot().connections.find(item => item.id === connection.id)?.icon,
+    ).toBeUndefined();
+    expect(reopened.getSnapshot().connections.find(item => item.id === copied.id)?.icon).toEqual(
+      icon,
+    );
+  });
+
+  it('直接保存也校验图标格式、编码和体积，不接受外部地址或伪造图片', async () => {
+    const service = fixture().create();
+    await service.initialize();
+    expect(() =>
+      service.prepareIcon({ name: 'icon.svg', bytes: new Uint8Array([1, 2, 3]) }),
+    ).toThrow('PNG / JPEG / WebP');
+    expect(() =>
+      service.prepareIcon({ name: 'large.png', bytes: new Uint8Array(providerIconMaxBytes + 1) }),
+    ).toThrow('256 KB');
+    for (const base64 of ['https://example.test/icon.png', 'AAAA', diagnosticImage + '!']) {
+      await expect(
+        service.saveConnection({
+          ...connectionInput('无效图标'),
+          icon: { mediaType: 'image/png', base64 },
+        }),
+      ).rejects.toThrow();
+    }
+    expect(service.getSnapshot().connections).toHaveLength(0);
+  });
+
+  it('常用模板有独立地址，品牌识别只接受已知主机并对未知供应商回退', () => {
+    expect(new Set(providerPresets.map(preset => preset.id)).size).toBe(providerPresets.length);
+    for (const id of [
+      'openai',
+      'deepseek',
+      'qwen',
+      'kimi',
+      'zhipu',
+      'doubao',
+      'minimax',
+      'siliconflow',
+      'openrouter',
+      'groq',
+      'mistral',
+      'xai',
+    ])
+      expect(getProviderPreset(id).id).toBe(id);
+    expect(getProviderPreset('unknown').id).toBe('custom');
+    expect(resolveProviderBrand('custom', 'https://api.openai.com/v1')).toBe('openai');
+    expect(
+      resolveProviderBrand('custom', 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1'),
+    ).toBe('qwen');
+    expect(
+      resolveProviderBrand('custom', 'https://api.openai.com.example.test/v1'),
+    ).toBeUndefined();
+    expect(resolveProviderBrand('unknown', 'invalid')).toBeUndefined();
+    expect(resolveProviderBrand('custom', 'https://third-party.test/v1')).toBeUndefined();
+  });
   it('同连接两个并行运行的旧凭证只在两个租约都释放后回收', async () => {
     const f = fixture();
     const service = f.create();

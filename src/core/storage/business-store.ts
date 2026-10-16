@@ -10,7 +10,7 @@ import type { RunHeader, RunInput, RunResult, RunWrite } from '../runs/records';
 import type { RunHeaderQuery } from '../runs/queries';
 import type { TraceNode, TraceTextChunk, TranscriptFrame, TraceWrite } from '../runs/trace-storage';
 
-export const CURRENT_DATA_FORMAT = 'agent-mobile-f4';
+export const CURRENT_DATA_FORMAT = 'agent-mobile-f5';
 export interface BusinessWriteBatch {
   metadata?: readonly MetadataEntry[];
   operations?: readonly { header: OperationHeader; expectedRevision: number }[];

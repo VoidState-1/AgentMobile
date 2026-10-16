@@ -11,16 +11,12 @@ export interface RunRequest {
 }
 /** No credential fields: the adapter closes over secrets and exposes one cleanup. */
 export interface PreparedRun {
-  launch: Pick<
-    RunLaunch,
-    'mode' | 'imageInput' | 'modelSnapshot' | 'contextTokens' | 'outputTokens'
-  >;
+  launch: Pick<RunLaunch, 'imageInput' | 'modelSnapshot' | 'contextTokens' | 'outputTokens'>;
   engine: AgentEnginePort;
   resources: Omit<RunResources, 'execution'>;
   release(): Promise<void>;
   createChild?(
     prompt: string,
-    workspace?: 'snapshot' | 'proposal',
   ): Promise<{ engine: AgentEnginePort; resources: Omit<RunResources, 'execution' | 'mcp'> }>;
 }
 export interface RunResourceFactory {

@@ -152,7 +152,7 @@ describe('长任务真实 Pi 循环', () => {
     const repository = new RunRepository(f.metadata);
     for (let index = 0; index < 8; index++)
       await repository.save({
-        schemaVersion: 3,
+        schemaVersion: 4,
         id: 'history-' + index,
         projectId: f.project.id,
         conversationId: conversation.id,
@@ -164,7 +164,7 @@ describe('长任务真实 Pi 循环', () => {
         kind: 'root',
         prompt: 'HISTORY_' + index,
         response: 'REPLY_' + index,
-        mode: 'remote',
+
         state: 'completed',
         createdAt: '2026-10-14T00:00:0' + index + 'Z',
       });

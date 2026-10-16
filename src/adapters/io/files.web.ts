@@ -2,11 +2,13 @@ import { AppError } from '@/core/errors';
 import type { WorkspaceApplication } from '@/application/workspace/service';
 import { contentLimits } from '@/core/agent/settings';
 
-export async function pickFile(): Promise<{ name: string; bytes: Uint8Array } | undefined> {
+export async function pickFile(
+  kind?: 'image',
+): Promise<{ name: string; bytes: Uint8Array } | undefined> {
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = '.txt,.md,.png,.jpg,.jpeg,.webp';
+    input.accept = kind === 'image' ? '.png,.jpg,.jpeg,.webp' : '.txt,.md,.png,.jpg,.jpeg,.webp';
     input.onchange = async () => {
       try {
         const file = input.files?.[0];

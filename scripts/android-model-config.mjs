@@ -72,8 +72,7 @@ if (!process.argv.includes('--verify-only')) {
   ]) {
     await tap('设置');
     await tap('模型与供应商');
-    await tap('添加连接');
-    await tap('自定义服务');
+    await tap('添加其他供应商');
     await fill(
       '连接名称',
       'Native-' + (protocol === 'gemini' ? 'G' : protocol === 'anthropic-messages' ? 'A' : 'C'),
@@ -123,7 +122,7 @@ await tap('返回');
 await tap('设置');
 await tap('深色');
 await tap('模型与供应商');
-await waitFor('搜索连接');
+await waitFor('搜索供应商');
 await sleep(1000);
 await screenshot('config-android-dark.png');
 await tap('返回');

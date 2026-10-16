@@ -5,9 +5,12 @@ import * as Sharing from 'expo-sharing';
 import type { WorkspaceApplication } from '@/application/workspace/service';
 import { contentLimits } from '@/core/agent/settings';
 
-export async function pickFile() {
+export async function pickFile(kind?: 'image') {
   const result = await DocumentPicker.getDocumentAsync({
-    type: ['text/plain', 'text/markdown', 'image/png', 'image/jpeg', 'image/webp'],
+    type:
+      kind === 'image'
+        ? ['image/png', 'image/jpeg', 'image/webp']
+        : ['text/plain', 'text/markdown', 'image/png', 'image/jpeg', 'image/webp'],
     copyToCacheDirectory: true,
   });
   if (result.canceled) return;

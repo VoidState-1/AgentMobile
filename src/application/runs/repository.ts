@@ -48,7 +48,7 @@ const summary = (header: RunHeader): RunSummary => ({
   parentRunId: header.parentRunId,
   kind: header.kind,
   state: header.state,
-  mode: header.mode,
+
   admissionSequence: header.admissionSequence,
   revision: header.revision,
   promptPreview: header.promptPreview,
@@ -79,7 +79,7 @@ function writeValue(run: RunRecord, previous?: RunHeader, childCount = 0): RunWr
     input: previous ? undefined : { prompt: run.prompt },
     result: { response: run.response, skillActivations: run.skillActivations },
     header: {
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: run.id,
       projectId: run.projectId,
       conversationId: run.conversationId,
@@ -90,7 +90,7 @@ function writeValue(run: RunRecord, previous?: RunHeader, childCount = 0): RunWr
       agentDefinitionId: run.agentDefinitionId,
       agentDefinitionRevision: run.agentDefinitionRevision,
       state: run.state,
-      mode: run.mode,
+
       launchSnapshotRef: run.launchSnapshotRef,
       inputSnapshotRef: run.inputSnapshotRef,
       draftRevision: run.draftRevision,
@@ -344,7 +344,7 @@ export class RunRepository {
           projectId: query.projectId,
           conversationId: query.conversationId,
           kind: 'root',
-          mode: query.mode,
+
           active: false,
           limit: query.count,
         });
@@ -380,7 +380,7 @@ export class RunRepository {
       conversationId: run.conversationId,
       kind: run.kind,
       state: run.state,
-      mode: run.mode,
+
       prompt: run.prompt,
       response: run.response,
       createdAt: run.createdAt,

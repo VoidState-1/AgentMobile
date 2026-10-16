@@ -17,7 +17,7 @@ export function runView(value: ExecutionView): RunView {
     conversationId: value.conversationId,
     kind: value.kind ?? 'root',
     state: value.state,
-    mode: value.mode,
+
     prompt: value.prompt,
     response: value.response,
     createdAt: value.createdAt,

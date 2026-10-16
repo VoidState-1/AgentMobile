@@ -43,7 +43,7 @@ async function fixture(
   const original = await workspace.readText(project.id, 'documents/notes.md');
   const runs = new RunRepository(f.metadata);
   const root: RunRecord = {
-    schemaVersion: 3,
+    schemaVersion: 4,
     id: 'root',
     rootRunId: 'root',
     kind: 'root',
@@ -54,7 +54,7 @@ async function fixture(
     prompt: '合入提案',
     response: '',
     createdAt: new Date().toISOString(),
-    mode: 'demo',
+
     agentDefinitionId: 'main',
     agentDefinitionRevision: 1,
     launchSnapshotRef: 'root',

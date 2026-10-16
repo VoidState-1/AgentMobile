@@ -6,7 +6,6 @@ import type { TranscriptFrame } from '@/core/runs/trace-storage';
 export interface HistoryQuery {
   projectId: string;
   conversationId: string;
-  mode: ExecutionView['mode'];
   count: number;
   characters: number;
 }

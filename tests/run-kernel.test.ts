@@ -85,7 +85,7 @@ async function fixture(
         },
       };
       return {
-        launch: { mode: 'demo', imageInput: false, contextTokens: 32000, outputTokens: 4096 },
+        launch: { imageInput: false, contextTokens: 32000, outputTokens: 4096 },
         engine,
         resources: { codec: contentCodec, notifications: testNotifications },
         async release() {

@@ -22,7 +22,7 @@ export function workspaceTools(context: RunToolsContext): ControlledTool[] {
     path => workspace.read(projectId, path),
   );
   return [
-    ...fileReadTools(reader, codec, settings.imageInput && settings.mode !== 'demo'),
+    ...fileReadTools(reader, codec, settings.imageInput),
 
     defineTool({
       effect: 'workspace-write',

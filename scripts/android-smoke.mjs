@@ -1,5 +1,6 @@
 import fs from 'node:fs/promises';
 import { adb, sleep, dump, nodes, waitFor, tap, screenshot, metroPort } from './android-ui.mjs';
+import { configureWorkspaceFixture } from './android-fixture-model.mjs';
 
 const projectName = 'NativeSmoke-' + Date.now();
 await fs.mkdir('work', { recursive: true });
@@ -7,9 +8,7 @@ if ((await dump()).includes('Continue')) await tap('Continue');
 if ((await dump()).includes('Go home')) await tap('Close');
 await tap('设置');
 await tap('浅色');
-await tap('模型与供应商');
-await tap('运行模式：演示模式');
-await tap('返回');
+await configureWorkspaceFixture();
 if ((await dump()).includes('项目与对话') && !(await dump()).includes('新建项目'))
   await tap('项目与对话');
 await tap('新建项目');

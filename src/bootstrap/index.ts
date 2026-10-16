@@ -43,6 +43,7 @@ async function initialize() {
     storage.metadata,
     storage.credentials,
     Crypto.randomUUID,
+    contentCodec,
   );
   await models.initialize();
   const agentSettings = new AgentSettingsService(storage.metadata);

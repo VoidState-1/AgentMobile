@@ -12,7 +12,7 @@ import { SkillService } from '../src/application/skills/library';
 import { GitSkillRepository } from '../src/adapters/skills/repository';
 import { runResourceFactory } from '../src/adapters/agent/resources';
 import { PiEngineAdapter } from '../src/adapters/agent/pi-engine';
-import { demoTransport } from '../src/adapters/agent/demo';
+import { workspaceFixtureTransport } from './fixture-transport';
 import { protocolModel, protocolTransport } from '../src/adapters/model/protocols';
 import { contentCodec } from '../src/adapters/storage/codec';
 import type { WorkspaceApplication } from '../src/application/workspace/service';
@@ -34,7 +34,7 @@ interface RuntimeOptions {
   files?: HostFileSystem;
 }
 
-/** Integration fixtures use the same queue, budget and v2 persistence as bootstrap. */
+/** Integration fixtures use the same queue, budget and current persistence as bootstrap. */
 export async function createTestRuntime(
   workspace: WorkspaceApplication,
   options: RuntimeOptions = {},
@@ -53,7 +53,8 @@ export async function createTestRuntime(
   if (!factory) {
     const credentials = { get: async () => '', set: async () => {} };
     const models =
-      options.models ?? new ModelConfigurationService(workspace.metadata, credentials, randomUUID);
+      options.models ??
+      new ModelConfigurationService(workspace.metadata, credentials, randomUUID, contentCodec);
     if (!options.models) await models.initialize();
     const configuration = new McpConfigurationService(workspace.metadata, credentials, randomUUID);
     if (!options.mcp) await configuration.initialize();
@@ -107,10 +108,9 @@ export async function startTestRun(
               request.settings.limits.requestTimeoutMs,
             ),
           }
-        : demoTransport(request.prompt);
+        : workspaceFixtureTransport(request.prompt);
       return {
         launch: {
-          mode: model ? 'remote' : 'demo',
           imageInput: model?.parameters.allowImages ?? false,
           modelSnapshot: model,
           contextTokens: transport.model.contextWindow,

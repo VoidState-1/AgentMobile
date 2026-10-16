@@ -3,6 +3,9 @@ import { SerialQueue } from '@/core/serial-queue';
 import { AppError } from '@/core/errors';
 import { Signal } from '@/core/signal';
 import type { CredentialStore, MetadataStore } from '@/core/storage/contracts';
+import type { ContentCodec } from '@/core/storage/codec';
+import { createProviderIcon, validateProviderIcon } from '@/core/models/provider-icon';
+import { orderedProviderKeys, providerKeys } from '@/core/models/provider-order';
 import {
   configurationFingerprint,
   normalizedServiceAddress,
@@ -49,15 +52,20 @@ export class ModelConfigurationService {
     private metadata: MetadataStore,
     private credentials: CredentialStore,
     private id: () => string,
+    private codec: ContentCodec,
     private now: () => string = () => new Date().toISOString(),
   ) {}
 
   getSnapshot = (): ModelConfiguration => this.state;
+  prepareIcon(file: { name: string; bytes: Uint8Array }) {
+    return createProviderIcon(file, this.codec);
+  }
   subscribe = (listener: () => void): (() => void) => this.signal.subscribe(listener);
   private async exclusive<T>(work: () => Promise<T>): Promise<T> {
     return this.queue.run(work);
   }
   private async persist(next: ModelConfiguration) {
+    next.providerOrder = orderedProviderKeys(next.providerOrder, next.connections);
     next.revision = this.state.revision + 1;
     await this.metadata.put('model-config', 'configuration', next);
     this.state = freeze(clone(next));
@@ -67,11 +75,25 @@ export class ModelConfigurationService {
     await this.exclusive(async () => {
       const saved = await this.metadata.get<ModelConfiguration>('model-config', 'configuration');
       if (saved) {
-        if (saved.schemaVersion !== 1)
+        if (saved.schemaVersion !== 2)
           throw new AppError('STORAGE', '模型配置格式需要更新应用后读取。');
         this.state = freeze(clone(saved));
       } else await this.persist(emptyModelConfiguration());
       await this.cleanupCredentials();
+    });
+  }
+  async setProviderOrder(order: string[], expectedRevision: number): Promise<void> {
+    const requested = [...order];
+    await this.exclusive(async () => {
+      const available = providerKeys(this.state.connections);
+      if (
+        expectedRevision !== this.state.revision ||
+        requested.length !== available.length ||
+        new Set(requested).size !== requested.length ||
+        requested.some(key => !available.includes(key))
+      )
+        throw new AppError('CONFLICT', '供应商列表已变化，请重新拖拽排序。');
+      await this.persist({ ...clone(this.state), providerOrder: requested });
     });
   }
   private referenced(ref: string): boolean {
@@ -121,6 +143,7 @@ export class ModelConfigurationService {
         catalogAt: previous?.catalogAt,
       };
       validateConnectionEntity(connection);
+      validateProviderIcon(connection.icon, this.codec);
       const bindingChanged =
         previous &&
         (serviceOrigin(previous.baseUrl) !== serviceOrigin(connection.baseUrl) ||
@@ -410,26 +433,10 @@ export class ModelConfigurationService {
         const map = scope === 'project' ? next.defaults.projects : next.defaults.sessions;
         if (modelId) map[ownerId] = modelId;
         else delete map[ownerId];
-        if (scope === 'session') {
-          next.sessionModes ??= {};
-          if (modelId) next.sessionModes[ownerId] = 'remote';
-          else delete next.sessionModes[ownerId];
-        }
       }
       if (modelId) {
-        next.mode = 'remote';
         next.recent = [modelId, ...next.recent.filter(id => id !== modelId)].slice(0, 8);
       }
-      await this.persist(next);
-    });
-  }
-  async setMode(mode: ModelConfiguration['mode'], sessionId?: string): Promise<void> {
-    await this.exclusive(async () => {
-      const next = clone(this.state);
-      if (sessionId) {
-        next.sessionModes ??= {};
-        next.sessionModes[sessionId] = mode;
-      } else next.mode = mode;
       await this.persist(next);
     });
   }

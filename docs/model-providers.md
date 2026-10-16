@@ -2,21 +2,37 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                      |
-| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------- |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理连接/模型配置、凭证租约、三协议编码解码、公开推理及诊断。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                            |
+| -------- | ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录配置 schema 2、供应商顺序持久化、凭证就绪状态与模型必选行为。 |
+| 1.1.0    | 2026-10-16T22:42:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 补充尚未提交源码的模板注册表、图标校验及与执行配置的隔离。                          |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理连接/模型配置、凭证租约、三协议编码解码、公开推理及诊断。                       |
 
 ## 1. 连接与模型分离
 
-ProviderConnection 表示一个服务连接：presetId、protocol、baseUrl、auth、compatibility、apiVersion、enabled、revision 及诊断记录。ModelEntry 属于连接，保存 apiId、显示名、enabled/favorite、能力证据、参数、目录状态、限制与独立 revision。
+ProviderConnection 表示一个服务连接：presetId、protocol、baseUrl、auth、compatibility、apiVersion、enabled、可选 icon、revision 及诊断记录。ModelEntry 属于连接，保存 apiId、显示名、enabled/favorite、能力证据、参数、目录状态、限制与独立 revision。
 
-UI 显示名与请求模型 ID 不同；不通过名字包含某个词自动判断协议或推理能力。预设为 deepseek/anthropic/gemini/custom，实际协议为 chat-completions/anthropic-messages/gemini。DeepSeek compatibility 是明确选项，不从 host 或 modelId 暗中猜测。
+UI 显示名与请求模型 ID 不同；不通过名字包含某个词自动判断协议或推理能力。预设注册表包含 OpenAI、DeepSeek、Anthropic、Gemini、通义千问、Kimi、智谱、豆包、MiniMax、硅基流动、OpenRouter、Groq、Mistral、xAI 及 custom；实际协议仍为 chat-completions/anthropic-messages/gemini。模板只预填基础地址与协议，模型能力和可用性仍通过实际配置/诊断确认。DeepSeek compatibility 是明确选项，不从 host 或 modelId 暗中猜测。
 
-配置 schemaVersion=1，整个 ModelConfiguration graph 保存到 `model-config/configuration`，服务串行修改、保存成功后发布冻结快照。
+配置 schemaVersion=2，整个 ModelConfiguration graph 保存到 `model-config/configuration`，服务串行修改、保存成功后发布冻结快照。
+
+### 1.1 供应商列表与排序
+
+providerOrder 持久化完整节点顺序：模板为 `preset:<id>`，其他供应商为 `connection:<id>`。新节点追加、已删除节点移除；模板始终保留。setProviderOrder 校验当前配置 revision 与全量排列后原子保存；搜索状态下只置换可见节点，隐藏节点保留原槽位。
+
+列表只在凭证可用（或 auth=none）时显示已保存圆点与模型数量；数量在圆点左侧右对齐。缺少凭证的配置仍可重新打开补填，但列表按未保存连接显示，不展示模型数量、协议或凭证提示。圆点表示配置已就绪，不代表网络健康检测通过。
+
+### 1.2 供应商图标
+
+ProviderIcon 为 `{mediaType, base64}`，可选地附在 ProviderConnection/ConnectionInput。prepareIcon 经注入的 ContentCodec 编码，复用工作区图片头/尺寸校验，限 PNG/JPEG/WebP 和 256 KB；saveConnection 仍独立校验 MIME、Base64 正规编码、大小及图片结构，不能绕过准备步骤传入外部地址或无效图片。
+
+图标与连接保存在同一个原子元数据记录中，不保存系统路径、临时 URI 或独立图片文件。复制连接保留图标；删除连接一起移除；icon 设为 undefined 表示恢复自动品牌/默认图标。图标不进入 configurationFingerprint、ModelRunSnapshot 或模型请求，修改图标不改变诊断依赖的协议指纹。
+
+resolveProviderBrand 只用于界面：明确模板优先，否则对标准化主机名做精确匹配（含源码列出的地区域名）。不接受子串匹配，不通过此结果推断协议、工具或推理能力。
 
 ## 2. 选择优先级与失效行为
 
-模型默认优先级：会话 sessions → 项目 projects → global。mode 可全局设置，也可由 sessionModes 覆盖。当前 sessionId 对应业务 conversationId。
+模型默认优先级：会话 sessions → 项目 projects → global。所有任务都使用选定的模型服务，未选择模型或缺少凭证时拒绝启动并保留草稿。当前 sessionId 对应业务 conversationId。
 
 删除连接会删除其模型条目；删除模型/连接保留失效的显式 pin。这样后续运行会要求重新选择，不会静默跳到另一个供应商。清除某层 pin 是用户明确恢复继承的动作。
 

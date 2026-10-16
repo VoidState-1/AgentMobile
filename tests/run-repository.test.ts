@@ -14,7 +14,7 @@ const runFixture = (id: string, createdAt = '2026-10-14T00:00:00Z'): ExecutionVi
   conversationId: 'conversation',
   prompt: '当前目标',
   response: '当前结果',
-  mode: 'demo',
+
   state: 'completed',
   baseCommit: 'head',
   createdAt,
@@ -22,7 +22,7 @@ const runFixture = (id: string, createdAt = '2026-10-14T00:00:00Z'): ExecutionVi
 const rootRun = (): RunRecord => ({
   ...runFixture('root'),
   conversationId: 'conversation',
-  schemaVersion: 3,
+  schemaVersion: 4,
   rootRunId: 'root',
   kind: 'root',
   depth: 0,

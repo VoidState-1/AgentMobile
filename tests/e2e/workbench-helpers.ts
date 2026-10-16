@@ -6,6 +6,10 @@ export async function openProjectTree(page: Page) {
   if (!(await page.getByTestId('project-tree').isVisible()))
     await page.getByRole('button', { name: '项目与对话', exact: true }).click();
 }
+export async function closeProjectTree(page: Page) {
+  const close = page.getByRole('button', { name: '收起侧栏', exact: true });
+  if (await close.isVisible()) await close.click();
+}
 export async function selectProject(page: Page, name: string) {
   await openProjectTree(page);
   const project = page
@@ -17,6 +21,7 @@ export async function selectProject(page: Page, name: string) {
     .getByRole('button', { name: /^切换对话 / })
     .first()
     .click();
+  await closeProjectTree(page);
 }
 export async function conversationActions(page: Page, title: string) {
   await openProjectTree(page);

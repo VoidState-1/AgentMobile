@@ -41,7 +41,7 @@ it('快照和运行归属不读取历史正文，序号在摘要/正文同事务
         prompt: '',
         response: '',
         state: 'completed',
-        mode: 'demo',
+
         createdAt: new Date().toISOString(),
         baseCommit: baseline.head,
         baseSnapshot: baseline.working,

@@ -59,6 +59,7 @@ test('两个项目并行，当前对话停止只取消自身；其他项目的�
   expect(JSON.stringify(requests[0])).not.toContain('TASK_B');
   expect(JSON.stringify(requests[1])).not.toContain('TASK_A');
   await selectProject(page, '并行甲');
+  await expect(page.getByText('TASK_A完成', { exact: true })).toBeVisible();
   await page.reload();
   await expect(page.getByText('TASK_A完成', { exact: true })).toBeVisible();
 });

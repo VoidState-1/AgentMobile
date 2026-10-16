@@ -133,7 +133,7 @@ export class RunKernel {
     const settings = clone(this.settings.getSnapshot() ?? defaultAgentSettings());
     validateAgentSettings(settings);
     const record: RunRecord = {
-      schemaVersion: 3,
+      schemaVersion: 4,
       id: runId,
       rootRunId: runId,
       kind: 'root',
@@ -145,7 +145,6 @@ export class RunKernel {
       conversationId,
       draftRevision,
       prompt,
-      mode: 'demo',
       agentSettingsSnapshot: settings,
       state: 'queued',
       response: '',
@@ -178,7 +177,6 @@ export class RunKernel {
         });
         if (entry.stop.signal.aborted) throw new AppError('CANCELLED', '任务已取消，草稿已保留。');
         Object.assign(record, {
-          mode: entry.prepared.launch.mode,
           modelSnapshot: entry.prepared.launch.modelSnapshot,
           mcpSnapshot: entry.prepared.resources.mcp?.snapshots,
           skillsSnapshot: entry.prepared.resources.skills?.snapshots,
@@ -346,7 +344,7 @@ export class RunKernel {
               acquire: signal =>
                 this.requests.acquire(
                   record.rootRunId,
-                  record.modelSnapshot?.connectionId ?? 'demo',
+                  record.modelSnapshot?.connectionId ?? record.rootRunId,
                   signal ?? entry.stop.signal,
                 ),
               reserve: resource => budget.reserve(record.id, resource),

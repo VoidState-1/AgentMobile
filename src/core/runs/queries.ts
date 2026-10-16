@@ -8,7 +8,6 @@ export interface RunDetail {
   conversationId: string;
   kind: 'root' | 'child';
   state: RunState;
-  mode: 'demo' | 'remote';
   prompt: string;
   response: string;
   createdAt: string;
@@ -55,7 +54,6 @@ export interface RunSummary {
   parentRunId?: string;
   kind: 'root' | 'child';
   state: RunState;
-  mode: 'demo' | 'remote';
   admissionSequence: number;
   revision: number;
   promptPreview: string;
@@ -76,7 +74,6 @@ export interface RunHeaderQuery {
   rootRunId?: string;
   kind?: 'root' | 'child';
   active?: boolean;
-  mode?: 'demo' | 'remote';
   highWater?: number;
   beforeSequence?: number;
   limit: number;

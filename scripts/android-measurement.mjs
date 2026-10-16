@@ -170,7 +170,7 @@ async function seed(spec) {
           : [];
       await repository.save(
         {
-          schemaVersion: 3,
+          schemaVersion: 4,
           id,
           projectId: project.id,
           conversationId: conversation.id,
@@ -181,7 +181,7 @@ async function seed(spec) {
           agentDefinitionRevision: 1,
           launchSnapshotRef: id + '-launch',
           state: 'completed',
-          mode: 'demo',
+
           prompt: 'Native measurement ' + index,
           response:
             spec.large && index === spec.runs - 1

@@ -42,7 +42,7 @@ export function Exchange({
           conversationId: child.conversationId,
           kind: 'child',
           state: child.state,
-          mode: child.mode,
+
           prompt: child.promptPreview,
           response: '',
           createdAt: child.createdAt,
@@ -102,7 +102,7 @@ export function Exchange({
           {runStateLabels[task.state]}
         </T>
         <T tone="muted" numberOfLines={1} variant="meta" style={{ flex: 1 }}>
-          {task.mode === 'demo' ? '演示模式' : (task.modelName ?? '模型未记录')}
+          {task.modelName ?? '模型未记录'}
         </T>
         <T tone="muted" variant="meta">
           {dateLabel(task.createdAt)}

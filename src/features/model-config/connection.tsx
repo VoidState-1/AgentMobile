@@ -1,6 +1,6 @@
 import { useDraftGuard } from '@/shared/use-draft-guard';
 import type { ModelsApi as ModelConfigurationService } from '@/application/services';
-import { protocolNames, providerPresets } from '@/core/models/presets';
+import { getProviderPreset, protocolNames } from '@/core/models/presets';
 import { serviceOrigin } from '@/core/models/rules';
 import type { ProviderConnection, ProviderPresetId } from '@/core/models/types';
 import { useWorkbenchTheme } from '@/shared/theme';
@@ -9,8 +9,8 @@ import { CredentialField } from '@/shared/ui/credential-field';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { FormFooter } from '@/shared/ui/feedback';
 import { ConfigPage, Loading, Section, Toggle } from '@/shared/ui/forms';
-import { ChevronRight, Plus } from '@/shared/ui/icons';
-import { Button, Field, T } from '@/shared/ui/primitives';
+import { ChevronRight, Plus, RotateCcw, Upload } from '@/shared/ui/icons';
+import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
 import { SegmentedControl, ViewTabs } from '@/shared/ui/selection';
 import { ConfirmSheet } from '@/shared/ui/sheets';
 import { useLocalSearchParams, useRouter } from 'expo-router';
@@ -18,6 +18,7 @@ import { useEffect, useRef, useState } from 'react';
 import { FlatList, View } from 'react-native';
 import { CheckResult } from './check-result';
 import { useModelConfiguration, type ModelConfigurationController } from './use-configuration';
+import { ProviderIcon } from './provider-icon';
 
 type Draft = Parameters<ModelConfigurationService['saveConnection']>[0];
 const edit = (value: ProviderConnection): Draft => ({
@@ -30,6 +31,7 @@ const edit = (value: ProviderConnection): Draft => ({
   apiVersion: value.apiVersion,
   auth: value.auth,
   enabled: value.enabled,
+  icon: value.icon,
 });
 
 export function ConnectionScreen() {
@@ -70,7 +72,7 @@ function ConnectionEditor({
   const { runtime, config, busy, error, action } = controller;
   const router = useRouter();
   const theme = useWorkbenchTheme();
-  const template = providerPresets.find(p => p.id === preset) ?? providerPresets[3];
+  const template = getProviderPreset(preset);
   const initial: Draft = connection
     ? edit(connection)
     : {
@@ -182,6 +184,31 @@ function ConnectionEditor({
         ListHeaderComponent={
           <View style={{ gap: 8, marginBottom: 4 }}>
             <Section title="连接信息">
+              <View style={{ flexDirection: 'row', alignItems: 'center' }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
+                  <ActionRow
+                    label="上传供应商图标"
+                    title="供应商图标"
+                    leading={<ProviderIcon {...draft} size={32} />}
+                    trailing={<Upload size={17} color={theme.secondary} />}
+                    disabled={busy}
+                    onPress={() => {
+                      void action(async () => {
+                        const file = await runtime!.io.pickFile('image');
+                        if (file) update({ icon: runtime!.models.prepareIcon(file) });
+                      });
+                    }}
+                  />
+                </View>
+                {draft.icon && (
+                  <IconButton
+                    icon={RotateCcw}
+                    label="恢复默认供应商图标"
+                    disabled={busy}
+                    onPress={() => update({ icon: undefined })}
+                  />
+                )}
+              </View>
               <Field
                 label="连接名称"
                 value={draft.name}

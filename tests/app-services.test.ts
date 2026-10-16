@@ -36,7 +36,12 @@ async function fixture() {
   };
   const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
   const project = await workspace.create('API');
-  const models = new ModelConfigurationService(storage.metadata, credentials, randomUUID);
+  const models = new ModelConfigurationService(
+    storage.metadata,
+    credentials,
+    randomUUID,
+    contentCodec,
+  );
   await models.initialize();
   const conversations = new ConversationService(storage.metadata, randomUUID);
   await conversations.initialize([project]);
@@ -156,8 +161,10 @@ it('视图订阅者异常不会把已保存的模型设置或对话变成失败�
   api.models.subscribe(() => {
     throw new Error('UI failed');
   });
-  await api.models.setMode('remote');
-  expect(api.models.getSnapshot().mode).toBe('remote');
+  const configuration = api.models.getSnapshot();
+  const order = [...configuration.providerOrder].reverse();
+  await api.models.setProviderOrder(order, configuration.revision);
+  expect(api.models.getSnapshot().providerOrder).toEqual(order);
   api.conversations.subscribe(() => {
     throw new Error('UI failed');
   });

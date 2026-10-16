@@ -235,7 +235,7 @@ try {
             : [];
         await repository.save(
           {
-            schemaVersion: 3,
+            schemaVersion: 4,
             id,
             projectId: project.id,
             conversationId: conversation.id,
@@ -246,7 +246,7 @@ try {
             agentDefinitionRevision: 1,
             launchSnapshotRef: id + '-launch',
             state: 'completed',
-            mode: 'demo',
+
             prompt: '测量运行 ' + index,
             response:
               spec.large && index === spec.runs - 1

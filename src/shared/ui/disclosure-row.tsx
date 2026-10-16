@@ -1,6 +1,13 @@
 import { useWorkbenchTheme, workbenchMetrics } from '@/shared/theme';
 import type { ReactNode } from 'react';
-import { Pressable, StyleSheet, View, type StyleProp, type ViewStyle } from 'react-native';
+import {
+  Pressable,
+  StyleSheet,
+  View,
+  type PressableProps,
+  type StyleProp,
+  type ViewStyle,
+} from 'react-native';
 import { ChevronDown, ChevronRight } from './icons';
 
 export function DisclosureRow({
@@ -12,6 +19,9 @@ export function DisclosureRow({
   children,
   disabled,
   style,
+  onLongPress,
+  accessibilityActions,
+  onAccessibilityAction,
 }: {
   label: string;
   expanded: boolean;
@@ -21,6 +31,9 @@ export function DisclosureRow({
   children: ReactNode;
   disabled?: boolean;
   style?: StyleProp<ViewStyle>;
+  onLongPress?: () => void;
+  accessibilityActions?: PressableProps['accessibilityActions'];
+  onAccessibilityAction?: PressableProps['onAccessibilityAction'];
 }) {
   const theme = useWorkbenchTheme();
   const Chevron = expanded ? ChevronDown : ChevronRight;
@@ -32,6 +45,9 @@ export function DisclosureRow({
       aria-expanded={expanded}
       disabled={disabled}
       onPress={onPress}
+      onLongPress={onLongPress}
+      accessibilityActions={accessibilityActions}
+      onAccessibilityAction={onAccessibilityAction}
       style={({ pressed }) => [
         styles.row,
         { backgroundColor: pressed ? theme.inset : 'transparent', opacity: disabled ? 0.4 : 1 },

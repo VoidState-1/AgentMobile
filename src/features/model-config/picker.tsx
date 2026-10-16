@@ -1,5 +1,5 @@
 import type { ModelsApi as ModelConfigurationService } from '@/application/services';
-import { selectedModelId, selectedModelMode } from '@/core/models/rules';
+import { selectedModelId } from '@/core/models/rules';
 import type { ModelConfiguration } from '@/core/models/types';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { ActionRow } from '@/shared/ui/action-row';
@@ -11,6 +11,7 @@ import { ModalFrame } from '@/shared/ui/sheets';
 import { useAction } from '@/shared/use-action';
 import { useState } from 'react';
 import { FlatList, View } from 'react-native';
+import { ProviderIcon } from './provider-icon';
 
 export function ModelPicker({
   service,
@@ -32,7 +33,6 @@ export function ModelPicker({
   const [filter, setFilter] = useState<'all' | 'favorite'>('all');
   const { busy, error, action } = useAction();
   const selected = selectedModelId(configuration, projectId, conversationId);
-  const mode = selectedModelMode(configuration, conversationId);
   const models = configuration.models
     .filter(
       model =>
@@ -69,29 +69,18 @@ export function ModelPicker({
       busy={busy}
       footer={
         <View style={{ gap: 6 }}>
-          {conversationId &&
-            (configuration.defaults.sessions[conversationId] ||
-              configuration.sessionModes?.[conversationId]) && (
-              <Button
-                label="使用项目或全局默认"
-                compact
-                variant="ghost"
-                disabled={busy}
-                onPress={() => {
-                  void change(() => service.setSelection('session', undefined, conversationId));
-                }}
-              />
-            )}
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          {conversationId && configuration.defaults.sessions[conversationId] && (
             <Button
-              label="演示模式"
-              variant="secondary"
+              label="使用项目或全局默认"
+              compact
+              variant="ghost"
               disabled={busy}
-              style={{ flex: 1 }}
               onPress={() => {
-                void change(() => service.setMode('demo', conversationId));
+                void change(() => service.setSelection('session', undefined, conversationId));
               }}
             />
+          )}
+          <View style={{ flexDirection: 'row', gap: 8 }}>
             <Button label="管理模型" style={{ flex: 1 }} disabled={busy} onPress={onManage} />
           </View>
         </View>
@@ -131,40 +120,35 @@ export function ModelPicker({
             title={search || filter === 'favorite' ? '没有匹配的模型' : '暂无可用模型'}
           />
         }
-        renderItem={({ item }) => (
-          <ActionRow
-            label={
-              '选择模型 ' +
-              (configuration.connections.find(c => c.id === item.connectionId)?.name ?? '') +
-              ' · ' +
-              item.name
-            }
-            title={(item.favorite ? '★ ' : '') + item.name}
-            description={
-              (configuration.connections.find(c => c.id === item.connectionId)?.name ?? '') +
-              ' · ' +
-              (item.capabilities.tools.support === 'unknown' ? '工具未验证' : '支持工具') +
-              ' · ' +
-              (item.parameters.allowImages ? '图片已开启' : '仅文字')
-            }
-            disabled={busy}
-            selected={mode === 'remote' && selected === item.id}
-            trailing={
-              mode === 'remote' && selected === item.id ? (
-                <Check size={17} color={theme.accent} />
-              ) : undefined
-            }
-            onPress={() => {
-              void change(() =>
-                service.setSelection(
-                  conversationId ? 'session' : 'global',
-                  item.id,
-                  conversationId,
-                ),
-              );
-            }}
-          />
-        )}
+        renderItem={({ item }) => {
+          const connection = configuration.connections.find(c => c.id === item.connectionId);
+          return (
+            <ActionRow
+              label={'选择模型 ' + (connection?.name ?? '') + ' · ' + item.name}
+              title={(item.favorite ? '★ ' : '') + item.name}
+              description={
+                (connection?.name ?? '') +
+                ' · ' +
+                (item.capabilities.tools.support === 'unknown' ? '工具未验证' : '支持工具') +
+                ' · ' +
+                (item.parameters.allowImages ? '图片已开启' : '仅文字')
+              }
+              disabled={busy}
+              leading={<ProviderIcon {...connection} size={24} />}
+              selected={selected === item.id}
+              trailing={selected === item.id ? <Check size={17} color={theme.accent} /> : undefined}
+              onPress={() => {
+                void change(() =>
+                  service.setSelection(
+                    conversationId ? 'session' : 'global',
+                    item.id,
+                    conversationId,
+                  ),
+                );
+              }}
+            />
+          );
+        }}
       />
     </ModalFrame>
   );

@@ -15,6 +15,7 @@ import type {
   ModelConfiguration,
   ConnectionInput,
   ProviderConnection,
+  ProviderIcon,
   ModelInput,
   ModelEntry,
 } from '@/core/models/types';
@@ -117,6 +118,8 @@ export interface ModelsApi {
   readonly recoveryIssues: readonly string[];
   getSnapshot(): ModelConfiguration;
   subscribe(listener: () => void): () => void;
+  prepareIcon(file: { name: string; bytes: Uint8Array }): ProviderIcon;
+  setProviderOrder(order: string[], revision: number): Promise<void>;
   saveConnection(
     input: ConnectionInput,
     key?: { value?: string; remove?: boolean },
@@ -132,7 +135,6 @@ export interface ModelsApi {
     modelId: string | undefined,
     ownerId?: string,
   ): Promise<void>;
-  setMode(mode: 'demo' | 'remote', sessionId?: string): Promise<void>;
   affectedDefaults(connectionId: string): number;
   diagnose(
     connectionId: string,
@@ -248,7 +250,7 @@ export interface AppServices {
   preferences: PreferencesApi;
   runs: RunsApi;
   io: {
-    pickFile(): Promise<{ name: string; bytes: Uint8Array } | undefined>;
+    pickFile(kind?: 'image'): Promise<{ name: string; bytes: Uint8Array } | undefined>;
     pickSkillPackage(): Promise<{ name: string; bytes: Uint8Array } | undefined>;
     exportFile(projectId: string, path: string): Promise<void>;
     exportSkill(name: string, commit: string): Promise<void>;

@@ -56,14 +56,13 @@ export function writeRun(db, value, launch) {
     error: fields.error ? { code: 'UNKNOWN', message: fields.error } : undefined,
   };
   const active = ['completed', 'cancelled', 'failed', 'interrupted'].includes(header.state) ? 0 : 1;
-  db.prepare('INSERT INTO run_headers VALUES (?,?,?,?,?,?,?,?,?,?)').run(
+  db.prepare('INSERT INTO run_headers VALUES (?,?,?,?,?,?,?,?,?)').run(
     header.id,
     sequence,
     header.projectId,
     header.conversationId,
     header.rootRunId,
     header.kind,
-    header.mode,
     active,
     1,
     JSON.stringify(header),

@@ -53,7 +53,7 @@ export function skillsTools(context: RunToolsContext): ControlledTool[] {
                 args.path,
                 args.offset ?? 0,
                 args.length ?? 12_000,
-                settings.imageInput && settings.mode !== 'demo',
+                settings.imageInput,
                 signal,
               );
             },

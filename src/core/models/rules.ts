@@ -96,12 +96,6 @@ export function selectedModelId(
     state.defaults.global
   );
 }
-export function selectedModelMode(
-  state: ModelConfiguration,
-  sessionId?: string,
-): ModelConfiguration['mode'] {
-  return (sessionId && state.sessionModes?.[sessionId]) || state.mode;
-}
 export function configurationFingerprint(
   connection: ProviderConnection,
   model?: ModelEntry,

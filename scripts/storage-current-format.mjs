@@ -124,7 +124,7 @@ try {
     'summary paging lost',
   );
   const runHeader = id => ({
-    schemaVersion: 3,
+    schemaVersion: 4,
     id,
     projectId: 'project',
     conversationId: 'conversation',
@@ -135,7 +135,7 @@ try {
     agentDefinitionRevision: 1,
     launchSnapshotRef: id,
     state: 'queued',
-    mode: 'demo',
+
     createdAt: '2026-10-14',
     promptPreview: id,
     responsePreview: '',
@@ -362,7 +362,7 @@ try {
       if (touchedStores.some(names => names !== 'operation_headers'))
         throw new Error('summary query read body store');
       const header = id => ({
-        schemaVersion: 3,
+        schemaVersion: 4,
         id,
         projectId: 'project',
         conversationId: 'conversation',
@@ -373,7 +373,7 @@ try {
         agentDefinitionRevision: 1,
         launchSnapshotRef: id,
         state: 'queued',
-        mode: 'demo',
+
         createdAt: '2026-10-14',
         promptPreview: id,
         responsePreview: '',

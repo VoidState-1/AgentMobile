@@ -21,7 +21,6 @@ export interface RunLaunch {
   projectId: string;
   conversationId: string;
   prompt: string;
-  mode: 'demo' | 'remote';
   imageInput: boolean;
   modelSnapshot?: ModelRunSnapshot;
   agentSettings: AgentSettings;
@@ -87,7 +86,6 @@ export async function startRun(
     const history = await persistence.history({
       projectId,
       conversationId,
-      mode: launch.mode,
       count: limits.historyTasks,
       characters: historyCharacters,
     });
@@ -98,7 +96,6 @@ export async function startRun(
       conversationId,
       draftRevision: launch.draftRevision,
       prompt,
-      mode: launch.mode,
       modelSnapshot: snapshot,
       agentSettingsSnapshot: agentSettings,
       mcpSnapshot: mcpRun?.snapshots,

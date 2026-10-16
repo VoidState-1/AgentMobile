@@ -82,7 +82,6 @@ export async function testStorage() {
             (!query.conversationId || header.conversationId === query.conversationId) &&
             (!query.rootRunId || header.rootRunId === query.rootRunId) &&
             (!query.kind || header.kind === query.kind) &&
-            (!query.mode || header.mode === query.mode) &&
             (query.active === undefined || query.active === !terminalRun(header.state)) &&
             (query.highWater === undefined || header.admissionSequence <= query.highWater) &&
             (query.beforeSequence === undefined || header.admissionSequence < query.beforeSequence),

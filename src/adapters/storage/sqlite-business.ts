@@ -39,10 +39,10 @@ CREATE TABLE operation_bodies (namespace TEXT NOT NULL, project_id TEXT NOT NULL
   FOREIGN KEY(namespace,project_id,id) REFERENCES operation_headers(namespace,project_id,id));
 CREATE TABLE operation_counters (namespace TEXT NOT NULL, project_id TEXT NOT NULL, sequence INTEGER NOT NULL, PRIMARY KEY(namespace,project_id));
 CREATE TABLE run_headers (id TEXT PRIMARY KEY, admission_sequence INTEGER NOT NULL UNIQUE, project_id TEXT NOT NULL, conversation_id TEXT NOT NULL,
-  root_run_id TEXT NOT NULL, kind TEXT NOT NULL, mode TEXT NOT NULL, active INTEGER NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL);
+  root_run_id TEXT NOT NULL, kind TEXT NOT NULL, active INTEGER NOT NULL, revision INTEGER NOT NULL, payload TEXT NOT NULL);
 CREATE INDEX run_project ON run_headers(project_id,kind,admission_sequence DESC);
 CREATE INDEX run_conversation ON run_headers(project_id,conversation_id,kind,admission_sequence DESC);
-CREATE INDEX run_history ON run_headers(project_id,conversation_id,kind,mode,active,admission_sequence DESC);
+CREATE INDEX run_history ON run_headers(project_id,conversation_id,kind,active,admission_sequence DESC);
 CREATE INDEX run_root ON run_headers(root_run_id,admission_sequence);
 CREATE INDEX run_active ON run_headers(active,admission_sequence);
 CREATE TABLE run_inputs (id TEXT PRIMARY KEY REFERENCES run_headers(id), payload TEXT NOT NULL);
@@ -52,7 +52,7 @@ CREATE TABLE trace_nodes (id TEXT PRIMARY KEY, run_id TEXT NOT NULL REFERENCES r
 CREATE TABLE trace_text_chunks (node_id TEXT NOT NULL REFERENCES trace_nodes(id), ordinal INTEGER NOT NULL, start_offset INTEGER NOT NULL, characters INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(node_id,ordinal));
 CREATE INDEX trace_text_offset ON trace_text_chunks(node_id,start_offset);
 CREATE TABLE transcript_frames (run_id TEXT NOT NULL REFERENCES run_headers(id), ordinal INTEGER NOT NULL, payload TEXT NOT NULL, PRIMARY KEY(run_id,ordinal));
-PRAGMA user_version = 5;
+PRAGMA user_version = 6;
 `;
 const scopeArgs = (scope: JournalScope, id: string) => [scope.namespace, scope.projectId, id];
 const decode = <T>(
@@ -232,7 +232,6 @@ export async function createSqliteBusinessStore(
         conversationId: 'conversation_id',
         rootRunId: 'root_run_id',
         kind: 'kind',
-        mode: 'mode',
       } as const;
       for (const [field, column] of Object.entries(fields)) {
         const value = query[field as keyof typeof fields];
@@ -368,14 +367,13 @@ export async function createSqliteBusinessStore(
             admissionSequence: sequence,
           };
           await tx.runAsync(
-            'INSERT INTO run_headers VALUES (?,?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET mode=excluded.mode,active=excluded.active,revision=excluded.revision,payload=excluded.payload',
+            'INSERT INTO run_headers VALUES (?,?,?,?,?,?,?,?,?) ON CONFLICT(id) DO UPDATE SET active=excluded.active,revision=excluded.revision,payload=excluded.payload',
             header.id,
             sequence,
             header.projectId,
             header.conversationId,
             header.rootRunId,
             header.kind,
-            header.mode,
             terminalRun(header.state) ? 0 : 1,
             header.revision,
             JSON.stringify(header),

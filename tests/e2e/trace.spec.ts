@@ -3,6 +3,7 @@ import { test, expect } from '@playwright/test';
 import { protocols, snapshot, answerEvents, toolEvents, sse } from '../protocol-fixtures';
 import { openModels, addConnection, addModel, returnToWorkbench } from './model-helpers';
 import { readCurrentRuns } from './current-records';
+import { configureWorkspaceFixture } from './workspace-fixture';
 
 test('超过一页的工作轨迹独立展示最终回答，并按需展开长回答', async ({ page }) => {
   await page.goto('/');
@@ -10,6 +11,7 @@ test('超过一页的工作轨迹独立展示最终回答，并按需展开长�
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('长轨迹');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
+  await configureWorkspaceFixture(page);
   await page.getByLabel('任务目标', { exact: true }).fill('整理笔记');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
@@ -214,6 +216,7 @@ test('重启收束正在生成的轨迹，并保留收到的推理摘要', async
   await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
   await page.getByLabel('项目名称', { exact: true }).fill('轨迹恢复');
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
+  await configureWorkspaceFixture(page);
   await page.getByRole('button', { name: '整理资料', exact: true }).click();
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();

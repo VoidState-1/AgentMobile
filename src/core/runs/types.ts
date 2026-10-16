@@ -22,7 +22,6 @@ export interface ExecutionView {
   conversationId?: string;
   draftRevision?: number;
   prompt: string;
-  mode: 'demo' | 'remote';
   modelSnapshot?: ModelRunSnapshot;
   agentSettingsSnapshot?: AgentSettings;
   mcpSnapshot?: readonly McpServerSnapshot[];

@@ -1,3 +1,4 @@
+import { contentCodec } from '../src/adapters/storage/codec';
 import { afterEach, describe, expect, it, vi } from 'vitest';
 import { normalizeContext } from '@earendil-works/pi-ai';
 import { randomUUID } from 'node:crypto';
@@ -84,6 +85,7 @@ describe('真实服务兼容与连接诊断', () => {
         storage.metadata,
         { get: async () => 'test-only', set: async () => {} },
         randomUUID,
+        contentCodec,
       );
       await models.initialize();
       const connection = await models.saveConnection(

@@ -10,7 +10,7 @@ import type { SkillSummary } from '../skills/types';
 export type { RunState } from './types';
 /** Current execution entity; independent of UI views and storage layout. */
 export interface RunRecord {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: string;
   projectId: string;
   conversationId: string;
@@ -29,7 +29,6 @@ export interface RunRecord {
   revision?: number;
   admissionSequence?: number;
   delegationSnapshotRef?: string;
-  mode: 'demo' | 'remote';
   prompt: string;
   response: string;
   modelSnapshot?: ModelRunSnapshot;
@@ -52,7 +51,7 @@ export interface RunRecord {
 
 /** Only this small, indexed record participates in list and recovery queries. */
 export interface RunHeader {
-  schemaVersion: 3;
+  schemaVersion: 4;
   id: string;
   projectId: string;
   conversationId: string;
@@ -63,7 +62,6 @@ export interface RunHeader {
   agentDefinitionId: string;
   agentDefinitionRevision: number;
   state: RunState;
-  mode: 'demo' | 'remote';
   launchSnapshotRef: string;
   inputSnapshotRef?: string;
   draftRevision?: number;
@@ -121,7 +119,6 @@ export function assertRunWrite(previous: RunHeader | undefined, update: RunWrite
       previous.agentDefinitionId !== update.header.agentDefinitionId ||
       previous.agentDefinitionRevision !== update.header.agentDefinitionRevision ||
       previous.depth !== update.header.depth ||
-      previous.mode !== update.header.mode ||
       (previous.state === 'cancelling' &&
         !['cancelling', 'completed', 'cancelled', 'failed', 'interrupted'].includes(
           update.header.state,

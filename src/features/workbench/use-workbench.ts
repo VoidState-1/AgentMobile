@@ -1,5 +1,5 @@
 import type { AppServices } from '@/application/services';
-import { selectedModelId, selectedModelMode } from '@/core/models/rules';
+import { selectedModelId } from '@/core/models/rules';
 import { useConversationDraft } from '@/features/conversations/use-draft';
 import { useGitActions } from '@/features/workbench/git-actions';
 import { useAction } from '@/shared/use-action';
@@ -74,19 +74,15 @@ export function useWorkbench() {
   );
   const settings = useMemo(
     () => ({
-      mode: selectedModelMode(configuration, ui.conversationId),
       model: selectedModel?.name ?? '选择模型',
       baseUrl: selectedConnection?.baseUrl ?? '',
       imageInput: selectedModel?.parameters.allowImages ?? false,
     }),
-    [configuration, ui.conversationId, selectedModel, selectedConnection],
+    [selectedModel, selectedConnection],
   );
-  const modelLabel =
-    settings.mode === 'demo'
-      ? '演示模式'
-      : selectedModel
-        ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name
-        : '选择模型';
+  const modelLabel = selectedModel
+    ? (selectedConnection?.name ?? '') + ' · ' + selectedModel.name
+    : '选择模型';
 
   useEffect(() => {
     if (!notice) return;

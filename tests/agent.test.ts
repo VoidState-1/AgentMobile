@@ -15,7 +15,7 @@ afterEach(async () => {
 });
 
 describe('Pi Agent 真实执行循环', () => {
-  it('演示经过工具读取和写入，产生真实 Git 修改，并可整次撤销', async () => {
+  it('模型工具读取和写入产生真实 Git 修改，并可整次撤销', async () => {
     const storage = await testStorage();
     cleanups.push(storage.cleanup);
     const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);

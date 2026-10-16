@@ -1,4 +1,5 @@
 import { adb, dump, tap, longPress, waitFor, screenshot, sleep, metroPort } from './android-ui.mjs';
+import { configureWorkspaceFixture } from './android-fixture-model.mjs';
 
 async function openApp() {
   await adb('shell', 'am', 'force-stop', 'com.agentmobile.app');
@@ -43,6 +44,7 @@ async function rename(title) {
 async function select(title) {
   await tap('项目与对话');
   await tap('切换对话 ' + title);
+  await tap('收起侧栏');
 }
 async function waitContains(value) {
   for (let i = 0; i < 12; i++) {
@@ -52,10 +54,7 @@ async function waitContains(value) {
   throw new Error('对话内容未出现：' + value);
 }
 await openApp();
-await tap('设置');
-await tap('模型与供应商');
-await tap('运行模式：演示模式');
-await tap('返回');
+await configureWorkspaceFixture();
 if (!(await dump()).includes('新建项目')) await tap('项目与对话');
 await tap('新建项目');
 await tap('项目名称');
