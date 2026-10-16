@@ -1,23 +1,20 @@
-import { useEffect, useRef, useState } from 'react';
-import { Pressable, Switch, View } from 'react-native';
-import { ChevronDown, ChevronRight } from '@/shared/ui/icons';
-import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { McpAttempt, McpServer, McpServerInput } from '@/core/mcp/types';
-import type { Project } from '@/core/projects';
-import {
-  Choices,
-  ConfigPage,
-  FormScroll,
-  Loading,
-  NumberField,
-  Section,
-  Toggle,
-  useDraftGuard,
-} from '@/shared/ui/forms';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { useDraftGuard } from '@/shared/use-draft-guard';
+import { CredentialField } from '@/shared/ui/credential-field';
+import { DisclosureRow } from '@/shared/ui/disclosure-row';
+import { FormFooter } from '@/shared/ui/feedback';
+import { ConfirmSheet } from '@/shared/ui/sheets';
+import { useProjectSelection } from '@/shared/use-project-selection';
+import { UnknownCalls } from './unknown';
+
+import type { McpServer, McpServerInput } from '@/core/mcp/types';
 import { useWorkbenchTheme } from '@/shared/theme';
-import { useWorkbenchUi } from '@/shared/workbench-state';
-import { useMcpConfiguration } from './common';
+import { ConfigPage, FormScroll, Loading, NumberField, Section, Toggle } from '@/shared/ui/forms';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { SegmentedControl } from '@/shared/ui/selection';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { Switch, View } from 'react-native';
+import { useMcpConfiguration } from './use-configuration';
 
 const edit = (server: McpServer): McpServerInput => ({
   id: server.id,
@@ -70,26 +67,9 @@ function ServerEditor({
   const [probing, setProbing] = useState(false);
   const probe = useRef<AbortController | undefined>(undefined);
   const [expanded, setExpanded] = useState<string>();
-  const [unknown, setUnknown] = useState<McpAttempt[]>([]);
-  const [confirmRetry, setConfirmRetry] = useState<McpAttempt>();
-  const selectedProject = useWorkbenchUi(state => state.projectId);
-  const [projectId, setProjectId] = useState(selectedProject ?? '');
-  const [projects, setProjects] = useState<Project[]>([]);
+  const { projectId, setProjectId, projects, error: projectError } = useProjectSelection(runtime);
   const dirty = JSON.stringify(draft) !== saved || !!token || remove;
   const guard = useDraftGuard(dirty);
-  useEffect(() => {
-    let current = true;
-    void runtime!.workspace.projects().then(values => {
-      if (current) setProjects(values);
-    });
-    if (!selectedProject)
-      void runtime!.preferences.getWorkbench().then(value => {
-        if (current) setProjectId(value?.projectId ?? '');
-      });
-    return () => {
-      current = false;
-    };
-  }, [runtime, selectedProject]);
   useEffect(() => {
     let current = true;
     if (server)
@@ -99,19 +79,8 @@ function ServerEditor({
           if (current) setReady(value);
         })
         .catch(() => {});
-    const refresh = () => {
-      void runtime!.mcp
-        .unknown(server?.id)
-        .then(values => {
-          if (current) setUnknown(values);
-        })
-        .catch(() => {});
-    };
-    refresh();
-    const unsubscribe = runtime!.agent.subscribe(refresh);
     return () => {
       current = false;
-      unsubscribe();
     };
   }, [runtime, server]);
   useEffect(() => () => probe.current?.abort(), []);
@@ -163,24 +132,14 @@ function ServerEditor({
       title={server ? server.name : '添加 MCP 连接'}
       onBack={() => guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/mcp')))}
       footer={
-        <View style={{ gap: 6 }}>
-          {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
-              {error}
-            </T>
-          )}
-          {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
-              {notice}
-            </T>
-          )}
+        <FormFooter error={error || projectError} notice={notice}>
           <Button
             label="保存 MCP 连接"
             busy={busy && !probing}
             disabled={probing || (!!server && !dirty)}
             onPress={save}
           />
-        </View>
+        </FormFooter>
       }
     >
       <FormScroll>
@@ -218,7 +177,7 @@ function ServerEditor({
           />
         </Section>
         <Section title="认证">
-          <Choices
+          <SegmentedControl
             label="MCP 认证方式"
             value={draft.auth}
             options={[
@@ -232,37 +191,18 @@ function ServerEditor({
             }}
           />
           {draft.auth === 'bearer' && (
-            <>
-              <T
-                tone={credentialChanged || remove || !ready ? 'warning' : 'accent'}
-                style={{ fontSize: 12 }}
-              >
-                {credentialChanged
-                  ? '服务器或认证已变更，需重新绑定 Token。'
-                  : remove
-                    ? '保存后将移除 Token'
-                    : ready
-                      ? 'Token 已保存 · 留空保留现有凭证'
-                      : 'Token 缺失 · 可先保存连接，稍后补填'}
-              </T>
-              <Field
-                label="MCP Token"
-                value={token}
-                secureTextEntry
-                maxLength={8192}
-                editable={!busy}
-                placeholder={ready ? '留空保留，填写则替换' : '输入 Bearer Token'}
-                onChangeText={setToken}
-              />
-              {ready && (
-                <Toggle
-                  label="移除已保存 Token"
-                  value={remove}
-                  disabled={busy}
-                  onChange={setRemove}
-                />
-              )}
-            </>
+            <CredentialField
+              label="MCP Token"
+              value={token}
+              onChange={setToken}
+              ready={ready}
+              remove={remove}
+              onRemoveChange={setRemove}
+              disabled={busy}
+              changedWarning={
+                credentialChanged ? '服务器或认证已变更，需重新绑定 Token。' : undefined
+              }
+            />
           )}
         </Section>
         {server && (
@@ -279,30 +219,27 @@ function ServerEditor({
                 <Button label="停止检测" variant="ghost" onPress={() => probe.current?.abort()} />
               )}
               {dirty && (
-                <T tone="warning" style={{ fontSize: 11 }}>
+                <T tone="warning" variant="meta">
                   先保存修改，再检测或授权工具。
                 </T>
               )}
               {!!server.check && (
-                <T
-                  tone={server.check.status === 'passed' ? 'accent' : 'danger'}
-                  style={{ fontSize: 12 }}
-                >
+                <T tone={server.check.status === 'passed' ? 'accent' : 'danger'} variant="caption">
                   {server.check.message}
                 </T>
               )}
               {!!server.protocolVersion && (
-                <T tone="muted" style={{ fontSize: 11 }}>
+                <T tone="muted" variant="meta">
                   {server.serverInfo} · MCP {server.protocolVersion}
                 </T>
               )}
             </Section>
             <Section title="项目工具授权">
-              <T tone="secondary" style={{ fontSize: 12 }}>
+              <T tone="secondary" variant="caption">
                 允许后，Agent 可自动向此服务器发送工具参数。
               </T>
               {projects.length ? (
-                <Choices
+                <SegmentedControl
                   label="授权项目"
                   value={projectId}
                   options={projects.map(project => ({ value: project.id, label: project.name }))}
@@ -313,7 +250,7 @@ function ServerEditor({
                 <T tone="muted">请先创建项目。</T>
               )}
               {!server.tools.length && (
-                <T tone="secondary" style={{ fontSize: 12 }}>
+                <T tone="secondary" variant="caption">
                   先检测连接以获取工具目录。
                 </T>
               )}
@@ -323,32 +260,17 @@ function ServerEditor({
                   style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 4, gap: 4 }}
                 >
                   <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
-                    <Pressable
-                      accessibilityRole="button"
-                      accessibilityLabel={'查看工具定义 ' + tool.name}
-                      accessibilityState={{ expanded: expanded === tool.name }}
-                      aria-expanded={expanded === tool.name}
+                    <DisclosureRow
+                      label={'查看工具定义 ' + tool.name}
+                      expanded={expanded === tool.name}
                       onPress={() => setExpanded(expanded === tool.name ? undefined : tool.name)}
-                      style={{
-                        flex: 1,
-                        minHeight: 44,
-                        flexDirection: 'row',
-                        alignItems: 'center',
-                        gap: 6,
-                      }}
+                      style={{ flex: 1 }}
                     >
-                      <View style={{ flex: 1, minWidth: 0 }}>
-                        <T numberOfLines={1}>{tool.name}</T>
-                        <T tone={tool.readOnlyHint ? 'muted' : 'warning'} style={{ fontSize: 12 }}>
-                          {tool.readOnlyHint ? '服务声明只读' : '可能修改远端状态'}
-                        </T>
-                      </View>
-                      {expanded === tool.name ? (
-                        <ChevronDown size={14} color={theme.muted} />
-                      ) : (
-                        <ChevronRight size={14} color={theme.muted} />
-                      )}
-                    </Pressable>
+                      <T numberOfLines={1}>{tool.name}</T>
+                      <T tone={tool.readOnlyHint ? 'muted' : 'warning'} variant="caption">
+                        {tool.readOnlyHint ? '服务声明只读' : '可能修改远端状态'}
+                      </T>
+                    </DisclosureRow>
                     <Switch
                       accessibilityLabel={'允许自动调用 ' + tool.name}
                       trackColor={{ true: theme.accent, false: theme.border }}
@@ -370,7 +292,7 @@ function ServerEditor({
                     />
                   </View>
                   {!!tool.unavailableReason && (
-                    <T tone="warning" style={{ fontSize: 12 }}>
+                    <T tone="warning" variant="caption">
                       {tool.unavailableReason}
                     </T>
                   )}
@@ -378,7 +300,7 @@ function ServerEditor({
                     <T
                       tone="secondary"
                       numberOfLines={expanded === tool.name ? undefined : 2}
-                      style={{ fontSize: 12, lineHeight: 19 }}
+                      variant="caption"
                     >
                       {tool.description}
                     </T>
@@ -388,7 +310,7 @@ function ServerEditor({
                       style={{ padding: 8, backgroundColor: theme.inset, borderRadius: 4, gap: 4 }}
                     >
                       {!!tool.title && <T>{tool.title}</T>}
-                      <T selectable tone="secondary" style={{ fontSize: 12, lineHeight: 19 }}>
+                      <T selectable tone="secondary" variant="caption">
                         {JSON.stringify(tool.inputSchema, null, 2)}
                       </T>
                     </View>
@@ -396,33 +318,7 @@ function ServerEditor({
                 </View>
               ))}
             </Section>
-            {!!unknown.length && (
-              <Section title="待核对的远端调用">
-                <T tone="warning" style={{ fontSize: 12 }}>
-                  远端可能已执行，解除重试限制前请核对。
-                </T>
-                {unknown.map(attempt => (
-                  <View key={attempt.id} style={{ gap: 7 }}>
-                    <T tone="warning" style={{ fontSize: 12 }}>
-                      {attempt.tool} ·{' '}
-                      {attempt.state === 'dispatched' ? '等待回执或尚未收束' : '远端结果未知'}
-                    </T>
-                    <T tone="muted" style={{ fontSize: 11 }}>
-                      {new Date(attempt.createdAt).toLocaleString()}
-                    </T>
-                    <T selectable style={{ fontSize: 11 }}>
-                      {attempt.preview}
-                    </T>
-                    <Button
-                      label={'核对后解除重试限制 ' + attempt.tool}
-                      variant="secondary"
-                      disabled={busy || attempt.state !== 'unknown'}
-                      onPress={() => setConfirmRetry(attempt)}
-                    />
-                  </View>
-                ))}
-              </Section>
-            )}
+            <UnknownCalls runtime={runtime!} serverId={server.id} disabled={busy} />
             <Button
               label="删除 MCP 连接"
               variant="danger"
@@ -433,55 +329,29 @@ function ServerEditor({
         )}
       </FormScroll>
       {guard.guard}
-      <Sheet
+      <ConfirmSheet
         visible={deleting}
         title="删除 MCP 连接"
+        busy={busy}
         onClose={() => setDeleting(false)}
-        busy={busy}
-        footer={
-          <Button
-            label="确认删除 MCP 连接"
-            variant="danger"
-            busy={busy}
-            onPress={() =>
-              guard.allow(() => {
-                void action(async () => {
-                  await runtime!.mcp.configuration.removeServer(server!.id);
-                  router.replace('/mcp');
-                });
-              })
-            }
-          />
+        confirmLabel="确认删除 MCP 连接"
+        onConfirm={() =>
+          guard.allow(() => {
+            void action(async () => {
+              await runtime!.mcp.configuration.removeServer(server!.id);
+              router.replace('/mcp');
+            });
+          })
         }
-      >
-        <T tone="secondary">
-          该连接及项目授权将被移除。正在执行的任务使用启动时配置，调用历史仍保留。
-        </T>
-      </Sheet>
-      <Sheet
-        visible={!!confirmRetry}
-        title="解除重试限制"
-        busy={busy}
-        onClose={() => setConfirmRetry(undefined)}
-        footer={
-          <Button
-            label="已核对，允许再次调用"
-            busy={busy}
-            onPress={() => {
-              void action(async () => {
-                await runtime!.mcp.acknowledge(confirmRetry!.id);
-                setConfirmRetry(undefined);
-                setUnknown(await runtime!.mcp.unknown(server!.id));
-              });
-            }}
-          />
+        danger
+        description={
+          <>
+            <T tone="secondary">
+              该连接及项目授权将被移除。正在执行的任务使用启动时配置，调用历史仍保留。
+            </T>
+          </>
         }
-      >
-        <T tone="warning">
-          解除后，Agent
-          可以再次发送相同调用，可能造成重复操作。请确认你已核对远端执行状态。这个操作只解除本地限制，不会立即调用服务器。
-        </T>
-      </Sheet>
+      />
     </ConfigPage>
   );
 }

@@ -1,0 +1,87 @@
+[
+  {
+    "name": "IME composing Enter",
+    "runs": 1,
+    "inputAfter": ""
+  },
+  {
+    "name": "bootstrap failure /models",
+    "visibleFailure": false,
+    "body": "模型与供应商\n0 个连接 · 0 个模型",
+    "spinners": 1
+  },
+  {
+    "name": "bootstrap failure /mcp",
+    "visibleFailure": false,
+    "body": "远程 MCP\n0 个连接",
+    "spinners": 1
+  },
+  {
+    "name": "bootstrap failure /skills",
+    "visibleFailure": false,
+    "body": "Agent Skills\n0 个技能",
+    "spinners": 1
+  },
+  {
+    "name": "bootstrap failure /settings/agent",
+    "visibleFailure": true,
+    "body": "Agent 设置\n本地资料读取失败，请保留数据并重新打开应用。",
+    "spinners": 1
+  },
+  {
+    "name": "theme reload configuration route",
+    "preference": {
+      "appearance": "dark"
+    },
+    "lightPages": 1,
+    "darkPages": 0
+  },
+  {
+    "name": "short touch targets and keyboard menu",
+    "bounds": {
+      "conversation": {
+        "x": 26,
+        "y": 93,
+        "width": 288,
+        "height": 34
+      },
+      "project": {
+        "x": 6,
+        "y": 55,
+        "width": 276,
+        "height": 36
+      }
+    },
+    "keyboardManagementButtons": 0
+  },
+  {
+    "name": "late diff only prefix displayed",
+    "prefixCharacters": 12150,
+    "hasNewTail": false,
+    "hasOldTail": false,
+    "truncationWarning": true
+  },
+  {
+    "name": "unclosed Markdown inline markers",
+    "hasOriginalBold": false,
+    "hasOriginalCode": false,
+    "body": "文件\n文件已保存，可在 Git 面板暂存并提交。\n全部\n文字\n图片\n1\ndocuments\nmd\nnotes.md\n修改\n59 B\n对话\n文件\n1\nGit\n设置\nnotes.md\n所有修改已保存\n编辑\n尚未\n尚未闭\n[链接](https://example.test)\ndocuments/notes.md"
+  },
+  {
+    "name": "per-keystroke draft writes",
+    "charactersTyped": 20,
+    "persistedWrites": 20
+  },
+  {
+    "name": "normal dirty configuration browser back",
+    "urlAfterBack": "http://127.0.0.1:4180/",
+    "unsavedGuardVisible": true,
+    "editorVisible": true
+  },
+  {
+    "name": "failed skill delete then browser back",
+    "urlAfterBack": "http://127.0.0.1:4180/skills",
+    "unsavedGuardVisible": false,
+    "editorVisible": false
+  }
+]

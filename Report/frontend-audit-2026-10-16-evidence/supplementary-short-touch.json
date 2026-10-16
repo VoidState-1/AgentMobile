@@ -1,0 +1,21 @@
+[
+  {
+    "name": "short touch targets and keyboard menu",
+    "bounds": {
+      "conversation": {
+        "x": 26,
+        "y": 93,
+        "width": 288,
+        "height": 34
+      },
+      "project": {
+        "x": 6,
+        "y": 55,
+        "width": 276,
+        "height": 36
+      }
+    },
+    "keyboardManagementButtons": 0,
+    "selectedFileTypeAfterArrowRight": "全部"
+  }
+]

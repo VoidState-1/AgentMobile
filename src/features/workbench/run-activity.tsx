@@ -1,8 +1,9 @@
+import { runStateLabels } from '@/shared/format';
+import type { RunsCapability } from '@/features/workbench/use-workbench';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { T } from '@/shared/ui/primitives';
 import { memo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
-import type { RunsCapability } from '@/features/workbench/use-workbench';
-import { T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
 
 /** Compact global roots view; child activity stays in its delegation trace. */
 export const RunActivity = memo(function RunActivity({
@@ -27,7 +28,7 @@ export const RunActivity = memo(function RunActivity({
         showsHorizontalScrollIndicator={false}
         contentContainerStyle={{ paddingHorizontal: 14, gap: 8, alignItems: 'center' }}
       >
-        <T tone="muted" style={{ fontSize: 10 }}>
+        <T tone="muted" variant="meta">
           活动任务 · {controller.runs.length}
         </T>
         {controller.runs.map(run => (
@@ -53,18 +54,12 @@ export const RunActivity = memo(function RunActivity({
           >
             {run.state !== 'queued' && <ActivityIndicator size={10} color={theme.accent} />}
             <View style={{ minWidth: 0, flexShrink: 1 }}>
-              <T numberOfLines={1} style={{ fontSize: 11 }}>
+              <T numberOfLines={1} variant="meta">
                 {controller.projects.find(project => project.id === run.projectId)?.name ?? '项目'}{' '}
                 · {run.prompt}
               </T>
-              <T tone="muted" style={{ fontSize: 9 }}>
-                {run.state === 'queued'
-                  ? '排队中'
-                  : run.state === 'waiting_children'
-                    ? '等待子任务'
-                    : run.state === 'cancelling'
-                      ? '正在停止'
-                      : '执行中'}
+              <T tone="muted" variant="meta">
+                {runStateLabels[run.state]}
               </T>
             </View>
           </Pressable>

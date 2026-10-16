@@ -117,7 +117,7 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
     page.getByRole('button', { name: '查看未暂存差异 documents/live.md', exact: true }),
   ).toBeVisible();
   await expect(page.getByRole('button', { name: '全部暂存', exact: true })).toBeDisabled();
-  await page.getByRole('button', { name: '提交历史 · 1', exact: true }).click();
+  await page.getByRole('tab', { name: '提交历史 · 1', exact: true }).click();
   await expect(page.getByRole('button', { name: /^查看版本 / })).toHaveCount(1);
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   holds[1].release();

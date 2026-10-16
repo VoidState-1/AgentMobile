@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                     |
 | -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
+| 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的真实分支、类型化差异范围和任务增删统计。   |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路径与修订、文件日志、真实暂存提交、任务撤销和快照语义。 |
 
 ## 1. 工作区边界
@@ -114,3 +115,11 @@ checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字�
 ## 10. 验证入口
 
 [file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts)。
+
+## 分支与任务差异摘要
+
+状态查询通过 `GitPort.branch` 读取实际 symbolic HEAD，分离 HEAD 返回 null。UI 不硬编码 main，也未因此新增分支管理或远程 Git 操作。
+
+差异文件用 `status` 枚举表达新增/修改/删除，`stagedOnly` 区分仅发生在 index 的任务变化。两者由应用层投影，中文徽标在 UI 统一渲染，不作为跨层契约。
+
+任务行数摘要复用冻结快照差异；后续手工修改或删除不改变历史任务的统计。完整文本按行比较，支持末行没有换行。图片不统计文本行；统计库每个文本差异使用 25ms/4,096 编辑步上限，预算耗尽时不输出不完整数值，仍可打开真实差异。该查询不改 Git、数据库或恢复日志。

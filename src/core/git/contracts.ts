@@ -12,6 +12,7 @@ export interface GitFileStatus {
 }
 export interface GitStatus {
   head: string;
+  branch: string | null;
   indexRevision: string;
   workingRevision: string;
   files: GitFileStatus[];
@@ -39,6 +40,7 @@ export interface GitPort {
   dir(workspaceId: WorkspaceId): string;
   init(workspaceId: WorkspaceId): Promise<void>;
   head(workspaceId: WorkspaceId): Promise<CommitOid>;
+  branch(workspaceId: WorkspaceId): Promise<string | null>;
   revision(bytes: Uint8Array): Promise<string>;
   commit(workspaceId: WorkspaceId, paths: WorkspacePath[], message: string): Promise<CommitOid>;
   historyPage(workspaceId: WorkspaceId, query?: GitHistoryQuery): Promise<GitHistoryPage>;

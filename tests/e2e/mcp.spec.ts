@@ -23,7 +23,7 @@ async function addMcp(page: Page) {
   await page.getByLabel('MCP 端点', { exact: true }).fill('https://mcp.example.test/mcp');
   await page.getByLabel('MCP Token', { exact: true }).fill('fixture-mcp-token');
   await page.getByRole('button', { name: '保存 MCP 连接', exact: true }).click();
-  await expect(page.getByText('Token 已保存 · 留空保留现有凭证', { exact: true })).toBeVisible();
+  await expect(page.getByText('凭证已保存 · 留空保留现有凭证', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '检测并发现工具', exact: true }).click();
   await expect(
     page.getByRole('switch', { name: '允许自动调用 lookup', exact: true }),
@@ -115,7 +115,7 @@ for (const modern of [false, true])
     await openMcp(page);
     await page.getByRole('button', { name: '配置 MCP 资料搜索', exact: true }).click();
     await expect(
-      page.getByText('Token 缺失 · 可先保存连接，稍后补填', { exact: true }),
+      page.getByText('凭证缺失 · 可先保存连接，稍后补填', { exact: true }),
     ).toBeVisible();
     await expect(
       page.getByRole('switch', { name: '允许自动调用 lookup', exact: true }),

@@ -1,13 +1,17 @@
-import { memo, useMemo, useState } from 'react';
-import { Pressable, ScrollView, View } from 'react-native';
-import { Image } from 'expo-image';
-import { diffLines } from 'diff';
-import { ArrowLeftRight, FileText, RotateCcw } from '@/shared/ui/icons';
-import type { GitCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
-import { Button, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
 import { fileName } from '@/shared/format';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { GitStatusBadge } from '@/shared/ui/git-status';
+import { ArrowLeftRight, RotateCcw } from '@/shared/ui/icons';
+import { Button, T } from '@/shared/ui/primitives';
+import { ViewTabs } from '@/shared/ui/selection';
+import { Sheet } from '@/shared/ui/sheets';
+import { diffLines } from 'diff';
+import { Image } from 'expo-image';
+import { memo, useMemo, useState } from 'react';
+import { ScrollView, View } from 'react-native';
+import type { GitCapability } from './use-workbench';
 
 export const ReviewSheet = memo(function ReviewSheet({
   controller,
@@ -16,7 +20,12 @@ export const ReviewSheet = memo(function ReviewSheet({
 }) {
   const theme = useWorkbenchTheme();
   const value = controller.review!;
-  const [index, setIndex] = useState(0);
+  const [index, setIndex] = useState(() =>
+    Math.max(
+      0,
+      value.files.findIndex(file => file.path === value.initialPath),
+    ),
+  );
   const file = value.files[index] ?? value.files[0];
   const lines = useMemo(() => {
     if (!file || isImage(file.path)) return [];
@@ -67,7 +76,7 @@ export const ReviewSheet = memo(function ReviewSheet({
             }}
           >
             {controller.dirty && (
-              <T tone="warning" style={{ fontSize: 12, flex: 1 }}>
+              <T tone="warning" variant="caption" style={{ flex: 1 }}>
                 请先保存编辑器中的修改。
               </T>
             )}
@@ -84,14 +93,14 @@ export const ReviewSheet = memo(function ReviewSheet({
       }
     >
       {!!controller.error && (
-        <T tone="danger" style={{ fontSize: 12 }}>
+        <T tone="danger" variant="caption">
           {controller.error}
         </T>
       )}
       {value.files.length === 0 ? (
         <View style={{ alignItems: 'center', padding: 16, gap: 8 }}>
           <ArrowLeftRight size={28} color={theme.muted} />
-          <T tone="secondary">没有文件变化</T>
+          <EmptyState compact title="没有文件变化" />
         </View>
       ) : (
         <>
@@ -100,35 +109,37 @@ export const ReviewSheet = memo(function ReviewSheet({
             showsHorizontalScrollIndicator={false}
             contentContainerStyle={{ gap: 4 }}
           >
-            {value.files.map((entry, entryIndex) => (
-              <Pressable
-                key={entry.path}
-                accessibilityRole="button"
-                accessibilityLabel={'查看变化 ' + entry.path}
-                onPress={() => setIndex(entryIndex)}
-                style={{
-                  paddingHorizontal: 9,
-                  minHeight: 44,
-                  borderRadius: 4,
-                  flexDirection: 'row',
-                  alignItems: 'center',
-                  gap: 7,
-                  backgroundColor: entryIndex === index ? theme.accentSoft : theme.inset,
-                }}
-              >
-                <FileText size={14} color={entryIndex === index ? theme.accent : theme.secondary} />
-                <T tone={entryIndex === index ? 'accent' : 'secondary'} style={{ fontSize: 12 }}>
-                  {fileName(entry.path)}
-                </T>
-              </Pressable>
-            ))}
+            <ViewTabs
+              label="差异文件"
+              value={file.path}
+              onChange={path => setIndex(value.files.findIndex(entry => entry.path === path))}
+              options={value.files.map(entry => ({
+                value: entry.path,
+                label: fileName(entry.path),
+                accessibilityLabel: '查看变化 ' + entry.path,
+              }))}
+            />
           </ScrollView>
           <View style={{ gap: 10 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', gap: 12 }}>
-              <T style={{ fontSize: 12, fontWeight: '500' }}>
-                {file?.kind} · {file?.path}
-              </T>
-              <T tone="muted" style={{ fontSize: 11 }}>
+              {file && (
+                <View
+                  style={{
+                    flex: 1,
+                    minWidth: 0,
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    gap: 6,
+                  }}
+                >
+                  <GitStatusBadge status={file.status} />
+                  <T numberOfLines={1} variant="caption" style={{ flex: 1 }}>
+                    {file.stagedOnly ? '暂存 · ' : ''}
+                    {file.path}
+                  </T>
+                </View>
+              )}
+              <T tone="muted" variant="meta">
                 {isImage(file?.path ?? '') ? '图片对比' : '逐行变化'}
               </T>
             </View>
@@ -139,7 +150,7 @@ export const ReviewSheet = memo(function ReviewSheet({
                   { label: '修改后', uri: file.after },
                 ].map(entry => (
                   <View key={entry.label} style={{ gap: 7 }}>
-                    <T tone="secondary" style={{ fontSize: 12 }}>
+                    <T tone="secondary" variant="caption">
                       {entry.label}
                     </T>
                     {entry.uri ? (
@@ -149,7 +160,7 @@ export const ReviewSheet = memo(function ReviewSheet({
                         style={{ height: 210, backgroundColor: theme.inset, borderRadius: 4 }}
                       />
                     ) : (
-                      <T tone="muted" style={{ fontSize: 12 }}>
+                      <T tone="muted" variant="caption">
                         没有图片
                       </T>
                     )}
@@ -182,33 +193,22 @@ export const ReviewSheet = memo(function ReviewSheet({
                       >
                         <T
                           tone="muted"
-                          style={{
-                            width: 33,
-                            textAlign: 'right',
-                            paddingRight: 6,
-                            fontSize: 10,
-                            lineHeight: 23,
-                          }}
+                          variant="meta"
+                          style={{ width: 33, textAlign: 'right', paddingRight: 6 }}
                         >
                           {line.before}
                         </T>
                         <T
                           tone="muted"
-                          style={{
-                            width: 33,
-                            textAlign: 'right',
-                            paddingRight: 6,
-                            fontSize: 10,
-                            lineHeight: 23,
-                          }}
+                          variant="meta"
+                          style={{ width: 33, textAlign: 'right', paddingRight: 6 }}
                         >
                           {line.after}
                         </T>
                         <T
+                          variant="caption"
                           style={{
                             width: 19,
-                            fontSize: 12,
-                            lineHeight: 23,
                             color:
                               line.kind === 'added'
                                 ? theme.success
@@ -237,7 +237,7 @@ export const ReviewSheet = memo(function ReviewSheet({
               </View>
             )}
             {file && (file.before.length > 12000 || file.after.length > 12000) && (
-              <T tone="muted" style={{ fontSize: 11 }}>
+              <T tone="muted" variant="meta">
                 较长内容仅预览前 12,000 字符，完整内容可在文件中查看。
               </T>
             )}

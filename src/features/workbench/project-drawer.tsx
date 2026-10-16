@@ -1,12 +1,12 @@
+import { useWorkbenchTheme } from '@/shared/theme';
 import type { ReactNode } from 'react';
 import { Modal, Pressable, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useWorkbenchTheme } from '@/shared/theme';
-import type { DialogsCapability } from './use-workbench';
 import { ProjectTree } from './project-tree';
+import type { NavigationCapability } from './use-workbench';
 
 export interface ProjectDrawerProps {
-  controller: DialogsCapability;
+  controller: NavigationCapability;
   width: number;
   wide: boolean;
   children: ReactNode;

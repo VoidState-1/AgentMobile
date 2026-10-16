@@ -25,7 +25,7 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
   page.on('pageerror', error => errors.push(error.message));
   await create(page);
   await edit(page, '# 第一版\n\n已暂存的内容。');
-  await expect(page.getByRole('button', { name: '提交历史 · 1', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '提交历史 · 1', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '暂存 documents/notes.md', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '取消暂存 documents/notes.md', exact: true }),
@@ -47,14 +47,14 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
   await page.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByLabel('提交说明', { exact: true }).fill('整理第一版笔记');
   await page.getByRole('button', { name: '提交已暂存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '提交历史 · 2', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '提交历史 · 2', exact: true })).toBeVisible();
   await expect(
     page.getByRole('button', { name: '取消暂存 documents/notes.md', exact: true }),
   ).toHaveCount(0);
   await expect(
     page.getByRole('button', { name: '查看未暂存差异 documents/notes.md', exact: true }),
   ).toBeVisible();
-  await page.getByRole('button', { name: '提交历史 · 2', exact: true }).click();
+  await page.getByRole('tab', { name: '提交历史 · 2', exact: true }).click();
   await page
     .getByRole('button', { name: /^查看版本 / })
     .first()
@@ -62,10 +62,10 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
   await expect(page.getByText('# 第一版', { exact: true })).toBeVisible();
   await expect(page.getByText('# 第二版', { exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('button', { name: '更改 · 1', exact: true }).click();
+  await page.getByRole('tab', { name: '更改 · 1', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改', exact: true }).click();
-  await expect(page.getByRole('button', { name: '更改', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '更改', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
   await expect(page.getByText('已暂存的内容。', { exact: true })).toBeVisible();
@@ -83,9 +83,9 @@ test('取消暂存不丢文件，历史恢复只改变工作区且阻止覆盖�
   await page.getByRole('button', { name: '全部暂存', exact: true }).click();
   await page.getByLabel('提交说明', { exact: true }).fill('明确提交');
   await page.getByRole('button', { name: '提交已暂存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '提交历史 · 2', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '提交历史 · 2', exact: true })).toBeVisible();
   await edit(page, '尚未提交的个人编辑。');
-  await page.getByRole('button', { name: '提交历史 · 2', exact: true }).click();
+  await page.getByRole('tab', { name: '提交历史 · 2', exact: true }).click();
   await page
     .getByRole('button', { name: /^查看版本 / })
     .last()
@@ -97,10 +97,10 @@ test('取消暂存不丢文件，历史恢复只改变工作区且阻止覆盖�
   ).toBeVisible();
   await page.getByRole('button', { name: '取消', exact: true }).click();
   await page.getByRole('button', { name: '关闭', exact: true }).click();
-  await page.getByRole('button', { name: '更改 · 1', exact: true }).click();
+  await page.getByRole('tab', { name: '更改 · 1', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改 documents/notes.md', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改', exact: true }).click();
-  await page.getByRole('button', { name: '提交历史 · 2', exact: true }).click();
+  await page.getByRole('tab', { name: '提交历史 · 2', exact: true }).click();
   await page
     .getByRole('button', { name: /^查看版本 / })
     .last()
@@ -108,8 +108,8 @@ test('取消暂存不丢文件，历史恢复只改变工作区且阻止覆盖�
   await page.getByRole('button', { name: '恢复此版本', exact: true }).click();
   await page.getByRole('button', { name: '确认恢复', exact: true }).click();
   await expect(page.getByText('内容已恢复，历史记录已保留。')).toBeVisible();
-  await expect(page.getByRole('button', { name: '提交历史 · 2', exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '更改 · 1', exact: true }).click();
+  await expect(page.getByRole('tab', { name: '提交历史 · 2', exact: true })).toBeVisible();
+  await page.getByRole('tab', { name: '更改 · 1', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '查看未暂存差异 documents/notes.md', exact: true }),
   ).toBeVisible();
@@ -140,7 +140,7 @@ test('手机 Git 面板支持深浅主题、短视口、提交输入与未跟踪
   await page.getByRole('button', { name: '取消暂存 documents/draft.md', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改 documents/draft.md', exact: true }).click();
   await page.getByRole('button', { name: '丢弃更改', exact: true }).click();
-  await expect(page.getByRole('button', { name: '更改', exact: true })).toBeVisible();
+  await expect(page.getByRole('tab', { name: '更改', exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(

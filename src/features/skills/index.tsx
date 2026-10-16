@@ -1,15 +1,20 @@
-import { useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
 import type { SkillBundle } from '@/core/skills/types';
-import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
-import { ChevronRight } from '@/shared/ui/icons';
-import { useSkills } from './common';
+import { ActionRow } from '@/shared/ui/action-row';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
+import { ChevronRight, Plus } from '@/shared/ui/icons';
+import { Button, Field, T, ToolbarAction } from '@/shared/ui/primitives';
+import { SegmentedControl } from '@/shared/ui/selection';
+import { Sheet } from '@/shared/ui/sheets';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
+import { View } from 'react-native';
+import { useSkillLibrary } from './use-library';
 
 export function SkillsPage() {
-  const { runtime, config, error, busy, action, projectId, setProjectId, projects } = useSkills();
+  const { runtime, config, error, busy, action, projectId, setProjectId, projects } =
+    useSkillLibrary();
   const router = useRouter();
   const theme = useWorkbenchTheme();
   const [search, setSearch] = useState('');
@@ -23,7 +28,7 @@ export function SkillsPage() {
       title="Agent Skills"
       subtitle={config.skills.length + ' 个技能'}
       action={
-        <Button label="新建技能" variant="secondary" onPress={() => router.push('/skills/edit')} />
+        <ToolbarAction label="新建技能" icon={Plus} onPress={() => router.push('/skills/edit')} />
       }
     >
       {!runtime ? (
@@ -55,7 +60,7 @@ export function SkillsPage() {
               placeholder="名称或描述"
             />
             {projects.length ? (
-              <Choices
+              <SegmentedControl
                 label="启用项目"
                 value={projectId}
                 options={projects.map(project => ({ value: project.id, label: project.name }))}
@@ -63,50 +68,37 @@ export function SkillsPage() {
                 disabled={busy}
               />
             ) : (
-              <T tone="muted" style={{ fontSize: 12 }}>
+              <T tone="muted" variant="caption">
                 未选择项目
               </T>
             )}
             {!skills.length && (
-              <T tone="secondary" style={{ fontSize: 12 }}>
-                {config.skills.length ? '没有匹配的技能。' : '暂无技能'}
-              </T>
+              <EmptyState compact title={config.skills.length ? '没有匹配的技能。' : '暂无技能'} />
             )}
             {skills.map(skill => (
               <View
                 key={skill.name}
                 style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 6, gap: 2 }}
               >
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityLabel={'管理技能 ' + skill.name}
+                <ActionRow
+                  label={'管理技能 ' + skill.name}
                   onPress={() =>
                     router.push({ pathname: '/skills/edit', params: { name: skill.name } })
                   }
-                  style={({ pressed }) => ({
-                    gap: 2,
-                    minHeight: 44,
-                    justifyContent: 'center',
-                    backgroundColor: pressed ? theme.inset : 'transparent',
-                  })}
-                >
-                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                    <T tone="accent" style={{ fontSize: 13, fontWeight: '600' }}>
-                      {skill.name}
-                    </T>
-                    <T tone="muted" style={{ flex: 1, fontSize: 11, textAlign: 'right' }}>
-                      {skill.files.length} 个文件
-                    </T>
-                    <ChevronRight size={15} color={theme.muted} />
-                  </View>
-                  <T tone="secondary" numberOfLines={2} style={{ fontSize: 12, lineHeight: 19 }}>
-                    {skill.description}
-                  </T>
-                  <T tone="muted" style={{ fontSize: 10 }}>
-                    {skill.revision.slice(0, 7)}
-                    {skill.warnings.length ? ' · 查看兼容说明' : ''}
-                  </T>
-                </Pressable>
+                  title={skill.name}
+                  description={skill.description}
+                  meta={
+                    skill.revision.slice(0, 7) + (skill.warnings.length ? ' · 查看兼容说明' : '')
+                  }
+                  trailing={
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <T tone="muted" variant="meta">
+                        {skill.files.length} 个文件
+                      </T>
+                      <ChevronRight size={16} color={theme.muted} />
+                    </View>
+                  }
+                />
                 <Toggle
                   label={'启用技能 ' + skill.name}
                   value={config.grants[projectId]?.[skill.name] === skill.revision}
@@ -123,19 +115,19 @@ export function SkillsPage() {
           {!!config.issues.length && (
             <Section title="需要处理的技能">
               {config.issues.map(issue => (
-                <T key={issue} tone="warning" style={{ fontSize: 12 }}>
+                <T key={issue} tone="warning" variant="caption">
                   {issue}
                 </T>
               ))}
             </Section>
           )}
           {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
+            <T tone="danger" variant="caption">
               {error}
             </T>
           )}
           {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
+            <T tone="accent" variant="caption">
               {notice}
             </T>
           )}
@@ -168,20 +160,20 @@ export function SkillsPage() {
                 ? ' · 将更新现有技能'
                 : ''}
             </T>
-            <T tone="secondary" style={{ fontSize: 12 }}>
+            <T tone="secondary" variant="caption">
               {skill.description}
             </T>
-            <T tone="muted" style={{ fontSize: 11 }}>
+            <T tone="muted" variant="meta">
               {skill.files.length} 个文件
             </T>
             {skill.warnings.map(warning => (
-              <T key={warning} tone="warning" style={{ fontSize: 11 }}>
+              <T key={warning} tone="warning" variant="meta">
                 {warning}
               </T>
             ))}
           </View>
         ))}
-        <T tone="secondary" style={{ fontSize: 12 }}>
+        <T tone="secondary" variant="caption">
           更新后旧版本保留在 Git，已运行任务继续使用原版本，变化后的技能需重新启用。
         </T>
       </Sheet>

@@ -1,18 +1,19 @@
-import { memo, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { FileText, Image as ImageIcon, Plus, Upload } from '@/shared/ui/icons';
-import type {
-  DialogsCapability,
-  EditorCapability,
-  FilesCapability,
-  ConversationCapability,
-} from './use-workbench';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
-import { fileName } from '@/shared/format';
 import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
 import { SkillPicker } from '@/features/skills/picker';
+import { fileName } from '@/shared/format';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { ActionRow } from '@/shared/ui/action-row';
+import { FileText, Image as ImageIcon, Plus, Upload } from '@/shared/ui/icons';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { ConfirmSheet, Sheet } from '@/shared/ui/sheets';
+import { memo, useState } from 'react';
+import type {
+  ConversationCapability,
+  EditorCapability,
+  FilesCapability,
+  SheetsCapability,
+} from './use-workbench';
 
 function RenameSheet({ controller }: { controller: EditorCapability }) {
   const [name, setName] = useState(controller.editor?.name ?? '');
@@ -45,7 +46,7 @@ export const WorkbenchSheets = memo(function WorkbenchSheets({
   files,
   conversation,
 }: {
-  controller: DialogsCapability;
+  controller: SheetsCapability;
   editor: EditorCapability;
   files: FilesCapability;
   conversation: ConversationCapability;
@@ -54,7 +55,13 @@ export const WorkbenchSheets = memo(function WorkbenchSheets({
   return (
     <>
       {controller.sheet === 'skills' && (
-        <SkillPicker controller={controller} conversation={conversation} />
+        <SkillPicker
+          projectId={controller.projectId}
+          prompt={conversation.prompt}
+          onChoose={conversation.setPrompt}
+          onClose={() => controller.setSheet(undefined)}
+          onManage={controller.openSkills}
+        />
       )}
       <Sheet
         visible={controller.sheet === 'create'}
@@ -135,72 +142,51 @@ export const WorkbenchSheets = memo(function WorkbenchSheets({
         }
       >
         {files.files.map(file => (
-          <Pressable
+          <ActionRow
             key={file.path}
-            accessibilityRole="button"
-            accessibilityLabel={'引用 ' + file.path}
+            label={'引用 ' + file.path}
+            title={fileName(file.path)}
             onPress={() => {
               conversation.setAttachment(file.path);
               controller.setSheet(undefined);
             }}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'center',
-              gap: 9,
-              minHeight: 44,
-              borderBottomWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: pressed ? theme.inset : 'transparent',
-            })}
-          >
-            {isImage(file.path) ? (
-              <ImageIcon size={17} color={theme.accent} />
-            ) : (
-              <FileText size={17} color={theme.secondary} />
-            )}
-            <T numberOfLines={1} style={{ flex: 1, fontSize: 13 }}>
-              {fileName(file.path)}
-            </T>
-          </Pressable>
+            selected={conversation.attachment === file.path}
+            leading={
+              isImage(file.path) ? (
+                <ImageIcon size={17} color={theme.accent} />
+              ) : (
+                <FileText size={17} color={theme.secondary} />
+              )
+            }
+          />
         ))}
       </Sheet>
       {controller.sheet === 'rename' && <RenameSheet controller={editor} />}
-      <Sheet
+      <ConfirmSheet
         visible={!!controller.confirmation}
         title={controller.confirmation?.title ?? ''}
+        description={controller.confirmation?.description}
         onClose={() => controller.setConfirmation(undefined)}
         busy={controller.busy}
-        footer={
-          <View style={{ gap: 8 }}>
-            {controller.confirmation?.saveFirst && (
-              <Button
-                label="保存后离开"
-                busy={controller.busy}
-                onPress={() => {
-                  void controller.saveAndLeave();
-                }}
-              />
-            )}
+        error={controller.error}
+        confirmLabel={controller.confirmation?.label ?? '确认'}
+        danger={controller.confirmation?.danger}
+        cancelLabel={controller.confirmation?.saveFirst ? '继续编辑' : '取消'}
+        onConfirm={() => {
+          void controller.confirm();
+        }}
+        extraAction={
+          controller.confirmation?.saveFirst && (
             <Button
-              label={controller.confirmation?.label ?? '确认'}
-              variant={controller.confirmation?.danger ? 'danger' : 'primary'}
+              label="保存后离开"
               busy={controller.busy}
               onPress={() => {
-                void controller.confirm();
+                void controller.saveAndLeave();
               }}
             />
-            <Button
-              label={controller.confirmation?.saveFirst ? '继续编辑' : '取消'}
-              variant="ghost"
-              disabled={controller.busy}
-              onPress={() => controller.setConfirmation(undefined)}
-            />
-          </View>
+          )
         }
-      >
-        <T tone="secondary">{controller.confirmation?.description}</T>
-        {!!controller.error && <T tone="danger">{controller.error}</T>}
-      </Sheet>
+      />
     </>
   );
 });

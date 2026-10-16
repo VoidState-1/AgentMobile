@@ -1,0 +1,10 @@
+[
+  {
+    "name": "failed skill delete then browser back",
+    "activeDialog": "删除技能\n将移除此技能并撤销项目启用。运行任务继续使用原版本，已保存内容保留在 Git 历史中。\n确认删除技能",
+    "errorInActiveDialog": false,
+    "urlAfterBack": "http://127.0.0.1:4180/skills",
+    "unsavedGuardVisible": false,
+    "editorVisible": false
+  }
+]

@@ -92,6 +92,8 @@ export function createGitRepository(host: HostFileSystem): GitPort {
       await git.init({ ...options(projectId), defaultBranch: 'main' });
     },
     head: (projectId: string) => git.resolveRef({ ...options(projectId), ref: 'HEAD' }),
+    branch: async (projectId: string) =>
+      (await git.currentBranch({ ...options(projectId), fullname: false })) ?? null,
     revision: async (bytes: Uint8Array) => (await git.hashBlob({ object: bytes })).oid,
     async commit(projectId: string, paths: string[], message: string) {
       for (const path of paths) {

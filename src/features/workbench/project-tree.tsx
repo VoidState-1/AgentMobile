@@ -1,23 +1,17 @@
+import { EmptyState } from '@/shared/ui/empty-state';
+import { Archive, Folder, FolderOpen, MessageSquare, Plus, Search, X } from '@/shared/ui/icons';
+import { Button, IconButton, Input, T, Toolbar } from '@/shared/ui/primitives';
 import { useState } from 'react';
-import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
-import type { DialogsCapability } from './use-workbench';
-import {
-  Archive,
-  Folder,
-  FolderOpen,
-  MessageSquare,
-  Plus,
-  Search,
-  X,
-} from '@/shared/ui/icons';
-import { Button, IconButton, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme, workbenchMetrics as metrics } from '@/shared/theme';
+import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
+import type { NavigationCapability } from './use-workbench';
+
+import { useWorkbenchTheme } from '@/shared/theme';
 
 export function ProjectTree({
   controller,
   close,
 }: {
-  controller: DialogsCapability;
+  controller: NavigationCapability;
   close?: () => void;
 }) {
   const theme = useWorkbenchTheme();
@@ -29,19 +23,33 @@ export function ProjectTree({
   const search = query.trim().toLocaleLowerCase();
   return (
     <View testID="project-tree" style={{ flex: 1, backgroundColor: theme.sidebar }}>
-      <View
-        style={{
-          minHeight: metrics.header,
-          paddingLeft: 12,
-          paddingRight: 4,
-          flexDirection: 'row',
-          alignItems: 'center',
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-        }}
+      <Toolbar
+        trailing={
+          <View style={{ flexDirection: 'row' }}>
+            <IconButton
+              icon={searching ? X : Search}
+              label={searching ? '收起搜索' : '搜索项目与对话'}
+              size={44}
+              onPress={() => {
+                setSearching(!searching);
+                setQuery('');
+              }}
+            />
+            {!searching && controller.projects.length > 0 && (
+              <IconButton
+                icon={Plus}
+                label="新建项目"
+                size={44}
+                disabled={controller.busy}
+                onPress={controller.newProject}
+              />
+            )}
+            {close && <IconButton icon={X} label="收起侧栏" size={44} onPress={close} />}
+          </View>
+        }
       >
         {searching ? (
-          <TextInput
+          <Input
             autoFocus
             accessibilityLabel="搜索项目与对话"
             value={query}
@@ -54,34 +62,16 @@ export function ProjectTree({
               fontSize: 16,
               color: theme.text,
               height: 44,
-              ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
             }}
           />
         ) : (
-          <T style={{ flex: 1, fontWeight: '600', fontSize: 15 }}>Agent Mobile</T>
+          <T variant="title" style={{ flex: 1, fontWeight: '600' }}>
+            Agent Mobile
+          </T>
         )}
-        <IconButton
-          icon={searching ? X : Search}
-          label={searching ? '收起搜索' : '搜索项目与对话'}
-          size={44}
-          onPress={() => {
-            setSearching(!searching);
-            setQuery('');
-          }}
-        />
-        {!searching && (
-          <IconButton
-            icon={Plus}
-            label="新建项目"
-            size={44}
-            disabled={controller.busy}
-            onPress={controller.newProject}
-          />
-        )}
-        {close && <IconButton icon={X} label="收起侧栏" size={44} onPress={close} />}
-      </View>
+      </Toolbar>
       {archived && (
-        <T tone="secondary" style={{ paddingHorizontal: 12, paddingTop: 8, fontSize: 12 }}>
+        <T tone="secondary" variant="caption" style={{ paddingHorizontal: 12, paddingTop: 8 }}>
           已归档
         </T>
       )}
@@ -89,6 +79,20 @@ export function ProjectTree({
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ padding: 6, paddingBottom: 12 }}
       >
+        {!controller.projects.length && (
+          <EmptyState
+            compact
+            title="暂无项目"
+            action={
+              <Button
+                label="新建项目"
+                icon={Plus}
+                onPress={controller.newProject}
+                disabled={controller.busy}
+              />
+            }
+          />
+        )}
         {controller.projects.map(project => {
           const projectMatches = project.name.toLocaleLowerCase().includes(search);
           const conversations = controller.allConversations
@@ -138,7 +142,7 @@ export function ProjectTree({
                       color={project.id === controller.projectId ? theme.accent : theme.secondary}
                     />
                   )}
-                  <T numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '600' }}>
+                  <T numberOfLines={1} variant="label" style={{ flex: 1, fontWeight: '600' }}>
                     {project.name}
                   </T>
                   {controller.runs.some(run => run.projectId === project.id) && (
@@ -215,11 +219,8 @@ export function ProjectTree({
                           )}
                           <T
                             numberOfLines={1}
-                            style={{
-                              flex: 1,
-                              fontSize: 13,
-                              color: selected ? theme.accent : theme.text,
-                            }}
+                            variant="label"
+                            style={{ flex: 1, color: selected ? theme.accent : theme.text }}
                           >
                             {item.title}
                           </T>
@@ -270,11 +271,7 @@ export function ProjectTree({
                       </View>
                     );
                   })}
-                  {!conversations.length && archived && (
-                    <T tone="muted" style={{ fontSize: 12, padding: 8 }}>
-                      暂无归档
-                    </T>
-                  )}
+                  {!conversations.length && archived && <EmptyState compact title="暂无归档" />}
                 </View>
               )}
             </View>
@@ -300,7 +297,7 @@ export function ProjectTree({
         }}
       >
         <Archive size={16} color={archived ? theme.accent : theme.secondary} />
-        <T tone={archived ? 'accent' : 'secondary'} style={{ fontSize: 12 }}>
+        <T tone={archived ? 'accent' : 'secondary'} variant="caption">
           {archived ? '返回对话' : '已归档'}
         </T>
       </Pressable>

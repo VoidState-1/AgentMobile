@@ -1,33 +1,31 @@
-import { useState, type ComponentType, type ReactNode } from 'react';
+import { typography, useWorkbenchTheme, workbenchMetrics } from '@/shared/theme';
+import { Command, type LucideProps } from '@/shared/ui/icons';
+import { forwardRef, useState, type ComponentType, type ReactNode } from 'react';
 import {
   ActivityIndicator,
-  KeyboardAvoidingView,
-  Modal,
   Platform,
   Pressable,
-  ScrollView,
-  StyleSheet,
   Text,
   TextInput,
-  useWindowDimensions,
   View,
-  type TextProps,
-  type TextInputProps,
   type StyleProp,
+  type TextInputProps,
+  type TextProps,
   type TextStyle,
   type ViewStyle,
 } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Command, MoreHorizontal, type LucideProps } from '@/shared/ui/icons';
-import { useWorkbenchTheme, workbenchMetrics } from '@/shared/theme';
 
 export type IconComponent = ComponentType<LucideProps>;
 
 export function T({
   tone = 'text',
+  variant = 'body',
   style,
   ...props
-}: TextProps & { tone?: 'text' | 'secondary' | 'muted' | 'accent' | 'danger' | 'warning' }) {
+}: TextProps & {
+  tone?: 'text' | 'secondary' | 'muted' | 'accent' | 'danger' | 'warning';
+  variant?: keyof typeof typography;
+}) {
   const theme = useWorkbenchTheme();
   return (
     <Text
@@ -35,8 +33,7 @@ export function T({
       style={[
         {
           color: theme[tone],
-          fontSize: 14,
-          lineHeight: 21,
+          ...typography[variant],
           fontFamily:
             Platform.OS === 'web' ? 'system-ui, "Microsoft YaHei", sans-serif' : undefined,
         },
@@ -45,6 +42,25 @@ export function T({
     />
   );
 }
+
+export const Input = forwardRef<TextInput, TextInputProps>(function Input(
+  { style, ...props },
+  ref,
+) {
+  const theme = useWorkbenchTheme();
+  return (
+    <TextInput
+      ref={ref}
+      placeholderTextColor={theme.muted}
+      {...props}
+      style={[
+        { color: theme.text, fontSize: 16 },
+        Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : undefined,
+        style,
+      ]}
+    />
+  );
+});
 
 export function Brand({ small }: { small?: boolean }) {
   const theme = useWorkbenchTheme();
@@ -61,6 +77,122 @@ export function Brand({ small }: { small?: boolean }) {
     >
       <Command size={small ? 17 : 21} color={theme.accentText} strokeWidth={2.2} />
     </View>
+  );
+}
+
+export function Toolbar({
+  title,
+  subtitle,
+  leading,
+  trailing,
+  children,
+  testID,
+  maxWidth,
+}: {
+  title?: string;
+  subtitle?: string;
+  leading?: ReactNode;
+  trailing?: ReactNode;
+  children?: ReactNode;
+  testID?: string;
+  maxWidth?: number;
+}) {
+  const theme = useWorkbenchTheme();
+  return (
+    <View
+      testID={testID}
+      style={{ borderBottomWidth: 1, borderColor: theme.border, backgroundColor: theme.surface }}
+    >
+      <View
+        style={{
+          minHeight: workbenchMetrics.header,
+          paddingHorizontal: 4,
+          flexDirection: 'row',
+          alignItems: 'center',
+          gap: 4,
+          width: '100%',
+          maxWidth,
+          alignSelf: 'center',
+        }}
+      >
+        {leading}
+        <View style={{ flex: 1, minWidth: 0, paddingHorizontal: 6 }}>
+          {children ?? (
+            <>
+              <T
+                accessibilityRole="header"
+                numberOfLines={1}
+                variant="title"
+                style={{ fontWeight: '600' }}
+              >
+                {title}
+              </T>
+              {!!subtitle && (
+                <T numberOfLines={1} tone="muted" variant="meta">
+                  {subtitle}
+                </T>
+              )}
+            </>
+          )}
+        </View>
+        {trailing}
+      </View>
+    </View>
+  );
+}
+
+export function ToolbarAction({
+  label,
+  text,
+  icon: Icon,
+  onPress,
+  disabled,
+  busy,
+  primary,
+}: {
+  label: string;
+  text?: string;
+  icon?: IconComponent;
+  onPress: () => void;
+  disabled?: boolean;
+  busy?: boolean;
+  primary?: boolean;
+}) {
+  const theme = useWorkbenchTheme();
+  const color = primary ? theme.accent : theme.secondary;
+  if (Icon && !text && !busy)
+    return <IconButton icon={Icon} label={label} disabled={disabled} onPress={onPress} />;
+  return (
+    <Pressable
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled || busy, busy }}
+      disabled={disabled || busy}
+      onPress={onPress}
+      style={({ pressed }) => ({
+        minWidth: workbenchMetrics.touch,
+        minHeight: workbenchMetrics.touch,
+        paddingHorizontal: 8,
+        alignItems: 'center',
+        justifyContent: 'center',
+        flexDirection: 'row',
+        gap: 5,
+        borderRadius: workbenchMetrics.radius,
+        backgroundColor: pressed ? theme.inset : 'transparent',
+        opacity: disabled ? 0.35 : 1,
+      })}
+    >
+      {busy ? (
+        <ActivityIndicator size="small" color={color} />
+      ) : Icon ? (
+        <Icon size={19} color={color} />
+      ) : null}
+      {!!text && (
+        <T variant="label" style={{ fontWeight: '600', color }}>
+          {text}
+        </T>
+      )}
+    </Pressable>
   );
 }
 
@@ -126,7 +258,9 @@ export function Button({
       ) : Icon ? (
         <Icon size={16} color={fg} />
       ) : null}
-      <T style={{ color: fg, fontWeight: '600', fontSize: 13, lineHeight: 19 }}>{label}</T>
+      <T variant="label" style={{ color: fg, fontWeight: '600' }}>
+        {label}
+      </T>
     </Pressable>
   );
 }
@@ -181,8 +315,12 @@ export function Field({
   const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 5, minWidth: 0 }}>
-      {!hideLabel && <T style={{ fontSize: 12, fontWeight: '500' }}>{label}</T>}
-      <TextInput
+      {!hideLabel && (
+        <T variant="caption" style={{ fontWeight: '500' }}>
+          {label}
+        </T>
+      )}
+      <Input
         accessibilityLabel={label}
         placeholderTextColor={theme.muted}
         autoCapitalize="none"
@@ -207,168 +345,10 @@ export function Field({
             paddingVertical: 9,
             color: theme.text,
             fontSize: 16,
-            ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : {}),
           },
           style,
         ]}
       />
     </View>
-  );
-}
-
-export function OverflowMenu({
-  label,
-  disabled,
-  items,
-}: {
-  label: string;
-  disabled?: boolean;
-  items: { label: string; onPress: () => void; disabled?: boolean }[];
-}) {
-  const [open, setOpen] = useState(false);
-  const theme = useWorkbenchTheme();
-  return (
-    <>
-      <IconButton
-        icon={MoreHorizontal}
-        label={label}
-        disabled={disabled}
-        onPress={() => setOpen(true)}
-      />
-      <Sheet visible={open} title={label} onClose={() => setOpen(false)}>
-        {items.map(item => (
-          <Pressable
-            key={item.label}
-            accessibilityRole="button"
-            accessibilityLabel={item.label}
-            disabled={item.disabled}
-            onPress={() => {
-              setOpen(false);
-              item.onPress();
-            }}
-            style={({ pressed }) => ({
-              minHeight: 44,
-              paddingHorizontal: 4,
-              justifyContent: 'center',
-              backgroundColor: pressed ? theme.inset : 'transparent',
-              opacity: item.disabled ? 0.4 : 1,
-            })}
-          >
-            <T>{item.label}</T>
-          </Pressable>
-        ))}
-      </Sheet>
-    </>
-  );
-}
-
-export function Sheet({
-  visible,
-  title,
-  subtitle,
-  onClose,
-  children,
-  footer,
-  wide,
-  busy,
-}: {
-  visible: boolean;
-  title: string;
-  subtitle?: string;
-  onClose: () => void;
-  children: ReactNode;
-  footer?: ReactNode;
-  wide?: boolean;
-  busy?: boolean;
-}) {
-  const theme = useWorkbenchTheme();
-  const { width } = useWindowDimensions();
-  const mobile = width < 700;
-  const inset = useSafeAreaInsets();
-  // Mount portals only while visible so nested confirmations appear above the
-  // editor/review that opened them, on both web and native modal stacks.
-  if (!visible) return null;
-  return (
-    <Modal
-      visible={visible}
-      transparent
-      animationType="none"
-      onRequestClose={() => {
-        if (!busy) onClose();
-      }}
-    >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'web' ? undefined : 'padding'}
-        style={[
-          StyleSheet.absoluteFill,
-          {
-            justifyContent: mobile ? 'flex-end' : 'center',
-            alignItems: 'center',
-            padding: mobile ? 0 : 16,
-            backgroundColor: theme.overlay,
-          },
-        ]}
-      >
-        <Pressable
-          accessibilityLabel="关闭面板"
-          onPress={() => {
-            if (!busy) onClose();
-          }}
-          style={StyleSheet.absoluteFill}
-        />
-        <View
-          style={{
-            width: '100%',
-            maxWidth: mobile ? undefined : wide ? 920 : 480,
-            maxHeight: mobile ? '90%' : '86%',
-            backgroundColor: theme.surface,
-            borderRadius: 8,
-            borderBottomLeftRadius: mobile ? 0 : 8,
-            borderBottomRightRadius: mobile ? 0 : 8,
-            paddingBottom: mobile ? inset.bottom : 0,
-            overflow: 'hidden',
-            borderWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          <View
-            style={{
-              paddingLeft: 12,
-              paddingRight: 4,
-              minHeight: 48,
-              flexDirection: 'row',
-              gap: 8,
-              alignItems: 'center',
-              borderBottomWidth: 1,
-              borderBottomColor: theme.border,
-            }}
-          >
-            <View style={{ flex: 1, minWidth: 0, paddingVertical: 6 }}>
-              <T accessibilityRole="header" style={{ fontWeight: '600', fontSize: 15 }}>
-                {title}
-              </T>
-              {!!subtitle && (
-                <T tone="secondary" style={{ fontSize: 12, marginTop: 3 }}>
-                  {subtitle}
-                </T>
-              )}
-            </View>
-            <IconButton icon={X} label="关闭" disabled={busy} onPress={onClose} />
-          </View>
-          <ScrollView
-            keyboardShouldPersistTaps="handled"
-            style={{ flexShrink: 1 }}
-            contentContainerStyle={{ padding: 12, gap: 10 }}
-          >
-            {children}
-          </ScrollView>
-          {footer && (
-            <View style={{ padding: 10, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
-              {footer}
-            </View>
-          )}
-        </View>
-      </KeyboardAvoidingView>
-    </Modal>
   );
 }

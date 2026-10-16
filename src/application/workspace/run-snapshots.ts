@@ -132,7 +132,7 @@ export class RunSnapshots {
         task.finalIndexSnapshot,
       )) {
         if (!changes.some(file => file.path === change.path))
-          changes.push({ ...change, kind: '暂存' + change.kind });
+          changes.push({ ...change, stagedOnly: true });
       }
     }
     return task.changedPaths

@@ -1,4 +1,5 @@
 import type { AppServices } from '@/application/services';
+import { summarizeChanges } from '@/adapters/git/change-summary';
 import type { ModelConfigurationService } from '@/application/models/configuration';
 import type { ConversationService } from '@/application/conversations/service';
 import type { AgentSettingsService } from '@/application/settings/agent';
@@ -74,9 +75,11 @@ export function createAppServices(value: AppDependencies): AppServices {
     ...expose(
       {
         taskChanges: async (id: string) => value.workspace.taskChanges(await runRecord(id)),
+        taskChangeSummary: async (id: string) =>
+          summarizeChanges(await value.workspace.taskChanges(await runRecord(id))),
         undoTask: async (id: string) => value.workspace.undoTask(await runRecord(id)),
       },
-      ['taskChanges', 'undoTask'],
+      ['taskChanges', 'taskChangeSummary', 'undoTask'],
     ),
     ...expose(
       {

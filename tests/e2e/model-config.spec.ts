@@ -151,7 +151,7 @@ test('两份连接不串密钥，收藏搜索、复制、未保存保护与刷�
   await page.getByRole('button', { name: '保存模型', exact: true }).click();
   await returnToWorkbench(page);
   await page.getByRole('button', { name: '模型设置', exact: true }).click();
-  await page.getByRole('button', { name: '模型筛选：收藏', exact: true }).click();
+  await page.getByRole('tab', { name: '模型筛选：收藏', exact: true }).click();
   await page.getByRole('button', { name: '选择模型 工作连接 · 工作模型', exact: true }).click();
   const keys: string[] = [];
   await page.route('https://example.test/**', async route => {

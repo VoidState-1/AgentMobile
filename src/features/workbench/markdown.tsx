@@ -6,13 +6,13 @@ import { safePath } from '@/core/workspace/path';
 import { T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
 
-function Inline({ text }: { text: string }) {
+function Inline({ text, tone = 'text' }: { text: string; tone?: 'text' | 'secondary' }) {
   const theme = useWorkbenchTheme();
   return (
-    <T style={{ fontSize: 14, lineHeight: 25 }}>
+    <T tone={tone} style={{ fontSize: 14, lineHeight: 25 }}>
       {text.split(/(\*\*.*?\*\*|`[^`]+`)/g).map((part, index) =>
         part.startsWith('**') ? (
-          <T key={index} style={{ fontWeight: '600' }}>
+          <T tone={tone} key={index} style={{ fontWeight: '600' }}>
             {part.slice(2, -2)}
           </T>
         ) : part.startsWith('`') ? (
@@ -20,7 +20,9 @@ function Inline({ text }: { text: string }) {
             {part.slice(1, -1)}
           </T>
         ) : (
-          <T key={index}>{part}</T>
+          <T tone={tone} key={index}>
+            {part}
+          </T>
         ),
       )}
     </T>
@@ -109,9 +111,11 @@ function LocalImage({
 export function Markdown({
   content,
   loadImage,
+  tone = 'text',
 }: {
   content: string;
   loadImage?: (target: string) => Promise<string>;
+  tone?: 'text' | 'secondary';
 }) {
   const theme = useWorkbenchTheme();
   const lines = content.split('\n');
@@ -130,6 +134,7 @@ export function Markdown({
         >
           <T
             selectable
+            tone={tone}
             style={{
               fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
               fontSize: 12,
@@ -145,6 +150,7 @@ export function Markdown({
       blocks.push(
         <T
           accessibilityRole="header"
+          tone={tone}
           key={index}
           style={{
             fontSize: level === 1 ? 22 : level === 2 ? 17 : 15,
@@ -168,7 +174,7 @@ export function Markdown({
         >
           <T tone="muted">•</T>
           <View style={{ flex: 1 }}>
-            <Inline text={line.slice(2)} />
+            <Inline text={line.slice(2)} tone={tone} />
           </View>
         </View>,
       );
@@ -199,7 +205,7 @@ export function Markdown({
     else
       blocks.push(
         <View key={index} style={{ marginVertical: 2 }}>
-          <Inline text={line} />
+          <Inline text={line} tone={tone} />
         </View>,
       );
   }

@@ -138,7 +138,7 @@ export class ProposalService {
           const limit = Math.max(0, Math.min(6000, Math.floor(remaining / 2)));
           remaining -= limit * 2;
           return isImage(change.path)
-            ? { path: change.path, kind: change.kind, image: true, before: '', after: '' }
+            ? { path: change.path, status: change.status, image: true, before: '', after: '' }
             : {
                 ...change,
                 before: change.before.slice(0, limit),

@@ -1,23 +1,16 @@
-import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
-import {
-  ActivityIndicator,
-  Pressable,
-  ScrollView,
-  View,
-  useWindowDimensions,
-} from 'react-native';
-import { Image } from 'expo-image';
-import {
-  Folder,
-  FolderOpen,
-  Image as ImageIcon,
-} from '@/shared/ui/icons';
-import type { ProjectFile } from '@/core/workspace/types';
-import type { FilesCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
-import { T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
+import type { ProjectFile } from '@/core/workspace/types';
 import { fileName, sizeLabel } from '@/shared/format';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { GitStatusBadge } from '@/shared/ui/git-status';
+import { Folder, FolderOpen, Image as ImageIcon } from '@/shared/ui/icons';
+import { T } from '@/shared/ui/primitives';
+import { ViewTabs } from '@/shared/ui/selection';
+import { Image } from 'expo-image';
+import { memo, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { ActivityIndicator, Pressable, ScrollView, View, useWindowDimensions } from 'react-native';
+import type { FilesCapability } from './use-workbench';
 
 function Thumbnail({ file, controller }: { file: ProjectFile; controller: FilesCapability }) {
   const { preview, projectId } = controller;
@@ -92,10 +85,6 @@ export const FilesPane = memo(function FilesPane({
   const changed = new Map(
     controller.gitStatus?.files.map(file => [file.path, file.unstaged ?? file.staged]) ?? [],
   );
-  const marker = (path: string) =>
-    changed.get(path)
-      ? ({ added: 'A', modified: 'M', deleted: 'D' } as const)[changed.get(path)!]
-      : '';
   const fileRow = (file: ProjectFile, depth: number) => (
     <Pressable
       key={file.path}
@@ -127,26 +116,22 @@ export const FilesPane = memo(function FilesPane({
           <Thumbnail file={file} controller={controller} />
         </View>
       ) : (
-        <T tone="muted" style={{ width: 24, fontSize: 10 }}>
+        <T tone="muted" variant="meta" style={{ width: 24 }}>
           {file.path.split('.').at(-1)?.slice(0, 4)}
         </T>
       )}
       <View style={{ flex: 1, minWidth: 0 }}>
-        <T numberOfLines={1} style={{ fontSize: 13 }}>
+        <T numberOfLines={1} variant="label">
           {fileName(file.path)}
         </T>
         {!!query && (
-          <T tone="muted" numberOfLines={1} style={{ fontSize: 11 }}>
+          <T tone="muted" numberOfLines={1} variant="meta">
             {file.path}
           </T>
         )}
       </View>
-      {!!marker(file.path) && (
-        <T tone="warning" accessibilityLabel={'Git ' + marker(file.path)} style={{ fontSize: 12 }}>
-          {marker(file.path)}
-        </T>
-      )}
-      <T tone="muted" style={{ fontSize: 11 }}>
+      {changed.get(file.path) && <GitStatusBadge status={changed.get(file.path)!} />}
+      <T tone="muted" variant="meta">
         {sizeLabel(file.size)}
       </T>
     </Pressable>
@@ -186,7 +171,7 @@ export const FilesPane = memo(function FilesPane({
               ) : (
                 <Folder size={16} color={theme.accent} />
               )}
-              <T numberOfLines={1} style={{ fontSize: 13, flex: 1 }}>
+              <T numberOfLines={1} variant="label" style={{ flex: 1 }}>
                 {node.name}
               </T>
             </Pressable>
@@ -196,33 +181,21 @@ export const FilesPane = memo(function FilesPane({
       });
   return (
     <View style={{ flex: 1, backgroundColor: theme.surface }}>
-      <View style={{ paddingHorizontal: 8, borderBottomWidth: 1, borderColor: theme.border }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-          {(['all', 'text', 'image'] as const).map(value => (
-            <Pressable
-              key={value}
-              accessibilityRole="button"
-              accessibilityLabel={{ all: '全部', text: '文字', image: '图片' }[value]}
-              accessibilityState={{ selected: filter === value }}
-              onPress={() => setFilter(value)}
-              style={{
-                minHeight: 40,
-                paddingHorizontal: 10,
-                justifyContent: 'center',
-                borderBottomWidth: 2,
-                borderBottomColor: filter === value ? theme.accent : 'transparent',
-              }}
-            >
-              <T tone={filter === value ? 'accent' : 'secondary'} style={{ fontSize: 12 }}>
-                {{ all: '全部', text: '文字', image: '图片' }[value]}
-              </T>
-            </Pressable>
-          ))}
-          <T tone="muted" style={{ flex: 1, textAlign: 'right', fontSize: 11, paddingRight: 4 }}>
+      <ViewTabs
+        label="文件类型"
+        value={filter}
+        onChange={setFilter}
+        options={[
+          { value: 'all', label: '全部' },
+          { value: 'text', label: '文字' },
+          { value: 'image', label: '图片' },
+        ]}
+        trailing={
+          <T tone="muted" variant="caption">
             {entries.length}
           </T>
-        </View>
-      </View>
+        }
+      />
       <ScrollView
         keyboardShouldPersistTaps="handled"
         contentContainerStyle={{ paddingHorizontal: 10, paddingBottom: 12 }}
@@ -250,9 +223,12 @@ export const FilesPane = memo(function FilesPane({
                 <View style={{ height: 100, backgroundColor: theme.inset }}>
                   <Thumbnail file={file} controller={controller} />
                 </View>
-                <T numberOfLines={1} style={{ fontSize: 12, padding: 6 }}>
-                  {fileName(file.path)}
-                </T>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4, padding: 6 }}>
+                  <T numberOfLines={1} variant="caption" style={{ flex: 1 }}>
+                    {fileName(file.path)}
+                  </T>
+                  {changed.get(file.path) && <GitStatusBadge status={changed.get(file.path)!} />}
+                </View>
               </Pressable>
             ))}
           </View>
@@ -262,9 +238,7 @@ export const FilesPane = memo(function FilesPane({
           nodes(tree, 0)
         )}
         {!controller.projectLoading && !entries.length && (
-          <T tone="muted" style={{ paddingVertical: 24, fontSize: 13 }}>
-            {query ? '没有匹配的文件' : '暂无文件'}
-          </T>
+          <EmptyState compact title={query ? '没有匹配的文件' : '暂无文件'} />
         )}
       </ScrollView>
     </View>

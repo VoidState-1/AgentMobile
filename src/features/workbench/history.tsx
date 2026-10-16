@@ -1,13 +1,15 @@
+import { ActionRow } from '@/shared/ui/action-row';
+import type { GitFileStatus } from '@/core/git/contracts';
+import { dateLabel } from '@/shared/format';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { GitStatusBadge } from '@/shared/ui/git-status';
+import { ChevronRight, GitCommitHorizontal, Plus, RotateCcw, X } from '@/shared/ui/icons';
+import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
+import { ViewTabs } from '@/shared/ui/selection';
 import { memo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
-import { Check, ChevronRight, GitCommitHorizontal, Plus, RotateCcw, X } from '@/shared/ui/icons';
 import type { GitCapability } from './use-workbench';
-import type { GitFileStatus } from '@/core/git/contracts';
-import { Button, Field, IconButton, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
-import { dateLabel } from '@/shared/format';
-
-const statusLabel = { added: '新增', modified: '修改', deleted: '删除' };
 
 export const HistoryPane = memo(function HistoryPane({
   controller,
@@ -32,7 +34,7 @@ export const HistoryPane = memo(function HistoryPane({
           gap: 8,
         }}
       >
-        <T style={{ fontSize: 12, fontWeight: '600' }}>
+        <T variant="caption" style={{ fontWeight: '600' }}>
           {area === 'staged' ? '已暂存' : '未暂存'} · {files.length}
         </T>
         {!!files.length && (
@@ -51,9 +53,7 @@ export const HistoryPane = memo(function HistoryPane({
         )}
       </View>
       {files.length === 0 ? (
-        <T tone="muted" style={{ fontSize: 12, paddingVertical: 8 }}>
-          没有{area === 'staged' ? '已暂存' : '未暂存'}更改
-        </T>
+        <EmptyState compact title={'没有' + (area === 'staged' ? '已暂存' : '未暂存') + '更改'} />
       ) : (
         files.map(file => (
           <View
@@ -68,15 +68,7 @@ export const HistoryPane = memo(function HistoryPane({
               borderColor: theme.border,
             }}
           >
-            <T
-              style={{
-                width: 26,
-                fontSize: 11,
-                color: file[area] === 'deleted' ? theme.danger : theme.success,
-              }}
-            >
-              {statusLabel[file[area]!]}
-            </T>
+            <GitStatusBadge status={file[area]!} />
             <Pressable
               accessibilityRole="button"
               accessibilityLabel={
@@ -88,7 +80,7 @@ export const HistoryPane = memo(function HistoryPane({
               }}
               style={{ flex: 1, minWidth: 0, minHeight: 44, justifyContent: 'center' }}
             >
-              <T numberOfLines={2} style={{ fontSize: 13 }}>
+              <T numberOfLines={2} variant="label">
                 {file.path}
               </T>
             </Pressable>
@@ -127,42 +119,24 @@ export const HistoryPane = memo(function HistoryPane({
         alignSelf: 'center',
       }}
     >
-      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 9 }}>
-        <T tone="muted" style={{ fontSize: 11 }}>
-          main · {status?.head.slice(0, 7) ?? '…'}
-        </T>
-      </View>
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: 6,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-          paddingBottom: 6,
-        }}
-      >
-        <Button
-          compact
-          label={'更改' + (status?.files.length ? ' · ' + status.files.length : '')}
-          variant={tab === 'changes' ? 'primary' : 'ghost'}
-          onPress={() => setTab('changes')}
-        />
-        <Button
-          compact
-          label={'提交历史 · ' + controller.versions.length}
-          variant={tab === 'history' ? 'primary' : 'ghost'}
-          onPress={() => setTab('history')}
-        />
-      </View>
+      <ViewTabs
+        label="Git 视图"
+        value={tab}
+        onChange={setTab}
+        options={[
+          { value: 'changes', label: '更改', count: status?.files.length || undefined },
+          { value: 'history', label: '提交历史', count: controller.versions.length },
+        ]}
+      />
       {tab === 'changes' ? (
         <>
           {controller.projectActive && (
-            <T tone="secondary" style={{ fontSize: 12 }}>
+            <T tone="secondary" variant="caption">
               Agent 正在使用此项目，完成或停止后可暂存与提交。
             </T>
           )}
           {controller.dirty && (
-            <T tone="warning" style={{ fontSize: 12 }}>
+            <T tone="warning" variant="caption">
               编辑器中有未保存的修改，请先保存。
             </T>
           )}
@@ -195,45 +169,29 @@ export const HistoryPane = memo(function HistoryPane({
         </>
       ) : (
         controller.versions.map((version, index) => (
-          <Pressable
+          <ActionRow
             key={version.oid}
-            accessibilityRole="button"
-            accessibilityLabel={'查看版本 ' + version.oid.slice(0, 7)}
+            label={'查看版本 ' + version.oid.slice(0, 7)}
             disabled={controller.busy}
             onPress={() => {
               void controller.reviewVersion(version);
             }}
-            style={({ pressed }) => ({
-              flexDirection: 'row',
-              alignItems: 'flex-start',
-              gap: 8,
-              paddingVertical: 8,
-              paddingHorizontal: 6,
-              borderBottomWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: pressed ? theme.inset : 'transparent',
-              borderRadius: 3,
-            })}
-          >
-            <GitCommitHorizontal
-              size={18}
-              color={index === 0 ? theme.accent : theme.muted}
-              style={{ marginTop: 3 }}
-            />
-            <View style={{ flex: 1, gap: 4 }}>
-              <T style={{ fontSize: 13, fontWeight: '500' }}>{version.message.split('\n')[0]}</T>
-              <T tone="muted" style={{ fontSize: 11 }}>
-                {dateLabel(version.timestamp)} · {version.oid.slice(0, 7)}
-              </T>
-              {index === 0 && (
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                  <Check size={12} color={theme.success} />
-                  <T style={{ fontSize: 11, color: theme.success }}>当前版本</T>
-                </View>
-              )}
-            </View>
-            <ChevronRight size={16} color={theme.muted} style={{ marginTop: 7 }} />
-          </Pressable>
+            title={version.message.split('\n')[0]}
+            meta={dateLabel(version.timestamp) + ' · ' + version.oid.slice(0, 7)}
+            leading={
+              <GitCommitHorizontal size={18} color={index === 0 ? theme.accent : theme.muted} />
+            }
+            trailing={
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                {index === 0 && (
+                  <T tone="accent" variant="meta">
+                    当前版本
+                  </T>
+                )}
+                <ChevronRight size={16} color={theme.muted} />
+              </View>
+            }
+          />
         ))
       )}
       {tab === 'history' && controller.versionCursor && (

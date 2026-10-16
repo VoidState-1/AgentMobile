@@ -145,7 +145,7 @@ if (!process.argv.includes('--fault')) {
     }
   }
   await open();
-  await tap('查看变化');
+  await tap('查看产物差异 documents/proposal.md');
   await tap('撤销修改');
   await tap('确认恢复');
   await tap('文件');

@@ -26,7 +26,7 @@ export async function addConnection(
   await page.getByLabel('服务基础地址', { exact: true }).fill('https://example.test/v1');
   await page.getByLabel('API Key', { exact: true }).fill(key);
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
-  await expect(page.getByText('凭证已保存 · 留空保留现有密钥', { exact: true })).toBeVisible();
+  await expect(page.getByText('凭证已保存 · 留空保留现有凭证', { exact: true })).toBeVisible();
 }
 export async function addModel(page: Page, name: string, apiId = 'protocol-test', images = false) {
   await page.getByRole('button', { name: '手工添加', exact: true }).click();

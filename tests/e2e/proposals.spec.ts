@@ -99,7 +99,10 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
   await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await expect(page.getByText('提交历史 · 1', { exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '对话', exact: true }).click();
-  await page.getByRole('button', { name: '查看变化', exact: true }).click();
+  await page
+    .getByRole('button', { name: /^查看产物差异 / })
+    .first()
+    .click();
   await page.getByRole('button', { name: '撤销修改', exact: true }).click();
   await page.getByRole('button', { name: '确认恢复', exact: true }).click();
   await page.getByRole('tab', { name: '文件', exact: true }).click();

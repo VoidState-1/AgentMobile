@@ -89,7 +89,12 @@ test('同项目第二对话发送后排队，不提前请求模型，首任务�
   await page.getByRole('button', { name: '新建对话', exact: true }).click();
   await page.getByLabel('任务目标', { exact: true }).fill('SECOND');
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
-  await expect(page.getByText('等待启动', { exact: true })).toBeVisible();
+  await expect(
+    page.getByTestId('conversation-scroll').getByText('排队中', { exact: true }),
+  ).toBeVisible();
+  await expect(
+    page.getByRole('button', { name: '查看活动任务 SECOND', exact: true }),
+  ).toContainText('排队中');
   await expect(page.getByRole('button', { name: '取消排队', exact: true })).toBeVisible();
   expect(goals).toEqual(['FIRST']);
   release();

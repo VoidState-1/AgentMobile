@@ -1,4 +1,5 @@
 import { AppError } from '@/core/errors';
+import type { ReviewFile } from '@/application/services';
 import type { WorkspaceContext } from './context';
 import type { Operation } from '@/core/workspace/journal';
 import type { ProjectFile } from '@/core/workspace/types';
@@ -44,7 +45,7 @@ export class GitService {
     return this.treeChanges(before, after);
   }
 
-  treeChanges(before: Record<string, Uint8Array>, after: Record<string, Uint8Array>) {
+  treeChanges(before: Record<string, Uint8Array>, after: Record<string, Uint8Array>): ReviewFile[] {
     const result = [];
     for (const path of [...new Set([...Object.keys(before), ...Object.keys(after)])]) {
       if (path === 'project.json') continue;
@@ -56,7 +57,11 @@ export class GitService {
         continue;
       result.push({
         path,
-        kind: !before[path] ? '新增' : !after[path] ? '删除' : '修改',
+        status: !before[path]
+          ? ('added' as const)
+          : !after[path]
+            ? ('deleted' as const)
+            : ('modified' as const),
         before: before[path]
           ? isImage(path)
             ? 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(before[path])
@@ -118,6 +123,7 @@ export class GitService {
       .filter(file => file.staged || file.unstaged);
     return {
       head,
+      branch: await this.context.git.branch(projectId),
       files,
       indexRevision: await this.fingerprint(index),
       workingRevision: await this.fingerprint(working),

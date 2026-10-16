@@ -1,0 +1,143 @@
+{
+  "scopes": [
+    {
+      "folder": "src/app",
+      "files": 10,
+      "lines": 49
+    },
+    {
+      "folder": "src/features",
+      "files": 37,
+      "lines": 9179
+    },
+    {
+      "folder": "src/shared",
+      "files": 9,
+      "lines": 1136
+    }
+  ],
+  "totalFiles": 56,
+  "totalLines": 10364,
+  "largest": [
+    {
+      "file": "src/features/workbench/use-workbench.ts",
+      "lines": 942
+    },
+    {
+      "file": "src/features/workbench/trace.tsx",
+      "lines": 605
+    },
+    {
+      "file": "src/features/model-config/model.tsx",
+      "lines": 588
+    },
+    {
+      "file": "src/features/workbench/conversation.tsx",
+      "lines": 534
+    },
+    {
+      "file": "src/features/skills/editor.tsx",
+      "lines": 527
+    },
+    {
+      "file": "src/features/workbench/screen.tsx",
+      "lines": 521
+    },
+    {
+      "file": "src/features/model-config/connection.tsx",
+      "lines": 490
+    },
+    {
+      "file": "src/features/mcp/server.tsx",
+      "lines": 487
+    },
+    {
+      "file": "src/shared/ui/primitives.tsx",
+      "lines": 466
+    },
+    {
+      "file": "src/features/workbench/use-workbench-data.ts",
+      "lines": 422
+    }
+  ],
+  "inlineObjectStyles": 426,
+  "memoObjects": [
+    {
+      "capability": "settings",
+      "fields": 4
+    },
+    {
+      "capability": "conversation",
+      "fields": 32
+    },
+    {
+      "capability": "editor",
+      "fields": 17
+    },
+    {
+      "capability": "files",
+      "fields": 11
+    },
+    {
+      "capability": "git",
+      "fields": 21
+    },
+    {
+      "capability": "runs",
+      "fields": 5
+    },
+    {
+      "capability": "dialogs",
+      "fields": 52
+    }
+  ],
+  "lightContrasts": [
+    {
+      "foreground": "#788397",
+      "background": "#FFFFFF",
+      "role": "muted on surface",
+      "ratio": 3.82
+    },
+    {
+      "foreground": "#788397",
+      "background": "#F7F8FC",
+      "role": "muted on background",
+      "ratio": 3.6
+    },
+    {
+      "foreground": "#A17131",
+      "background": "#FBF3E6",
+      "role": "warning on warningSoft",
+      "ratio": 3.87
+    },
+    {
+      "foreground": "#687286",
+      "background": "#FFFFFF",
+      "role": "secondary on surface",
+      "ratio": 4.84
+    },
+    {
+      "foreground": "#C04753",
+      "background": "#FCEEF0",
+      "role": "danger on dangerSoft",
+      "ratio": 4.36
+    }
+  ],
+  "boundaryProbes": [
+    {
+      "file": "src/features/audit-boundary.ts",
+      "source": "import * as SQLite from 'expo-sqlite';",
+      "architectureErrors": 0
+    },
+    {
+      "file": "src/features/audit-boundary.ts",
+      "source": "import * as SecureStore from 'expo-secure-store';",
+      "architectureErrors": 0
+    },
+    {
+      "file": "src/shared/audit-boundary.ts",
+      "source": "import { WorkbenchScreen } from '@/features/workbench/screen';",
+      "architectureErrors": 0
+    }
+  ]
+}

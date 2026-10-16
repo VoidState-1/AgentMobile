@@ -43,6 +43,7 @@ async function fixture() {
   cleanups.push(f.cleanup);
   const workspace = createWorkspace(f.files, f.metadata, randomUUID);
   const project = await workspace.create('Git 测试');
+  expect((await workspace.status(project.id)).branch).toBe('main');
   const cli = (...args: string[]) =>
     execFileSync('git', ['-C', f.resolve(workspace.git.dir(project.id)), ...args], {
       encoding: 'utf8',
@@ -70,6 +71,13 @@ async function fixture() {
     workspace.commitStaged(project.id, message, await workspace.status(project.id), paths);
   return { ...f, workspace, project, cli, save, stage, commit };
 }
+it('Git 状态读取真实分支，分离 HEAD 时不编造分支名', async () => {
+  const f = await fixture();
+  f.cli('branch', '-m', 'review');
+  expect((await f.workspace.status(f.project.id)).branch).toBe('review');
+  f.cli('checkout', '--detach');
+  expect((await f.workspace.status(f.project.id)).branch).toBeNull();
+});
 
 describe('标准工作区、暂存区与提交', () => {
   it('反复保存不移动 HEAD；内部检查点不进入 git log，标准 CLI 可查看未暂存内容', async () => {
@@ -349,7 +357,8 @@ describe('任务基线、保护与撤销', () => {
     expect(task.changedPaths).toContain('b.md');
     expect(task.uncommittedPaths).toContain(path);
     expect((await f.workspace.taskChanges(task)).find(file => file.path === path)).toMatchObject({
-      kind: '暂存修改',
+      status: 'modified',
+      stagedOnly: true,
       after: 'staged task edit',
     });
     await f.workspace.undoTask(task);

@@ -1,75 +1,18 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { IconButton, Input, T, Toolbar } from '@/shared/ui/primitives';
+import { useRouter } from 'expo-router';
+import { useState, type ReactNode } from 'react';
+import type { TextInputProps } from 'react-native';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
   Platform,
-  Pressable,
   ScrollView,
   Switch,
-  TextInput,
-  type TextInputProps,
   View,
 } from 'react-native';
-import { useNavigation, useRouter } from 'expo-router';
-import { usePreventRemove } from 'expo-router/react-navigation';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from './icons';
-import { Button, IconButton, Sheet, T } from './primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
-
-export function useDraftGuard(dirty: boolean) {
-  const navigation = useNavigation();
-  const [leave, setLeave] = useState<() => void>();
-  const [allowed, setAllowed] = useState(false);
-  const [pending, setPending] = useState<() => void>();
-  const allow = (next: () => void) => {
-    setAllowed(true);
-    setPending(() => next);
-  };
-  usePreventRemove(dirty && !allowed, ({ data }) =>
-    setLeave(() => () => allow(() => navigation.dispatch(data.action))),
-  );
-  useEffect(() => {
-    pending?.();
-  }, [pending]);
-  useEffect(() => {
-    if (Platform.OS !== 'web' || !dirty) return;
-    const prevent = (event: BeforeUnloadEvent) => {
-      event.preventDefault();
-      event.returnValue = '';
-    };
-    window.addEventListener('beforeunload', prevent);
-    return () => window.removeEventListener('beforeunload', prevent);
-  }, [dirty]);
-  const exit = (next: () => void) => {
-    if (dirty) setLeave(() => () => allow(next));
-    else next();
-  };
-  const guard = (
-    <Sheet
-      visible={!!leave}
-      title="有尚未保存的配置"
-      onClose={() => setLeave(undefined)}
-      footer={
-        <View style={{ gap: 8 }}>
-          <Button label="继续编辑" onPress={() => setLeave(undefined)} />
-          <Button
-            label="放弃修改并离开"
-            variant="danger"
-            onPress={() => {
-              const next = leave;
-              setLeave(undefined);
-              next?.();
-            }}
-          />
-        </View>
-      }
-    >
-      <T tone="secondary">离开将丢弃当前修改。</T>
-    </Sheet>
-  );
-  return { exit, guard, allow };
-}
 
 export function ConfigPage({
   title,
@@ -100,47 +43,19 @@ export function ConfigPage({
         backgroundColor: theme.surface,
       }}
     >
-      <View
-        style={{
-          backgroundColor: theme.surface,
-          borderBottomWidth: 1,
-          borderBottomColor: theme.border,
-        }}
-      >
-        <View
-          style={{
-            width: '100%',
-            maxWidth: 820,
-            alignSelf: 'center',
-            paddingHorizontal: 6,
-            minHeight: 48,
-            flexDirection: 'row',
-            alignItems: 'center',
-            gap: 8,
-          }}
-        >
+      <Toolbar
+        title={title}
+        subtitle={subtitle}
+        maxWidth={820}
+        leading={
           <IconButton
             icon={ArrowLeft}
             label="返回"
             onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))}
           />
-          <View style={{ flex: 1, minWidth: 0, paddingVertical: 5 }}>
-            <T
-              accessibilityRole="header"
-              numberOfLines={1}
-              style={{ fontWeight: '600', fontSize: 15 }}
-            >
-              {title}
-            </T>
-            {!!subtitle && (
-              <T tone="muted" numberOfLines={1} style={{ fontSize: 11 }}>
-                {subtitle}
-              </T>
-            )}
-          </View>
-          {action}
-        </View>
-      </View>
+        }
+        trailing={action}
+      />
       <View style={{ flex: 1, width: '100%', maxWidth: 820, alignSelf: 'center', minHeight: 0 }}>
         {children}
       </View>
@@ -203,7 +118,8 @@ export function Section({
       <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, gap: 4 }}>
         <T
           accessibilityRole="header"
-          style={{ flex: 1, fontWeight: '600', fontSize: 13, color: theme.accent }}
+          variant="label"
+          style={{ flex: 1, fontWeight: '600', color: theme.accent }}
         >
           {title}
         </T>
@@ -232,7 +148,7 @@ export function NumberField({
       <T numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
         {label}
       </T>
-      <TextInput
+      <Input
         {...props}
         accessibilityLabel={accessibilityLabel ?? label}
         autoCapitalize="none"
@@ -257,10 +173,9 @@ export function NumberField({
           color: theme.text,
           borderBottomWidth: 1,
           borderBottomColor: focused ? theme.accent : theme.border,
-          ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
         }}
       />
-      <T tone="secondary" numberOfLines={1} style={{ width: 44, fontSize: 12 }}>
+      <T tone="secondary" numberOfLines={1} variant="caption" style={{ width: 44 }}>
         {unit ?? ''}
       </T>
     </View>
@@ -284,9 +199,9 @@ export function Toggle({
   return (
     <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
       <View style={{ flex: 1, minWidth: 0 }}>
-        <T style={{ fontSize: 13 }}>{label}</T>
+        <T variant="label">{label}</T>
         {!!hint && (
-          <T tone="muted" style={{ fontSize: 11 }}>
+          <T tone="muted" variant="meta">
             {hint}
           </T>
         )}
@@ -299,64 +214,6 @@ export function Toggle({
         trackColor={{ true: theme.accent, false: theme.border }}
         thumbColor={Platform.OS === 'android' ? theme.surface : undefined}
       />
-    </View>
-  );
-}
-
-export function Choices<TValue extends string>({
-  label,
-  value,
-  options,
-  onChange,
-  disabled,
-}: {
-  label: string;
-  value: TValue;
-  options: { value: TValue; label: string }[];
-  onChange: (value: TValue) => void;
-  disabled?: boolean;
-}) {
-  const theme = useWorkbenchTheme();
-  return (
-    <View style={{ gap: 5 }}>
-      <T style={{ fontSize: 12 }}>{label}</T>
-      <View
-        style={{
-          flexDirection: 'row',
-          gap: 3,
-          flexWrap: 'wrap',
-          padding: 3,
-          borderRadius: 6,
-          backgroundColor: theme.inset,
-        }}
-      >
-        {options.map(option => (
-          <Pressable
-            key={option.value}
-            accessibilityRole="button"
-            accessibilityLabel={label + '：' + option.label}
-            accessibilityState={{ selected: value === option.value }}
-            onPress={() => onChange(option.value)}
-            disabled={disabled}
-            style={({ pressed }) => ({
-              flexGrow: 1,
-              flexShrink: 1,
-              minHeight: 44,
-              paddingHorizontal: 8,
-              justifyContent: 'center',
-              alignItems: 'center',
-              borderRadius: 4,
-              backgroundColor:
-                value === option.value ? theme.surface : pressed ? theme.accentSoft : 'transparent',
-              opacity: disabled ? 0.45 : 1,
-            })}
-          >
-            <T tone={value === option.value ? 'accent' : 'secondary'} style={{ fontSize: 12 }}>
-              {option.label}
-            </T>
-          </Pressable>
-        ))}
-      </View>
     </View>
   );
 }

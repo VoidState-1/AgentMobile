@@ -29,7 +29,7 @@ export function useGitActions(context: GitContext) {
     setEditor,
     guard,
   } = context;
-  async function reviewTask(task: RunView) {
+  async function reviewTask(task: RunView, path?: string) {
     if (!runtime) return;
     await action(async () => {
       const head = await runtime.workspace.head(task.projectId);
@@ -38,6 +38,7 @@ export function useGitActions(context: GitContext) {
         title: '任务的文件变化',
         files: scoped,
         task,
+        initialPath: path,
         restoreRef: scoped.length ? (task.baseSnapshot ?? task.baseCommit) : undefined,
         expectedHead: head,
       });

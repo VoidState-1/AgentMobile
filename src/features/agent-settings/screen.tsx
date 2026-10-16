@@ -1,23 +1,19 @@
-import { useState } from 'react';
-import { View } from 'react-native';
-import { useRouter } from 'expo-router';
+import { useDraftGuard } from '@/shared/use-draft-guard';
 import type { AppServices as Runtime } from '@/application/services';
 import {
+  contentLimits,
   defaultAgentLimits,
   defaultSystemPrompt,
-  contentLimits,
   type AgentLimits,
 } from '@/core/agent/settings';
-import { Button, Field, OverflowMenu, T } from '@/shared/ui/primitives';
-import {
-  ConfigPage,
-  FormScroll,
-  Loading,
-  NumberField,
-  Section,
-  useDraftGuard,
-} from '@/shared/ui/forms';
+import { FormFooter } from '@/shared/ui/feedback';
+import { ConfigPage, FormScroll, Loading, NumberField, Section } from '@/shared/ui/forms';
+import { OverflowMenu } from '@/shared/ui/menus';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { useAction } from '@/shared/use-action';
 import { useAppServices } from '@/shared/use-app-services';
+import { useRouter } from 'expo-router';
+import { useState } from 'react';
 
 const fields: {
   key: keyof AgentLimits;
@@ -68,18 +64,14 @@ function Editor({ runtime }: { runtime: Runtime }) {
   const [saved, setSaved] = useState(
     JSON.stringify([initial.systemPrompt, limitsDraft(initial.limits)]),
   );
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState('');
+  const { busy, error, action } = useAction();
   const [notice, setNotice] = useState('');
   const signature = JSON.stringify([prompt, limits]);
   const dirty = signature !== saved;
   const guard = useDraftGuard(dirty);
   const save = async () => {
-    if (busy) return;
-    setBusy(true);
-    setError('');
     setNotice('');
-    try {
+    await action(async () => {
       const value = await runtime.agentSettings.save(
         {
           systemPrompt: prompt,
@@ -95,28 +87,14 @@ function Editor({ runtime }: { runtime: Runtime }) {
       setRevision(value.revision);
       setSaved(JSON.stringify([value.systemPrompt, next]));
       setNotice('Agent 设置已保存，下次任务生效。');
-    } catch (reason) {
-      setError(reason instanceof Error ? reason.message : '保存失败，请重试。');
-    } finally {
-      setBusy(false);
-    }
+    });
   };
   return (
     <ConfigPage
       title="Agent 设置"
       onBack={() => guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/')))}
       footer={
-        <View style={{ gap: 7 }}>
-          {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
-              {error}
-            </T>
-          )}
-          {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
-              {notice}
-            </T>
-          )}
+        <FormFooter error={error} notice={notice}>
           <Button
             label="保存 Agent 设置"
             disabled={!dirty}
@@ -125,7 +103,7 @@ function Editor({ runtime }: { runtime: Runtime }) {
               void save();
             }}
           />
-        </View>
+        </FormFooter>
       }
     >
       <FormScroll>
@@ -162,7 +140,7 @@ function Editor({ runtime }: { runtime: Runtime }) {
             style={{ height: 144, lineHeight: 22 }}
           />
           {prompt.length >= contentLimits.systemPromptCharacters * 0.9 && (
-            <T tone="warning" style={{ fontSize: 12 }}>
+            <T tone="warning" variant="caption">
               {prompt.length.toLocaleString()} / 16,000 字符
             </T>
           )}

@@ -1,24 +1,23 @@
-import { useEffect, useRef, useState } from 'react';
-import { FlatList, Pressable, View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useDraftGuard } from '@/shared/use-draft-guard';
 import type { ModelsApi as ModelConfigurationService } from '@/application/services';
-import type { ProviderConnection, ProviderPresetId } from '@/core/models/types';
-import { providerPresets, protocolNames } from '@/core/models/presets';
+import { protocolNames, providerPresets } from '@/core/models/presets';
 import { serviceOrigin } from '@/core/models/rules';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { ChevronRight, Plus } from '@/shared/ui/icons';
+import type { ProviderConnection, ProviderPresetId } from '@/core/models/types';
 import { useWorkbenchTheme } from '@/shared/theme';
-import {
-  CheckResult,
-  Choices,
-  ConfigPage,
-  Loading,
-  Section,
-  Toggle,
-  useConfiguration,
-  useDraftGuard,
-  type ConfigurationController,
-} from './common';
+import { ActionRow } from '@/shared/ui/action-row';
+import { CredentialField } from '@/shared/ui/credential-field';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { FormFooter } from '@/shared/ui/feedback';
+import { ConfigPage, Loading, Section, Toggle } from '@/shared/ui/forms';
+import { ChevronRight, Plus } from '@/shared/ui/icons';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { SegmentedControl, ViewTabs } from '@/shared/ui/selection';
+import { ConfirmSheet } from '@/shared/ui/sheets';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { FlatList, View } from 'react-native';
+import { CheckResult } from './check-result';
+import { useModelConfiguration, type ModelConfigurationController } from './use-configuration';
 
 type Draft = Parameters<ModelConfigurationService['saveConnection']>[0];
 const edit = (value: ProviderConnection): Draft => ({
@@ -34,7 +33,7 @@ const edit = (value: ProviderConnection): Draft => ({
 });
 
 export function ConnectionScreen() {
-  const controller = useConfiguration();
+  const controller = useModelConfiguration();
   const params = useLocalSearchParams<{ id?: string; preset?: ProviderPresetId }>();
   const connection = controller.config.connections.find(item => item.id === params.id);
   if (!controller.runtime)
@@ -64,7 +63,7 @@ function ConnectionEditor({
   connection,
   preset,
 }: {
-  controller: ConfigurationController;
+  controller: ModelConfigurationController;
   connection?: ProviderConnection;
   preset: ProviderPresetId;
 }) {
@@ -165,24 +164,14 @@ function ConnectionEditor({
         guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/models')))
       }
       footer={
-        <View style={{ gap: 6 }}>
-          {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
-              {error}
-            </T>
-          )}
-          {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
-              {notice}
-            </T>
-          )}
+        <FormFooter error={error} notice={notice}>
           <Button
             label="保存连接"
             busy={busy && !probing}
             disabled={probing || (!dirty && !!connection)}
             onPress={save}
           />
-        </View>
+        </FormFooter>
       }
     >
       <FlatList
@@ -200,7 +189,7 @@ function ConnectionEditor({
                 editable={!busy}
                 onChangeText={name => update({ name })}
               />
-              <Choices
+              <SegmentedControl
                 label="通信协议"
                 value={draft.protocol}
                 disabled={busy}
@@ -235,7 +224,7 @@ function ConnectionEditor({
                 />
               )}
               {draft.protocol === 'chat-completions' && (
-                <Choices
+                <SegmentedControl
                   label="兼容特性"
                   value={draft.compatibility}
                   disabled={busy}
@@ -260,7 +249,7 @@ function ConnectionEditor({
             </Section>
             <Section title="认证与凭证">
               {draft.protocol === 'chat-completions' && (
-                <Choices
+                <SegmentedControl
                   label="认证方式"
                   value={draft.auth}
                   disabled={busy}
@@ -275,154 +264,115 @@ function ConnectionEditor({
                 />
               )}
               {draft.auth === 'key' && (
-                <>
-                  <T
-                    tone={originChanged || removeKey || !keyReady ? 'warning' : 'accent'}
-                    style={{ fontSize: 12 }}
-                  >
-                    {originChanged
-                      ? '服务 Origin 已变更，保存时需重新绑定密钥。'
-                      : removeKey
-                        ? '保存后将移除凭证'
-                        : keyReady
-                          ? '凭证已保存 · 留空保留现有密钥'
-                          : '凭证缺失 · 可先保存连接，稍后补填'}
-                  </T>
-                  <Field
-                    label={keyReady ? '替换 API Key' : 'API Key'}
-                    secureTextEntry
-                    value={secret}
-                    editable={!busy}
-                    placeholder={keyReady ? '输入新密钥，或留空保留' : '输入服务密钥'}
-                    onChangeText={value => {
-                      setSecret(value);
-                      setRemoveKey(false);
-                    }}
+                <CredentialField
+                  label={keyReady ? '替换 API Key' : 'API Key'}
+                  value={secret}
+                  onChange={setSecret}
+                  ready={keyReady}
+                  remove={removeKey}
+                  onRemoveChange={setRemoveKey}
+                  disabled={busy}
+                  changedWarning={
+                    originChanged ? '服务 Origin 已变更，保存时需重新绑定密钥。' : undefined
+                  }
+                />
+              )}
+            </Section>
+            {connection && (
+              <>
+                <Section title="服务检测">
+                  <Button
+                    label="检测连接并发现模型"
+                    variant="secondary"
+                    busy={probing}
+                    disabled={!connection || dirty || busy}
+                    onPress={test}
                   />
-                  {keyReady && (
+                  {probing && (
                     <Button
-                      label={removeKey ? '保留已有凭证' : '移除已有凭证'}
+                      label="取消检测"
                       variant="ghost"
-                      disabled={busy}
-                      onPress={() => {
-                        setRemoveKey(!removeKey);
-                        setSecret('');
-                      }}
+                      onPress={() => probe.current?.abort()}
                     />
                   )}
-                </>
-              )}
-            </Section>
-            <Section title="服务检测">
-              <Button
-                label="检测连接并发现模型"
-                variant="secondary"
-                busy={probing}
-                disabled={!connection || dirty || busy}
-                onPress={test}
-              />
-              {probing && (
-                <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
-              )}
-              <CheckResult result={connection?.check} history={connection?.checkHistory} />
-            </Section>
-            <View
-              style={{
-                flexDirection: 'row',
-                alignItems: 'center',
-                justifyContent: 'space-between',
-                gap: 8,
-              }}
-            >
-              <View>
-                <T style={{ fontWeight: '600' }}>模型目录</T>
-                {!!connection?.catalogAt && (
-                  <T tone="muted" style={{ fontSize: 10 }}>
-                    更新于 {new Date(connection.catalogAt).toLocaleString()}
-                  </T>
-                )}
-              </View>
-              <Button
-                label="手工添加"
-                icon={Plus}
-                compact
-                variant="secondary"
-                disabled={!connection || dirty || busy}
-                onPress={() =>
-                  router.push({
-                    pathname: '/models/model',
-                    params: { connectionId: connection!.id },
-                  })
-                }
-              />
-            </View>
-            <Field
-              label="搜索模型"
-              hideLabel
-              value={search}
-              placeholder="显示名或请求 ID"
-              onChangeText={setSearch}
-            />
-            <Choices
-              label="目录筛选"
-              value={filter}
-              options={[
-                { value: 'all', label: '全部' },
-                { value: 'favorite', label: '收藏' },
-                { value: 'enabled', label: '已启用' },
-              ]}
-              onChange={setFilter}
-            />
+                  <CheckResult result={connection?.check} history={connection?.checkHistory} />
+                </Section>
+                <View
+                  style={{
+                    flexDirection: 'row',
+                    alignItems: 'center',
+                    justifyContent: 'space-between',
+                    gap: 8,
+                  }}
+                >
+                  <View>
+                    <T style={{ fontWeight: '600' }}>模型目录</T>
+                    {!!connection?.catalogAt && (
+                      <T tone="muted" variant="meta">
+                        更新于 {new Date(connection.catalogAt).toLocaleString()}
+                      </T>
+                    )}
+                  </View>
+                  <Button
+                    label="手工添加"
+                    icon={Plus}
+                    compact
+                    variant="secondary"
+                    disabled={!connection || dirty || busy}
+                    onPress={() =>
+                      router.push({
+                        pathname: '/models/model',
+                        params: { connectionId: connection!.id },
+                      })
+                    }
+                  />
+                </View>
+                <Field
+                  label="搜索模型"
+                  hideLabel
+                  value={search}
+                  placeholder="显示名或请求 ID"
+                  onChangeText={setSearch}
+                />
+                <ViewTabs
+                  label="目录筛选"
+                  value={filter}
+                  options={[
+                    { value: 'all', label: '全部' },
+                    { value: 'favorite', label: '收藏', accessibilityLabel: '目录筛选：收藏' },
+                    { value: 'enabled', label: '已启用' },
+                  ]}
+                  onChange={setFilter}
+                />
+              </>
+            )}
           </View>
         }
-        ListEmptyComponent={
-          <T tone="muted" style={{ padding: 12, fontSize: 12 }}>
-            {connection ? '暂无匹配模型' : '保存连接后可添加模型'}
-          </T>
-        }
+        ListEmptyComponent={connection ? <EmptyState compact title="暂无匹配模型" /> : null}
         renderItem={({ item }) => (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={'编辑模型 ' + item.name}
-            disabled={dirty || busy}
+          <ActionRow
+            label={'编辑模型 ' + item.name}
             onPress={() =>
               router.push({
                 pathname: '/models/model',
                 params: { id: item.id, connectionId: item.connectionId },
               })
             }
-            style={({ pressed }) => ({
-              minHeight: 56,
-              paddingHorizontal: 4,
-              paddingVertical: 8,
-              borderBottomWidth: 1,
-              borderColor: theme.border,
-              backgroundColor: pressed ? theme.inset : theme.surface,
-              flexDirection: 'row',
-              gap: 10,
-              alignItems: 'center',
-              opacity: dirty ? 0.5 : 1,
-            })}
-          >
-            <View style={{ flex: 1, minWidth: 0 }}>
-              <T style={{ fontSize: 13, fontWeight: '500' }}>
-                {item.favorite ? '★ ' : ''}
-                {item.name}
-              </T>
-              <T tone="muted" style={{ fontSize: 11 }} numberOfLines={1}>
-                {item.apiId}
-              </T>
-              <T tone={item.catalog.missing ? 'warning' : 'secondary'} style={{ fontSize: 10 }}>
-                {item.enabled ? '已启用' : '已停用'} ·{' '}
-                {item.catalog.missing
-                  ? '最近目录未发现'
-                  : item.catalog.source === 'discovered'
-                    ? '来自目录'
-                    : '手工配置'}
-              </T>
-            </View>
-            <ChevronRight size={16} color={theme.muted} />
-          </Pressable>
+            disabled={dirty || busy}
+            title={(item.favorite ? '★ ' : '') + item.name}
+            description={item.apiId}
+            meta={
+              (item.enabled ? '已启用' : '已停用') +
+              ' · ' +
+              (item.catalog.missing
+                ? '最近目录未发现'
+                : item.catalog.source === 'discovered'
+                  ? '来自目录'
+                  : '手工配置')
+            }
+            metaTone={item.catalog.missing ? 'warning' : 'secondary'}
+            trailing={<ChevronRight size={16} color={theme.muted} />}
+          />
         )}
         ListFooterComponent={
           connection ? (
@@ -451,30 +401,28 @@ function ConnectionEditor({
         }
       />
       {guard.guard}
-      <Sheet
+      <ConfirmSheet
         visible={deleting}
         title="删除这个连接？"
         busy={busy}
         onClose={() => setDeleting(false)}
-        footer={
-          <Button
-            label="确认删除连接"
-            variant="danger"
-            busy={busy}
-            onPress={() => {
-              void action(async () => {
-                await runtime!.models.removeConnection(connection!.id);
-                guard.allow(() => router.replace('/models'));
-              });
-            }}
-          />
+        confirmLabel="确认删除连接"
+        onConfirm={() => {
+          void action(async () => {
+            await runtime!.models.removeConnection(connection!.id);
+            guard.allow(() => router.replace('/models'));
+          });
+        }}
+        danger
+        description={
+          <>
+            <T tone="secondary">
+              将删除连接与所属模型。{runtime!.models.affectedDefaults(connection?.id ?? '')}{' '}
+              处默认选择将失效，需要重新选择。历史任务与正在运行的任务仍保留启动时配置。
+            </T>
+          </>
         }
-      >
-        <T tone="secondary">
-          将删除连接与所属模型。{runtime!.models.affectedDefaults(connection?.id ?? '')}{' '}
-          处默认选择将失效，需要重新选择。历史任务与正在运行的任务仍保留启动时配置。
-        </T>
-      </Sheet>
+      />
     </ConfigPage>
   );
 }

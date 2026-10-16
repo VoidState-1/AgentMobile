@@ -1,29 +1,28 @@
+import { useDraftGuard } from '@/shared/use-draft-guard';
+import { ActionRow } from '@/shared/ui/action-row';
+import { ChevronRight } from '@/shared/ui/icons';
 import { AppError } from '@/core/errors';
-import { useEffect, useState } from 'react';
+import { resourceKind, skillLimits, skillPath } from '@/core/skills/rules';
+import type { SkillBundle, SkillVersionPage } from '@/core/skills/types';
+import { mimeFor } from '@/core/workspace/path';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { FormFooter } from '@/shared/ui/feedback';
+import { ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { SegmentedControl } from '@/shared/ui/selection';
+import { ConfirmSheet, Sheet } from '@/shared/ui/sheets';
 import { Buffer } from 'buffer';
 import { Image } from 'expo-image';
-import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
-import type { SkillBundle, SkillVersionPage } from '@/core/skills/types';
-import { resourceKind, skillLimits, skillPath } from '@/core/skills/rules';
-import { mimeFor } from '@/core/workspace/path';
-import {
-  Choices,
-  ConfigPage,
-  FormScroll,
-  Loading,
-  Section,
-  Toggle,
-  useDraftGuard,
-} from '@/shared/ui/forms';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
-import { useWorkbenchTheme } from '@/shared/theme';
-import { useSkills } from './common';
+import { useEffect, useState } from 'react';
+import { View } from 'react-native';
+import { useSkillLibrary } from './use-library';
 
 const template =
   '---\nname: my-skill\ndescription: 整理文字资料，适用于需要提炼重点并形成结构化笔记的任务。\n---\n\n# 工作流程\n\n1. 读取相关项目资料，核对目标。\n2. 提炼重点、待确认信息和下一步。\n3. 保存为 Markdown，保留来源说明。\n';
 export function SkillEditorPage() {
-  const controller = useSkills();
+  const controller = useSkillLibrary();
   const { name } = useLocalSearchParams<{ name?: string }>();
   if (!controller.runtime)
     return (
@@ -47,7 +46,13 @@ type ResourceDraft = {
   fresh?: boolean;
   bytes?: Uint8Array;
 };
-function Editor({ name, controller }: { name?: string; controller: ReturnType<typeof useSkills> }) {
+function Editor({
+  name,
+  controller,
+}: {
+  name?: string;
+  controller: ReturnType<typeof useSkillLibrary>;
+}) {
   const { runtime, config, busy, error, action, projectId, setProjectId, projects } = controller;
   const router = useRouter();
   const theme = useWorkbenchTheme();
@@ -149,24 +154,14 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
         guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/skills')))
       }
       footer={
-        <View style={{ gap: 6 }}>
-          {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
-              {error}
-            </T>
-          )}
-          {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
-              {notice}
-            </T>
-          )}
+        <FormFooter error={error} notice={notice}>
           <Button
             label="保存技能"
             busy={busy}
             disabled={!loaded || (!!name && !dirty)}
             onPress={save}
           />
-        </View>
+        </FormFooter>
       }
     >
       {!loaded ? (
@@ -189,7 +184,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
               style={{ minHeight: 220, fontSize: 14, lineHeight: 21 }}
             />
             {sourceBytes >= skillLimits.instructionBytes * 0.9 && (
-              <T tone="warning" style={{ fontSize: 12 }}>
+              <T tone="warning" variant="caption">
                 {(sourceBytes / 1024).toFixed(1)} / {skillLimits.instructionBytes / 1024} KB
               </T>
             )}
@@ -198,10 +193,9 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
             {files
               .filter(file => file.path !== 'SKILL.md')
               .map(file => (
-                <Pressable
+                <ActionRow
                   key={file.path}
-                  accessibilityRole="button"
-                  accessibilityLabel={'编辑技能资源 ' + file.path}
+                  label={'编辑技能资源 ' + file.path}
                   disabled={busy}
                   onPress={() =>
                     setResource({
@@ -217,30 +211,21 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
                       bytes: file.bytes,
                     })
                   }
-                  style={{
-                    paddingVertical: 8,
-                    borderBottomWidth: 1,
-                    borderColor: theme.border,
-                    gap: 3,
-                  }}
-                >
-                  <T tone="accent" style={{ fontSize: 12 }}>
-                    {file.path}
-                  </T>
-                  <T tone="muted" style={{ fontSize: 10 }}>
-                    {(file.bytes.length / 1024).toFixed(1)} KB ·{' '}
-                    {resourceKind(file.path) === 'text'
+                  title={file.path}
+                  meta={
+                    (file.bytes.length / 1024).toFixed(1) +
+                    ' KB · ' +
+                    (resourceKind(file.path) === 'text'
                       ? '文字'
                       : resourceKind(file.path) === 'image'
                         ? '图片'
-                        : '保留供导出'}
-                  </T>
-                </Pressable>
+                        : '保留供导出')
+                  }
+                  trailing={<ChevronRight size={16} color={theme.muted} />}
+                />
               ))}
             {!files.some(file => file.path !== 'SKILL.md') && (
-              <T tone="muted" style={{ fontSize: 12 }}>
-                暂无资源
-              </T>
+              <EmptyState compact title="暂无资源" />
             )}
             <Button
               label="添加文字资源"
@@ -254,7 +239,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
           {skill && (
             <Section title="项目启用">
               {projects.length ? (
-                <Choices
+                <SegmentedControl
                   label="启用项目"
                   value={projectId}
                   options={projects.map(project => ({ value: project.id, label: project.name }))}
@@ -274,7 +259,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
                 }}
               />
               {skill.warnings.map(warning => (
-                <T key={warning} tone="warning" style={{ fontSize: 11 }}>
+                <T key={warning} tone="warning" variant="meta">
                   {warning}
                 </T>
               ))}
@@ -304,10 +289,10 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
               />
               {versions?.versions.map((version, index) => (
                 <View key={version.commit} style={{ gap: 5 }}>
-                  <T tone="secondary" style={{ fontSize: 11 }}>
+                  <T tone="secondary" variant="meta">
                     {version.message} · {new Date(version.timestamp).toLocaleString()}
                   </T>
-                  <T tone="muted" style={{ fontSize: 10 }}>
+                  <T tone="muted" variant="meta">
                     {version.revision.slice(0, 7)}
                     {index === 0 ? ' · 当前版本' : ''}
                   </T>
@@ -346,7 +331,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
                 />
               )}
               {dirty && (
-                <T tone="muted" style={{ fontSize: 11 }}>
+                <T tone="muted" variant="meta">
                   先保存草稿，再导出或恢复版本。
                 </T>
               )}
@@ -448,53 +433,50 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
           </>
         )}
         {!!error && (
-          <T tone="danger" style={{ fontSize: 12 }}>
+          <T tone="danger" variant="caption">
             {error}
           </T>
         )}
       </Sheet>
-      <Sheet
+      <ConfirmSheet
         visible={discardResource}
         title="放弃资源编辑"
         onClose={() => setDiscardResource(false)}
-        footer={
-          <Button
-            label="放弃资源草稿"
-            variant="danger"
-            onPress={() => {
-              setDiscardResource(false);
-              setResource(undefined);
-            }}
-          />
+        confirmLabel="放弃资源草稿"
+        onConfirm={() => {
+          setDiscardResource(false);
+          setResource(undefined);
+        }}
+        danger
+        description={
+          <>
+            <T tone="secondary">资源修改尚未应用到技能草稿。</T>
+          </>
         }
-      >
-        <T tone="secondary">资源修改尚未应用到技能草稿。</T>
-      </Sheet>
-      <Sheet
+      />
+      <ConfirmSheet
         visible={deleting}
         title="删除技能"
         busy={busy}
         onClose={() => setDeleting(false)}
-        footer={
-          <Button
-            label="确认删除技能"
-            variant="danger"
-            busy={busy}
-            onPress={() =>
-              guard.allow(() => {
-                void action(async () => {
-                  await runtime!.skills.remove(name!, baseCommit);
-                  router.replace('/skills');
-                });
-              })
-            }
-          />
+        confirmLabel="确认删除技能"
+        onConfirm={() =>
+          guard.allow(() => {
+            void action(async () => {
+              await runtime!.skills.remove(name!, baseCommit);
+              router.replace('/skills');
+            });
+          })
         }
-      >
-        <T tone="secondary">
-          将移除此技能并撤销项目启用。运行任务继续使用原版本，已保存内容保留在 Git 历史中。
-        </T>
-      </Sheet>
+        danger
+        description={
+          <>
+            <T tone="secondary">
+              将移除此技能并撤销项目启用。运行任务继续使用原版本，已保存内容保留在 Git 历史中。
+            </T>
+          </>
+        }
+      />
       <Sheet
         visible={!!restoring}
         title="预览历史技能"
@@ -517,14 +499,14 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
           />
         }
       >
-        <T selectable style={{ fontSize: 12 }}>
+        <T selectable variant="caption">
           {restoring &&
             runtime!.skills.decodeText(
               restoring.bundle.files.find(file => file.path === 'SKILL.md')!.bytes,
             )}
         </T>
         {!!restoring && (
-          <T tone="muted" style={{ fontSize: 11 }}>
+          <T tone="muted" variant="meta">
             {restoring.bundle.files.length} 个文件 · {restoring.commit.slice(0, 7)}
           </T>
         )}

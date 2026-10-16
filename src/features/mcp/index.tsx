@@ -1,40 +1,27 @@
-import { useEffect, useState } from 'react';
-import { Pressable, View } from 'react-native';
-import { useRouter } from 'expo-router';
-import { ConfigPage, FormScroll, Loading, Section } from '@/shared/ui/forms';
-import { Button, T } from '@/shared/ui/primitives';
-import { ChevronRight, Plug } from '@/shared/ui/icons';
 import { useWorkbenchTheme } from '@/shared/theme';
-import { useWorkbenchUi } from '@/shared/workbench-state';
-import { useMcpConfiguration } from './common';
+import { ActionRow } from '@/shared/ui/action-row';
+import { EmptyState } from '@/shared/ui/empty-state';
+import { Feedback } from '@/shared/ui/feedback';
+import { ConfigPage, FormScroll, Loading, Section } from '@/shared/ui/forms';
+import { ChevronRight, Plug, Plus } from '@/shared/ui/icons';
+import { T, ToolbarAction } from '@/shared/ui/primitives';
+import { useProjectSelection } from '@/shared/use-project-selection';
+import { useRouter } from 'expo-router';
+import { View } from 'react-native';
 import { UnknownCalls } from './unknown';
+import { useMcpConfiguration } from './use-configuration';
 
 export function McpPage() {
   const { runtime, config, error } = useMcpConfiguration();
   const router = useRouter();
   const theme = useWorkbenchTheme();
-  const selectedProject = useWorkbenchUi(state => state.projectId);
-  const [storedProject, setStoredProject] = useState<string>();
-  const projectId = selectedProject ?? storedProject;
-  useEffect(() => {
-    let current = true;
-    if (!selectedProject && runtime)
-      void runtime.preferences
-        .getWorkbench()
-        .then(value => {
-          if (current) setStoredProject(value?.projectId);
-        })
-        .catch(() => {});
-    return () => {
-      current = false;
-    };
-  }, [runtime, selectedProject]);
+  const { projectId, error: projectError } = useProjectSelection(runtime);
   return (
     <ConfigPage
       title="远程 MCP"
       subtitle={config.servers.length + ' 个连接'}
       action={
-        <Button label="添加连接" variant="secondary" onPress={() => router.push('/mcp/server')} />
+        <ToolbarAction label="添加连接" icon={Plus} onPress={() => router.push('/mcp/server')} />
       }
     >
       {!runtime ? (
@@ -42,59 +29,37 @@ export function McpPage() {
       ) : (
         <FormScroll>
           <Section title="服务器">
-            {!config.servers.length && (
-              <T tone="secondary" style={{ fontSize: 13 }}>
-                暂无连接
-              </T>
-            )}
+            {!config.servers.length && <EmptyState compact title="暂无连接" />}
             {config.servers.map(server => {
               const allowed = Object.keys(config.grants[projectId ?? '']?.[server.id] ?? {}).length;
               return (
-                <Pressable
+                <ActionRow
                   key={server.id}
-                  accessibilityRole="button"
-                  accessibilityLabel={'配置 MCP ' + server.name}
+                  label={'配置 MCP ' + server.name}
                   onPress={() =>
                     router.push({ pathname: '/mcp/server', params: { id: server.id } })
                   }
-                  style={({ pressed }) => ({
-                    borderBottomWidth: 1,
-                    borderColor: theme.border,
-                    paddingVertical: 9,
-                    minHeight: 64,
-                    flexDirection: 'row',
-                    alignItems: 'center',
-                    backgroundColor: pressed ? theme.inset : 'transparent',
-                    gap: 9,
-                  })}
-                >
-                  <Plug size={18} color={server.enabled ? theme.accent : theme.muted} />
-                  <View style={{ flex: 1, minWidth: 0, gap: 1 }}>
-                    <View style={{ flexDirection: 'row', gap: 8 }}>
-                      <T numberOfLines={1} style={{ flex: 1, fontWeight: '600', fontSize: 14 }}>
-                        {server.name}
-                      </T>
-                      <T tone={server.enabled ? 'accent' : 'muted'} style={{ fontSize: 11 }}>
+                  title={server.name}
+                  description={server.url}
+                  meta={
+                    (server.check?.message ?? '尚未检测') + ' · 当前项目授权 ' + allowed + ' 个工具'
+                  }
+                  metaTone={server.check?.status === 'failed' ? 'danger' : 'secondary'}
+                  leading={<Plug size={18} color={server.enabled ? theme.accent : theme.muted} />}
+                  trailing={
+                    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                      <T tone={server.enabled ? 'accent' : 'muted'} variant="meta">
                         {server.enabled ? '已启用' : '已停用'}
                       </T>
+                      <ChevronRight size={16} color={theme.muted} />
                     </View>
-                    <T tone="muted" numberOfLines={1} style={{ fontSize: 11 }}>
-                      {server.url}
-                    </T>
-                    <T
-                      tone={server.check?.status === 'failed' ? 'danger' : 'secondary'}
-                      style={{ fontSize: 11 }}
-                    >
-                      {server.check?.message ?? '尚未检测'} · 当前项目授权 {allowed} 个工具
-                    </T>
-                  </View>
-                  <ChevronRight size={15} color={theme.muted} />
-                </Pressable>
+                  }
+                />
               );
             })}
           </Section>
           <UnknownCalls runtime={runtime} />
-          {!!error && <T tone="danger">{error}</T>}
+          <Feedback error={error || projectError} />
         </FormScroll>
       )}
     </ConfigPage>

@@ -42,7 +42,7 @@ export function gitTools(context: RunToolsContext): ControlledTool[] {
             const limit = Math.max(0, Math.min(12000, Math.floor(remaining / 2)));
             remaining -= limit * 2;
             return isImage(file.path)
-              ? { path: file.path, kind: file.kind, image: true }
+              ? { path: file.path, status: file.status, stagedOnly: file.stagedOnly, image: true }
               : {
                   ...file,
                   before: file.before.slice(0, limit),

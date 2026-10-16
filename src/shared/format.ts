@@ -1,3 +1,5 @@
+import type { RunState } from '@/core/runs/types';
+
 export const fileName = (path: string) => path.split('/').pop() ?? path;
 export const sizeLabel = (size: number) =>
   size < 1024
@@ -33,4 +35,15 @@ export const toolLabels: Record<string, string> = {
   git_stage: '暂存文件',
   git_unstage: '取消暂存',
   git_commit: '提交更改',
+};
+
+export const runStateLabels: Record<RunState, string> = {
+  queued: '排队中',
+  running: '执行中',
+  waiting_children: '等待子任务',
+  cancelling: '正在停止',
+  completed: '已完成',
+  failed: '执行失败',
+  cancelled: '已停止',
+  interrupted: '已中断',
 };

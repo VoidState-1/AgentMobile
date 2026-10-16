@@ -1,5 +1,5 @@
-import { useColorScheme } from 'react-native';
 import { useWorkbenchUi } from '@/shared/workbench-state';
+import { useColorScheme } from 'react-native';
 
 const light = {
   dark: false,
@@ -50,6 +50,15 @@ const dark: typeof light = {
   code: '#15181F',
 };
 export type WorkbenchTheme = typeof light;
+
+export const typography = {
+  body: { fontSize: 14, lineHeight: 21 },
+  label: { fontSize: 13, lineHeight: 20 },
+  caption: { fontSize: 12, lineHeight: 19 },
+  meta: { fontSize: 11, lineHeight: 17 },
+  title: { fontSize: 15, lineHeight: 22, fontWeight: '600' as const },
+  heading: { fontSize: 18, lineHeight: 26, fontWeight: '600' as const },
+} as const;
 
 export const workbenchMetrics = {
   header: 48,

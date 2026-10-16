@@ -1,16 +1,5 @@
-import { useEffect, useRef, useState } from 'react';
-import {
-  ActivityIndicator,
-  BackHandler,
-  Keyboard,
-  KeyboardAvoidingView,
-  Platform,
-  Pressable,
-  TextInput,
-  View,
-  useWindowDimensions,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
+import { workbenchMetrics as metrics, useWorkbenchTheme } from '@/shared/theme';
+import { EmptyState } from '@/shared/ui/empty-state';
 import {
   Check,
   FolderOpen,
@@ -23,20 +12,32 @@ import {
   Upload,
   X,
 } from '@/shared/ui/icons';
-import { useWorkbench } from './use-workbench';
-import type { DialogsCapability, FilesCapability } from './use-workbench';
-import { useWorkbenchTheme, workbenchMetrics as metrics } from '@/shared/theme';
+import { Brand, Button, IconButton, Input, T, Toolbar } from '@/shared/ui/primitives';
+import { useEffect, useRef, useState } from 'react';
+import {
+  ActivityIndicator,
+  BackHandler,
+  Keyboard,
+  KeyboardAvoidingView,
+  Platform,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { RunActivity } from './run-activity';
-import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
+import type { FilesCapability, ShellCapability } from './use-workbench';
+import { useWorkbench } from './use-workbench';
+
 import { Conversation } from './conversation';
+import { Editor } from './editor';
 import { FilesPane } from './files';
 import { HistoryPane } from './history';
-import { Editor } from './editor';
-import { ReviewSheet } from './review';
-import { WorkbenchSheets } from './sheets';
-import { ProjectTree } from './project-tree';
 import { ProjectDrawer } from './project-drawer';
+import { ProjectTree } from './project-tree';
+import { ReviewSheet } from './review';
 import { WorkbenchSettings } from './settings';
+import { WorkbenchSheets } from './sheets';
 
 const tabs = [
   { id: 'agent', name: '对话', icon: MessageSquare },
@@ -45,11 +46,13 @@ const tabs = [
   { id: 'settings', name: '设置', icon: Settings2 },
 ] as const;
 
-function DevelopmentRebuild({ controller }: { controller: DialogsCapability }) {
+function DevelopmentRebuild({ controller }: { controller: ShellCapability }) {
   const [confirm, setConfirm] = useState(false);
   return (
     <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 24, gap: 14 }}>
-      <T style={{ fontSize: 18, fontWeight: '600' }}>开发数据需要重建</T>
+      <T variant="heading" style={{ fontWeight: '600' }}>
+        开发数据需要重建
+      </T>
       <T tone="secondary" style={{ maxWidth: 440 }}>
         重建将清除当前设备上此应用的项目、对话、资料和文件历史；设备凭证保留。
       </T>
@@ -72,7 +75,7 @@ function DevelopmentRebuild({ controller }: { controller: DialogsCapability }) {
   );
 }
 
-function Navigation({ controller, changes }: { controller: DialogsCapability; changes: number }) {
+function Navigation({ controller, changes }: { controller: ShellCapability; changes: number }) {
   const theme = useWorkbenchTheme();
   return (
     <View
@@ -111,9 +114,8 @@ function Navigation({ controller, changes }: { controller: DialogsCapability; ch
               <Icon size={19} color={selected ? theme.accent : theme.secondary} />
               {id === 'history' && changes > 0 && (
                 <T
+                  variant="meta"
                   style={{
-                    fontSize: 10,
-                    lineHeight: 14,
                     paddingHorizontal: 3,
                     borderRadius: 3,
                     color: theme.accentText,
@@ -125,9 +127,8 @@ function Navigation({ controller, changes }: { controller: DialogsCapability; ch
               )}
             </View>
             <T
+              variant="meta"
               style={{
-                fontSize: 11,
-                lineHeight: 17,
                 color: selected ? theme.accent : theme.secondary,
                 fontWeight: selected ? '600' : '400',
               }}
@@ -141,8 +142,7 @@ function Navigation({ controller, changes }: { controller: DialogsCapability; ch
   );
 }
 
-function ProjectEmptyState({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
-  const theme = useWorkbenchTheme();
+function ProjectEmptyState({ controller, wide }: { controller: ShellCapability; wide: boolean }) {
   const Icon = tabs.find(tab => tab.id === controller.tab)?.icon ?? MessageSquare;
   const hasProjects = controller.projects.length > 0;
   const title = hasProjects
@@ -153,26 +153,20 @@ function ProjectEmptyState({ controller, wide }: { controller: DialogsCapability
         ? '项目版本'
         : '创建第一个项目';
   return (
-    <View
-      testID="project-empty-state"
-      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12, gap: 10 }}
-    >
-      <Icon size={25} color={theme.accent} />
-      <T accessibilityRole="header" style={{ fontSize: 16, fontWeight: '600' }}>
-        {title}
-      </T>
-      {controller.tab !== 'agent' && (
-        <T tone="secondary" style={{ fontSize: 13 }}>
-          {hasProjects ? (wide ? '从左侧选择项目' : '选择项目后查看') : '创建项目后查看'}
-        </T>
-      )}
-      {(!hasProjects || !wide) && (
-        <Button
-          label={hasProjects ? '选择项目' : '新建项目'}
-          icon={hasProjects ? PanelLeft : Plus}
-          onPress={hasProjects ? () => controller.setDrawerOpen(true) : controller.newProject}
-        />
-      )}
+    <View testID="project-empty-state" style={{ flex: 1, justifyContent: 'center' }}>
+      <EmptyState
+        title={title}
+        icon={Icon}
+        action={
+          (!hasProjects || !wide) && (
+            <Button
+              label={hasProjects ? '选择项目' : '新建项目'}
+              icon={hasProjects ? PanelLeft : Plus}
+              onPress={hasProjects ? () => controller.setDrawerOpen(true) : controller.newProject}
+            />
+          )
+        }
+      />
     </View>
   );
 }
@@ -184,7 +178,7 @@ function WorkbenchHeader({
   onFileQueryChange,
   wide,
 }: {
-  controller: DialogsCapability;
+  controller: ShellCapability;
   files?: FilesCapability;
   fileQuery?: string;
   onFileQueryChange?: (query: string) => void;
@@ -210,32 +204,40 @@ function WorkbenchHeader({
   const title =
     controller.tab === 'agent'
       ? (current?.title ?? controller.selectedProject?.name ?? 'Agent Mobile')
-      : (tabs.find(tab => tab.id === controller.tab)?.name ?? 'Agent Mobile');
+      : controller.tab === 'history' && controller.gitStatus?.branch
+        ? 'Git · ' + controller.gitStatus.branch
+        : (tabs.find(tab => tab.id === controller.tab)?.name ?? 'Agent Mobile');
   return (
-    <View
+    <Toolbar
       testID="workbench-header"
-      style={{
-        height: metrics.header,
-        paddingHorizontal: 4,
-        flexDirection: 'row',
-        alignItems: 'center',
-        borderBottomWidth: 1,
-        borderColor: theme.border,
-        backgroundColor: theme.surface,
-        gap: 6,
-      }}
+      leading={
+        !wide ? (
+          <IconButton
+            icon={PanelLeft}
+            label="项目与对话"
+            onPress={() => controller.setDrawerOpen(true)}
+          />
+        ) : undefined
+      }
+      trailing={
+        controller.tab === 'agent' && controller.projectId ? (
+          <IconButton
+            icon={Plus}
+            label="新建对话"
+            disabled={controller.busy}
+            onPress={() => {
+              void controller.newConversation();
+            }}
+          />
+        ) : undefined
+      }
     >
-      {!wide && (
-        <IconButton
-          icon={PanelLeft}
-          label="项目与对话"
-          size={44}
-          onPress={() => controller.setDrawerOpen(true)}
-        />
-      )}
       {controller.tab === 'files' ? (
         <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <T style={{ fontSize: 15, fontWeight: '600', paddingLeft: wide ? 8 : 2, paddingRight: 2 }}>
+          <T
+            variant="title"
+            style={{ fontWeight: '600', paddingLeft: wide ? 8 : 2, paddingRight: 2 }}
+          >
             文件
           </T>
           <View
@@ -252,7 +254,7 @@ function WorkbenchHeader({
             }}
           >
             <Search size={14} color={theme.muted} />
-            <TextInput
+            <Input
               accessibilityLabel="搜索文件"
               placeholder="搜索文件"
               placeholderTextColor={theme.muted}
@@ -265,7 +267,6 @@ function WorkbenchHeader({
                 fontSize: 13,
                 color: theme.text,
                 padding: 0,
-                ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
               }}
             />
             {!!fileQuery && (
@@ -281,7 +282,7 @@ function WorkbenchHeader({
             <>
               <IconButton
                 icon={Upload}
-                size={36}
+                size={44}
                 label="导入"
                 disabled={files.busy || files.projectActive}
                 onPress={() => {
@@ -290,7 +291,7 @@ function WorkbenchHeader({
               />
               <IconButton
                 icon={Plus}
-                size={36}
+                size={44}
                 label="新建文件"
                 disabled={files.busy || files.projectActive}
                 onPress={files.newFile}
@@ -302,7 +303,7 @@ function WorkbenchHeader({
         <>
           <View testID="conversation-bar" style={{ flex: 1, minWidth: 0, paddingHorizontal: 7 }}>
             {editing && current?.id === editing.id ? (
-              <TextInput
+              <Input
                 autoFocus
                 selectTextOnFocus
                 accessibilityLabel="对话名称"
@@ -323,43 +324,33 @@ function WorkbenchHeader({
                   fontSize: 16,
                   color: theme.text,
                   padding: 0,
-                  ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
                 }}
               />
             ) : (
               <Pressable
                 accessibilityRole="button"
-                accessibilityLabel={controller.tab === 'agent' && current ? '重命名当前对话' : title}
+                accessibilityLabel={
+                  controller.tab === 'agent' && current ? '重命名当前对话' : title
+                }
                 disabled={controller.busy || controller.tab !== 'agent' || !current}
                 onPress={() => current && setEditing({ id: current.id, value: current.title })}
                 style={{ minHeight: 44, justifyContent: 'center' }}
               >
-                <T numberOfLines={1} style={{ fontSize: 15, fontWeight: '600' }}>
+                <T numberOfLines={1} variant="title" style={{ fontWeight: '600' }}>
                   {title}
                 </T>
               </Pressable>
             )}
           </View>
-          {controller.tab === 'agent' && controller.projectId && (
-            <IconButton
-              icon={Plus}
-              label="新建对话"
-              size={44}
-              disabled={controller.busy}
-              onPress={() => {
-                void controller.newConversation();
-              }}
-            />
-          )}
         </>
       )}
-    </View>
+    </Toolbar>
   );
 }
 
 export function WorkbenchScreen() {
   const capabilities = useWorkbench();
-  const controller = capabilities.dialogs;
+  const controller = capabilities.shell;
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const wide = width >= 1100;
@@ -403,7 +394,7 @@ export function WorkbenchScreen() {
       </SafeAreaView>
     );
   return (
-    <ProjectDrawer controller={controller} width={width} wide={wide}>
+    <ProjectDrawer controller={capabilities.navigation} width={width} wide={wide}>
       <SafeAreaView
         testID={theme.dark ? 'workbench-dark' : 'workbench-light'}
         style={{ flex: 1, backgroundColor: theme.surface }}
@@ -421,7 +412,7 @@ export function WorkbenchScreen() {
           >
             {wide && (
               <View style={{ width: 240, borderRightWidth: 1, borderColor: theme.border }}>
-                <ProjectTree controller={controller} />
+                <ProjectTree controller={capabilities.navigation} />
               </View>
             )}
             <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
@@ -442,7 +433,7 @@ export function WorkbenchScreen() {
                     backgroundColor: theme.dangerSoft,
                   }}
                 >
-                  <T tone="danger" style={{ flex: 1, fontSize: 12, lineHeight: 19 }}>
+                  <T tone="danger" variant="caption" style={{ flex: 1 }}>
                     {controller.error}
                   </T>
                   <IconButton
@@ -465,13 +456,15 @@ export function WorkbenchScreen() {
                   }}
                 >
                   <Check size={12} color={theme.success} />
-                  <T style={{ fontSize: 12, color: theme.success }}>{controller.notice}</T>
+                  <T variant="caption" style={{ color: theme.success }}>
+                    {controller.notice}
+                  </T>
                 </View>
               )}
               {controller.formatMismatch ? (
                 <DevelopmentRebuild controller={controller} />
               ) : controller.tab === 'settings' ? (
-                <WorkbenchSettings controller={controller} />
+                <WorkbenchSettings controller={capabilities.settings} />
               ) : !controller.projectId ? (
                 <ProjectEmptyState controller={controller} wide={wide} />
               ) : (
@@ -512,7 +505,7 @@ export function WorkbenchScreen() {
         {!wide && controller.editorOpen && <Editor controller={capabilities.editor} mobile />}
         {controller.reviewOpen && <ReviewSheet controller={capabilities.git} />}
         <WorkbenchSheets
-          controller={controller}
+          controller={capabilities.sheets}
           editor={capabilities.editor}
           files={capabilities.files}
           conversation={capabilities.conversation}

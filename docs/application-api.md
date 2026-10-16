@@ -2,9 +2,10 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                   |
-| -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------- |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 建立 AppServices 能力目录、DTO、并发预期、错误与变更规范。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                             |
+| -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------- |
+| 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的 branch、类型化文件状态及 taskChangeSummary 查询。 |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 建立 AppServices 能力目录、DTO、并发预期、错误与变更规范。           |
 
 ## 1. 唯一业务入口
 
@@ -86,6 +87,10 @@ RunSummary、RunDetail、RunView 与 RunRecord 分离；UI 不依赖冻结配置
 - `preferences.getWorkbench/saveWorkbench` 保存项目选择和主题偏好；提交说明草稿等其余 UI 瞬时状态不自动持久化。
 - `io.pickFile/pickSkillPackage` 返回用户选定内容或 undefined；`exportFile/exportSkill` 处理平台分享/下载。取消选择不是失败。
 - `proposals?.preview(rootRunId,id)` 只供 UI 查看公开差异。合入由根 Agent 的受控 `apply_proposal` 工具进行，当前没有 UI 通用提案写入 API。
+
+`GitStatus.branch` 为实际当前分支名称，分离 HEAD 时为 `null`。`ReviewFile` 使用 `status: added | modified | deleted` 和可选 `stagedOnly`，不再用中文 `kind` 混合类型与范围；Git 工具及提案检查的差异结果同步使用这些字段。
+
+`workspace.taskChangeSummary(runId)` 返回该任务冻结前后快照的文件摘要：`path/status/stagedOnly/image` 与可选 `added/removed`。它不使用当前工作区推算历史，也不返回全文。图片、超出统计预算的文本不提供行数，UI 保留差异入口。该查询经 facade 解析 runId，统计库在 adapter 中使用，界面不直接读取 Git。
 
 ## 4. 乐观并发与命令示例
 

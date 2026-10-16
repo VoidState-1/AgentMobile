@@ -131,8 +131,11 @@ test('编辑、会话、逐行变化、恢复和刷新持久化', async ({ page 
   await page.getByRole('button', { name: '整理资料', exact: true }).click();
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText('已完成', { exact: true })).toBeVisible();
-  await page.getByRole('button', { name: '查看变化', exact: true }).click();
-  await expect(page.getByText('新增 · documents/summary.md', { exact: true })).toBeVisible();
+  await page
+    .getByRole('button', { name: /^查看产物差异 / })
+    .first()
+    .click();
+  await expect(page.getByText('documents/summary.md', { exact: true })).toBeVisible();
   await expect(page.getByText('## 原始资料摘录', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '撤销修改', exact: true }).click();
   await page.getByRole('button', { name: '确认恢复', exact: true }).click();

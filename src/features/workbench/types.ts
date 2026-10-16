@@ -1,5 +1,5 @@
 import type { SetStateAction } from 'react';
-import type { AppServices } from '@/application/services';
+import type { AppServices, ReviewFile } from '@/application/services';
 import type { RunView } from '@/core/runs/queries';
 import type { useWorkbenchUi } from '@/shared/workbench-state';
 
@@ -18,12 +18,6 @@ export interface EditorDocument {
   fresh: boolean;
   externalChanged?: boolean;
 }
-export interface ReviewFile {
-  path: string;
-  kind: string;
-  before: string;
-  after: string;
-}
 export interface Review {
   title: string;
   files: ReviewFile[];
@@ -32,6 +26,7 @@ export interface Review {
   task?: RunView;
   area?: 'staged' | 'unstaged';
   description?: string;
+  initialPath?: string;
 }
 export type Confirmation = {
   title: string;

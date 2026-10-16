@@ -3,7 +3,12 @@ import type { ProjectFile } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
 import type { RunListQuery, RunPage, RunDetail, RunView, RunChange } from '@/core/runs/queries';
 import type { TracePage, TextPage } from '@/core/runs/trace-storage';
-import type { GitStatus, GitHistoryQuery, GitHistoryPage } from '@/core/git/contracts';
+import type {
+  GitStatus,
+  GitFileStatus,
+  GitHistoryQuery,
+  GitHistoryPage,
+} from '@/core/git/contracts';
 import type {
   CheckKind,
   DiagnosticResult,
@@ -30,9 +35,18 @@ export interface FilePreview {
 }
 export interface ReviewFile {
   path: string;
-  kind: string;
+  status: NonNullable<GitFileStatus['staged']>;
+  stagedOnly?: boolean;
   before: string;
   after: string;
+}
+export interface FileChangeSummary {
+  path: string;
+  status: NonNullable<GitFileStatus['staged']>;
+  stagedOnly: boolean;
+  image: boolean;
+  added?: number;
+  removed?: number;
 }
 export interface WorkspaceOperationSummary {
   id: string;
@@ -73,6 +87,7 @@ export interface WorkspaceApi {
   restore(projectId: string, ref: string, expectedHead: string): Promise<string>;
   changes(projectId: string, before: string | undefined, after: string): Promise<ReviewFile[]>;
   taskChanges(runId: string): Promise<ReviewFile[]>;
+  taskChangeSummary(runId: string): Promise<FileChangeSummary[]>;
   undoTask(runId: string): Promise<void>;
   status(projectId: string): Promise<GitStatus>;
   stage(

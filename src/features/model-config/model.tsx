@@ -1,31 +1,26 @@
+import { useDraftGuard } from '@/shared/use-draft-guard';
 import { geminiResource } from '@/core/models/model-id';
-import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { presetModelEvidence, protocolNames } from '@/core/models/presets';
 import {
   defaultModelParameters,
   unknownCapabilities,
-  type ModelInput,
   type CapabilityName,
   type CheckKind,
   type ModelEntry,
+  type ModelInput,
 } from '@/core/models/types';
-import { presetModelEvidence, protocolNames } from '@/core/models/presets';
-import { Button, Field, OverflowMenu, Sheet, T } from '@/shared/ui/primitives';
-import { NumberField } from '@/shared/ui/forms';
+import { FormFooter } from '@/shared/ui/feedback';
+import { ConfigPage, FormScroll, Loading, NumberField, Section, Toggle } from '@/shared/ui/forms';
+import { OverflowMenu } from '@/shared/ui/menus';
+import { Button, Field, T } from '@/shared/ui/primitives';
+import { SegmentedControl } from '@/shared/ui/selection';
+import { ConfirmSheet } from '@/shared/ui/sheets';
 import { useWorkbenchUi } from '@/shared/workbench-state';
-import {
-  CheckResult,
-  Choices,
-  ConfigPage,
-  FormScroll,
-  Loading,
-  Section,
-  Toggle,
-  useConfiguration,
-  useDraftGuard,
-  type ConfigurationController,
-} from './common';
+import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useEffect, useRef, useState } from 'react';
+import { View } from 'react-native';
+import { CheckResult } from './check-result';
+import { useModelConfiguration, type ModelConfigurationController } from './use-configuration';
 
 const names: Record<CapabilityName, string> = {
   tools: '工具调用',
@@ -54,7 +49,7 @@ const edit = (model: ModelEntry): ModelInput => ({
 });
 
 export function ModelScreen() {
-  const controller = useConfiguration();
+  const controller = useModelConfiguration();
   const params = useLocalSearchParams<{ id?: string; connectionId: string }>();
   const model = controller.config.models.find(item => item.id === params.id);
   if (!controller.runtime)
@@ -87,7 +82,7 @@ function ModelEditor({
   model,
   connectionId,
 }: {
-  controller: ConfigurationController;
+  controller: ModelConfigurationController;
   model?: ModelEntry;
   connectionId: string;
 }) {
@@ -205,24 +200,14 @@ function ModelEditor({
         guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/models')))
       }
       footer={
-        <View style={{ gap: 6 }}>
-          {!!error && (
-            <T tone="danger" style={{ fontSize: 12 }}>
-              {error}
-            </T>
-          )}
-          {!!notice && (
-            <T tone="accent" style={{ fontSize: 12 }}>
-              {notice}
-            </T>
-          )}
+        <FormFooter error={error} notice={notice}>
           <Button
             label="保存模型"
             busy={busy && !probing}
             disabled={!!probing || (!dirty && !!model)}
             onPress={save}
           />
-        </View>
+        </FormFooter>
       }
     >
       <FormScroll>
@@ -276,7 +261,7 @@ function ModelEditor({
             onChange={enabled => update({ enabled })}
           />
           {model?.catalog.missing && (
-            <T tone="warning" style={{ fontSize: 11 }}>
+            <T tone="warning" variant="meta">
               最近一次服务目录未发现此 ID，仍可手工配置与检测。
             </T>
           )}
@@ -284,7 +269,7 @@ function ModelEditor({
         <Section title="模型能力">
           {(['tools', 'images', 'reasoning'] as const).map(name => (
             <View key={name} style={{ gap: 5 }}>
-              <Choices
+              <SegmentedControl
                 label={names[name]}
                 value={draft.capabilities[name]}
                 disabled={busy}
@@ -302,7 +287,7 @@ function ModelEditor({
                   })
                 }
               />
-              <T tone="muted" style={{ fontSize: 10 }}>
+              <T tone="muted" variant="meta">
                 依据：
                 {model &&
                 model.apiId === draft.apiId &&
@@ -316,7 +301,7 @@ function ModelEditor({
             </View>
           ))}
           {draft.capabilities.tools === 'unsupported' && (
-            <T tone="warning" style={{ fontSize: 12 }}>
+            <T tone="warning" variant="caption">
               此模型不支持工具，无法执行 Agent 任务。
             </T>
           )}
@@ -369,7 +354,7 @@ function ModelEditor({
             disabled={busy || draft.capabilities.images === 'unsupported'}
             onChange={allowImages => update({ parameters: { ...draft.parameters, allowImages } })}
           />
-          <Choices
+          <SegmentedControl
             label="推理模式"
             value={draft.parameters.reasoning}
             disabled={busy}
@@ -394,7 +379,7 @@ function ModelEditor({
           />
           {draft.parameters.reasoning === 'on' && connection.protocol !== 'chat-completions' && (
             <>
-              <Choices
+              <SegmentedControl
                 label="推理参数格式"
                 value={draft.parameters.reasoningStrategy ?? 'budget'}
                 disabled={busy}
@@ -430,7 +415,7 @@ function ModelEditor({
                 />
               )}
               {draft.parameters.reasoningStrategy === 'level' && (
-                <Choices
+                <SegmentedControl
                   label="推理强度"
                   value={draft.parameters.reasoningEffort ?? 'high'}
                   disabled={busy}
@@ -446,7 +431,7 @@ function ModelEditor({
               )}
             </>
           )}
-          <Choices
+          <SegmentedControl
             label="公开推理展示"
             value={
               draft.parameters.reasoningDisplay ??
@@ -462,82 +447,92 @@ function ModelEditor({
             }
           />
           {!!model?.limits && (
-            <T tone="secondary" style={{ fontSize: 11 }}>
+            <T tone="secondary" variant="meta">
               服务公布：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出上限{' '}
               {model.limits.outputTokens?.toLocaleString() ?? '未知'}
             </T>
           )}
         </Section>
-        <Section title="指定模型检测">
-          {(['text', 'tools', 'images'] as const).map(kind => (
-            <View key={kind} style={{ gap: 7 }}>
+        {model && (
+          <>
+            <Section title="指定模型检测">
+              {(['text', 'tools', 'images'] as const).map(kind => (
+                <View key={kind} style={{ gap: 7 }}>
+                  <Button
+                    label={
+                      { text: '文本检测', tools: '工具检测', images: '图片检测' }[kind] +
+                      ' · 可能计费'
+                    }
+                    variant="secondary"
+                    disabled={disabled}
+                    busy={probing === kind}
+                    onPress={() => test(kind)}
+                  />
+                  <CheckResult result={model?.checks[kind]} history={model?.checkHistory?.[kind]} />
+                </View>
+              ))}
+              {!!probing && (
+                <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
+              )}
+            </Section>
+            <Section title="默认选择">
               <Button
                 label={
-                  { text: '文本检测', tools: '工具检测', images: '图片检测' }[kind] + ' · 可能计费'
+                  config.defaults.global === model?.id && model ? '已为全局默认' : '设为全局默认'
                 }
                 variant="secondary"
-                disabled={disabled}
-                busy={probing === kind}
-                onPress={() => test(kind)}
+                disabled={disabled || !draft.enabled || !connection.enabled}
+                onPress={() => select('global')}
               />
-              <CheckResult result={model?.checks[kind]} history={model?.checkHistory?.[kind]} />
-            </View>
-          ))}
-          {!!probing && (
-            <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
-          )}
-        </Section>
-        <Section title="默认选择">
-          <Button
-            label={config.defaults.global === model?.id && model ? '已为全局默认' : '设为全局默认'}
-            variant="secondary"
-            disabled={disabled || !draft.enabled || !connection.enabled}
-            onPress={() => select('global')}
-          />
-          <Button
-            label={
-              projectId && config.defaults.projects[projectId] === model?.id && model
-                ? '已为项目默认'
-                : '设为当前项目默认'
-            }
-            variant="secondary"
-            disabled={disabled || !projectId || !draft.enabled || !connection.enabled}
-            onPress={() => select('project')}
-          />
-          <Button
-            label={
-              conversationId && config.defaults.sessions[conversationId] === model?.id && model
-                ? '已选用于此会话'
-                : '用于当前会话'
-            }
-            variant="secondary"
-            disabled={disabled || !conversationId || !draft.enabled || !connection.enabled}
-            onPress={() => select('session')}
-          />
-          {projectId && config.defaults.projects[projectId] && (
-            <Button
-              label="清除项目默认"
-              variant="ghost"
-              disabled={busy}
-              onPress={() => {
-                void action(() => runtime!.models.setSelection('project', undefined, projectId));
-              }}
-            />
-          )}
-          {conversationId &&
-            (config.defaults.sessions[conversationId] || config.sessionModes?.[conversationId]) && (
               <Button
-                label="清除会话选择"
-                variant="ghost"
-                disabled={busy}
-                onPress={() => {
-                  void action(() =>
-                    runtime!.models.setSelection('session', undefined, conversationId),
-                  );
-                }}
+                label={
+                  projectId && config.defaults.projects[projectId] === model?.id && model
+                    ? '已为项目默认'
+                    : '设为当前项目默认'
+                }
+                variant="secondary"
+                disabled={disabled || !projectId || !draft.enabled || !connection.enabled}
+                onPress={() => select('project')}
               />
-            )}
-        </Section>
+              <Button
+                label={
+                  conversationId && config.defaults.sessions[conversationId] === model?.id && model
+                    ? '已选用于此会话'
+                    : '用于当前会话'
+                }
+                variant="secondary"
+                disabled={disabled || !conversationId || !draft.enabled || !connection.enabled}
+                onPress={() => select('session')}
+              />
+              {projectId && config.defaults.projects[projectId] && (
+                <Button
+                  label="清除项目默认"
+                  variant="ghost"
+                  disabled={busy}
+                  onPress={() => {
+                    void action(() =>
+                      runtime!.models.setSelection('project', undefined, projectId),
+                    );
+                  }}
+                />
+              )}
+              {conversationId &&
+                (config.defaults.sessions[conversationId] ||
+                  config.sessionModes?.[conversationId]) && (
+                  <Button
+                    label="清除会话选择"
+                    variant="ghost"
+                    disabled={busy}
+                    onPress={() => {
+                      void action(() =>
+                        runtime!.models.setSelection('session', undefined, conversationId),
+                      );
+                    }}
+                  />
+                )}
+            </Section>
+          </>
+        )}
         {model && (
           <Button
             label="删除模型"
@@ -548,31 +543,29 @@ function ModelEditor({
         )}
       </FormScroll>
       {guard.guard}
-      <Sheet
+      <ConfirmSheet
         visible={deleting}
         title="删除这个模型？"
         busy={busy}
         onClose={() => setDeleting(false)}
-        footer={
-          <Button
-            label="确认删除模型"
-            variant="danger"
-            busy={busy}
-            onPress={() => {
-              void action(async () => {
-                await runtime!.models.removeModel(model!.id);
-                guard.allow(() =>
-                  router.replace({ pathname: '/models/connection', params: { id: connectionId } }),
-                );
-              });
-            }}
-          />
+        confirmLabel="确认删除模型"
+        onConfirm={() => {
+          void action(async () => {
+            await runtime!.models.removeModel(model!.id);
+            guard.allow(() =>
+              router.replace({ pathname: '/models/connection', params: { id: connectionId } }),
+            );
+          });
+        }}
+        danger
+        description={
+          <>
+            <T tone="secondary">
+              {defaults} 处默认选择将失效，下次发送时需要重新选择。历史和正在运行的任务保留原配置。
+            </T>
+          </>
         }
-      >
-        <T tone="secondary">
-          {defaults} 处默认选择将失效，下次发送时需要重新选择。历史和正在运行的任务保留原配置。
-        </T>
-      </Sheet>
+      />
     </ConfigPage>
   );
 }

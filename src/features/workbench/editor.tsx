@@ -1,29 +1,13 @@
-import { memo, useCallback, useEffect, useState } from 'react';
-import {
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  ScrollView,
-  TextInput,
-  View,
-} from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Image } from 'expo-image';
-import {
-  ArrowLeft,
-  Download,
-  FileText,
-  Image as ImageIcon,
-  Save,
-  Trash2,
-  X,
-} from '@/shared/ui/icons';
-import { Button, IconButton, T } from '@/shared/ui/primitives';
-import { Markdown, resolveImagePath } from './markdown';
-import { useWorkbenchTheme } from '@/shared/theme';
-import type { EditorCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { ArrowLeft, Download, FileText, Image as ImageIcon, Trash2, X } from '@/shared/ui/icons';
+import { IconButton, Input, T, Toolbar, ToolbarAction } from '@/shared/ui/primitives';
+import { Image } from 'expo-image';
+import { memo, useCallback, useEffect, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Markdown, resolveImagePath } from './markdown';
+import type { EditorCapability } from './use-workbench';
 
 export const Editor = memo(function Editor({
   controller,
@@ -68,23 +52,42 @@ export const Editor = memo(function Editor({
       behavior={Platform.OS === 'web' ? undefined : 'padding'}
       style={{ flex: 1, backgroundColor: theme.surface }}
     >
-      <View
-        style={{
-          minHeight: 48,
-          flexDirection: 'row',
-          alignItems: 'center',
-          paddingHorizontal: 6,
-          gap: 5,
-          borderBottomWidth: 1,
-          borderColor: theme.border,
-        }}
+      <Toolbar
+        leading={
+          <IconButton
+            icon={mobile ? ArrowLeft : X}
+            label="关闭文件"
+            onPress={controller.closeEditor}
+            disabled={controller.busy}
+          />
+        }
+        trailing={
+          !document.image ? (
+            <ToolbarAction
+              label={document.reading ? '编辑' : controller.dirty ? '保存' : '完成编辑'}
+              text={document.reading ? '编辑' : controller.dirty ? '保存' : '完成'}
+              primary
+              disabled={readonly}
+              busy={controller.busy}
+              onPress={() => {
+                if (document.reading) update({ reading: false });
+                else if (!controller.dirty) update({ reading: true });
+                else
+                  void controller.saveEditor().then(saved => {
+                    if (saved)
+                      controller.setEditor(current =>
+                        current?.identity === document.identity &&
+                        current.text === current.savedText &&
+                        current.name === current.savedName
+                          ? { ...current, reading: true }
+                          : current,
+                      );
+                  });
+              }}
+            />
+          ) : undefined
+        }
       >
-        <IconButton
-          icon={mobile ? ArrowLeft : X}
-          label="关闭文件"
-          onPress={controller.closeEditor}
-          disabled={controller.busy}
-        />
         <View style={{ flex: 1, minWidth: 0 }}>
           <Pressable
             accessibilityRole="button"
@@ -93,56 +96,44 @@ export const Editor = memo(function Editor({
             hitSlop={{ top: 8, bottom: 8 }}
             onPress={() => controller.setSheet('rename')}
           >
-            <T numberOfLines={1} style={{ fontSize: 14, fontWeight: '600' }}>
+            <T numberOfLines={1} variant="title" style={{ fontWeight: '600' }}>
               {document.fresh ? '新建文字资料' : document.name}
             </T>
           </Pressable>
-          <T tone={controller.dirty ? 'warning' : 'muted'} style={{ fontSize: 11 }}>
+          <T tone={controller.dirty ? 'warning' : 'muted'} variant="meta">
             {controller.dirty ? '未保存的修改' : document.image ? '图片预览' : '所有修改已保存'}
           </T>
         </View>
-        {!document.image && (
-          <Button
-            label="保存"
-            icon={Save}
-            compact={!mobile}
-            busy={controller.busy}
-            disabled={!controller.dirty || readonly}
-            onPress={() => {
-              void controller.saveEditor();
-            }}
-          />
-        )}
-      </View>
+      </Toolbar>
       {!!controller.error && (
         <View
           style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.dangerSoft }}
         >
-          <T tone="danger" style={{ fontSize: 12 }}>
+          <T tone="danger" variant="caption">
             {controller.error}
           </T>
         </View>
       )}
       {readonly && (
         <View style={{ padding: 12, backgroundColor: theme.warningSoft }}>
-          <T tone="secondary" style={{ fontSize: 12 }}>
+          <T tone="secondary" variant="caption">
             Agent 正在修改项目。你可以阅读，完成后再编辑。
           </T>
         </View>
       )}
       {document.externalChanged && (
         <View style={{ padding: 12, backgroundColor: theme.warningSoft }}>
-          <T tone="secondary" style={{ fontSize: 12 }}>
+          <T tone="secondary" variant="caption">
             文件已有新的版本。当前编辑已保留，保存前请核对变化。
           </T>
         </View>
       )}
       {document.fresh && (
         <View style={{ paddingHorizontal: 12, paddingVertical: 10, gap: 5 }}>
-          <T tone="secondary" style={{ fontSize: 12 }}>
+          <T tone="secondary" variant="caption">
             文件名称
           </T>
-          <TextInput
+          <Input
             accessibilityLabel="文件名称"
             value={document.name}
             onChangeText={name => update({ name })}
@@ -161,47 +152,6 @@ export const Editor = memo(function Editor({
               backgroundColor: theme.inset,
             }}
           />
-        </View>
-      )}
-      {!document.image && (
-        <View
-          style={{
-            flexDirection: 'row',
-            alignItems: 'center',
-            paddingHorizontal: 12,
-            paddingVertical: 0,
-            gap: 5,
-            borderBottomWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          {(['reading', 'editing'] as const).map(mode => (
-            <Pressable
-              key={mode}
-              accessibilityRole="button"
-              disabled={readonly && mode === 'editing'}
-              onPress={() => update({ reading: mode === 'reading' })}
-              style={{
-                paddingHorizontal: 12,
-                minHeight: 44,
-                justifyContent: 'center',
-                borderRadius: 6,
-                backgroundColor:
-                  document.reading === (mode === 'reading') ? theme.inset : 'transparent',
-              }}
-            >
-              <T
-                tone={document.reading === (mode === 'reading') ? 'text' : 'muted'}
-                style={{ fontSize: 12 }}
-              >
-                {mode === 'reading' ? '阅读' : '编辑'}
-              </T>
-            </Pressable>
-          ))}
-          <View style={{ flex: 1 }} />
-          <T tone="muted" style={{ fontSize: 11 }}>
-            {document.text.length.toLocaleString()} 字符
-          </T>
         </View>
       )}
       {document.image ? (
@@ -226,7 +176,7 @@ export const Editor = memo(function Editor({
           <Markdown content={document.text} loadImage={loadImage} />
         </ScrollView>
       ) : (
-        <TextInput
+        <Input
           accessibilityLabel="正文"
           testID="file-content"
           multiline
@@ -267,7 +217,7 @@ export const Editor = memo(function Editor({
         ) : (
           <FileText size={14} color={theme.muted} />
         )}
-        <T tone="muted" style={{ flex: 1, fontSize: 11 }} numberOfLines={1}>
+        <T tone="muted" variant="meta" style={{ flex: 1 }} numberOfLines={1}>
           {document.fresh ? '文字资料' : document.path}
         </T>
         {!document.fresh && (
