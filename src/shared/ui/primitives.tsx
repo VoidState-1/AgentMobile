@@ -14,6 +14,7 @@ import {
   type TextProps,
   type TextInputProps,
   type StyleProp,
+  type TextStyle,
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -172,9 +173,12 @@ export function Field({
   label,
   hideLabel,
   style,
+  onFocus,
+  onBlur,
   ...props
 }: TextInputProps & { label: string; hideLabel?: boolean }) {
   const theme = useWorkbenchTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View style={{ gap: 5, minWidth: 0 }}>
       {!hideLabel && <T style={{ fontSize: 12, fontWeight: '500' }}>{label}</T>}
@@ -183,18 +187,27 @@ export function Field({
         placeholderTextColor={theme.muted}
         autoCapitalize="none"
         autoCorrect={false}
+        onFocus={event => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={event => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         {...props}
         style={[
           {
             minHeight: 44,
             borderWidth: 1,
-            borderColor: theme.border,
+            borderColor: focused ? theme.accent : theme.border,
             backgroundColor: theme.inset,
             borderRadius: workbenchMetrics.radius,
             paddingHorizontal: 10,
             paddingVertical: 9,
             color: theme.text,
             fontSize: 16,
+            ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as TextStyle) : {}),
           },
           style,
         ]}

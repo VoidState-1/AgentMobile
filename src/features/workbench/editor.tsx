@@ -1,4 +1,4 @@
-import { memo, useCallback, useEffect } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 import {
   KeyboardAvoidingView,
   Modal,
@@ -33,6 +33,7 @@ export const Editor = memo(function Editor({
   mobile: boolean;
 }) {
   const theme = useWorkbenchTheme();
+  const [nameFocused, setNameFocused] = useState(false);
   const document = controller.editor!;
   const { preview } = controller;
   const readonly = controller.projectActive;
@@ -147,9 +148,11 @@ export const Editor = memo(function Editor({
             onChangeText={name => update({ name })}
             autoCapitalize="none"
             autoCorrect={false}
+            onFocus={() => setNameFocused(true)}
+            onBlur={() => setNameFocused(false)}
             style={{
               borderWidth: 1,
-              borderColor: theme.border,
+              borderColor: nameFocused ? theme.accent : theme.border,
               borderRadius: 8,
               color: theme.text,
               paddingHorizontal: 10,

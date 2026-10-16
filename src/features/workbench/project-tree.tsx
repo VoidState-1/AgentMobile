@@ -1,11 +1,10 @@
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, TextInput, View } from 'react-native';
+import { ActivityIndicator, Platform, Pressable, ScrollView, TextInput, View } from 'react-native';
 import type { DialogsCapability } from './use-workbench';
 import {
   Archive,
-  ChevronDown,
-  ChevronRight,
   Folder,
+  FolderOpen,
   MessageSquare,
   Plus,
   Search,
@@ -49,7 +48,14 @@ export function ProjectTree({
             onChangeText={setQuery}
             placeholder="搜索"
             placeholderTextColor={theme.muted}
-            style={{ flex: 1, minWidth: 0, fontSize: 16, color: theme.text, height: 44 }}
+            style={{
+              flex: 1,
+              minWidth: 0,
+              fontSize: 16,
+              color: theme.text,
+              height: 44,
+              ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
+            }}
           />
         ) : (
           <T style={{ flex: 1, fontWeight: '600', fontSize: 15 }}>Agent Mobile</T>
@@ -114,7 +120,7 @@ export function ProjectTree({
                   style={{
                     flex: 1,
                     minWidth: 0,
-                    minHeight: 44,
+                    minHeight: 36,
                     flexDirection: 'row',
                     alignItems: 'center',
                     gap: 6,
@@ -122,14 +128,16 @@ export function ProjectTree({
                   }}
                 >
                   {expanded ? (
-                    <ChevronDown size={13} color={theme.muted} />
+                    <FolderOpen
+                      size={16}
+                      color={project.id === controller.projectId ? theme.accent : theme.secondary}
+                    />
                   ) : (
-                    <ChevronRight size={13} color={theme.muted} />
+                    <Folder
+                      size={16}
+                      color={project.id === controller.projectId ? theme.accent : theme.secondary}
+                    />
                   )}
-                  <Folder
-                    size={16}
-                    color={project.id === controller.projectId ? theme.accent : theme.secondary}
-                  />
                   <T numberOfLines={1} style={{ flex: 1, fontSize: 13, fontWeight: '600' }}>
                     {project.name}
                   </T>
@@ -141,7 +149,7 @@ export function ProjectTree({
                   <IconButton
                     icon={Plus}
                     label={'新建对话 ' + project.name}
-                    size={44}
+                    size={32}
                     disabled={controller.busy}
                     onPress={() => {
                       void controller.newConversation(project.id);
@@ -153,16 +161,17 @@ export function ProjectTree({
                 <View
                   style={{
                     marginLeft: 11,
-                    paddingLeft: 9,
+                    paddingLeft: 8,
                     borderLeftWidth: 1,
                     borderColor: theme.border,
+                    marginTop: 2,
                   }}
                 >
                   {conversations.map(item => {
                     const selected = item.id === controller.conversationId;
                     const running = controller.runs.some(run => run.conversationId === item.id);
                     return (
-                      <View key={item.id}>
+                      <View key={item.id} style={{ marginBottom: 2 }}>
                         <Pressable
                           accessibilityRole="button"
                           accessibilityLabel={(archived ? '恢复对话 ' : '切换对话 ') + item.title}
@@ -182,14 +191,13 @@ export function ProjectTree({
                             if (event.nativeEvent.actionName === 'longpress') setMenu(item.id);
                           }}
                           style={({ pressed }) => ({
-                            minHeight: 44,
+                            minHeight: 34,
                             flexDirection: 'row',
                             alignItems: 'center',
                             gap: 8,
                             paddingHorizontal: 8,
-                            borderLeftWidth: 2,
-                            borderLeftColor: selected ? theme.accent : 'transparent',
-                            borderRadius: 3,
+                            paddingVertical: 4,
+                            borderRadius: 6,
                             backgroundColor: selected
                               ? theme.accentSoft
                               : pressed

@@ -3,25 +3,19 @@ import {
   ActivityIndicator,
   Pressable,
   ScrollView,
-  TextInput,
   View,
   useWindowDimensions,
 } from 'react-native';
 import { Image } from 'expo-image';
 import {
-  ChevronDown,
-  ChevronRight,
   Folder,
+  FolderOpen,
   Image as ImageIcon,
-  Plus,
-  Search,
-  Upload,
-  X,
 } from '@/shared/ui/icons';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { FilesCapability } from './use-workbench';
 import { isImage } from '@/core/workspace/path';
-import { IconButton, T } from '@/shared/ui/primitives';
+import { T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { fileName, sizeLabel } from '@/shared/format';
 
@@ -73,11 +67,16 @@ function fileTree(files: ProjectFile[]) {
   return root;
 }
 
-export const FilesPane = memo(function FilesPane({ controller }: { controller: FilesCapability }) {
+export const FilesPane = memo(function FilesPane({
+  controller,
+  query = '',
+}: {
+  controller: FilesCapability;
+  query?: string;
+}) {
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const compact = width < 700;
-  const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<'all' | 'text' | 'image'>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const entries = useMemo(
@@ -183,11 +182,10 @@ export const FilesPane = memo(function FilesPane({ controller }: { controller: F
               }}
             >
               {expanded ? (
-                <ChevronDown size={13} color={theme.muted} />
+                <FolderOpen size={16} color={theme.accent} />
               ) : (
-                <ChevronRight size={13} color={theme.muted} />
+                <Folder size={16} color={theme.accent} />
               )}
-              <Folder size={16} color={theme.accent} />
               <T numberOfLines={1} style={{ fontSize: 13, flex: 1 }}>
                 {node.name}
               </T>
@@ -199,36 +197,6 @@ export const FilesPane = memo(function FilesPane({ controller }: { controller: F
   return (
     <View style={{ flex: 1, backgroundColor: theme.surface }}>
       <View style={{ paddingHorizontal: 8, borderBottomWidth: 1, borderColor: theme.border }}>
-        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-          <Search size={16} color={theme.muted} />
-          <TextInput
-            accessibilityLabel="搜索文件"
-            placeholder="搜索文件"
-            placeholderTextColor={theme.muted}
-            value={query}
-            onChangeText={setQuery}
-            style={{ flex: 1, minWidth: 0, height: 44, color: theme.text, fontSize: 16 }}
-          />
-          {!!query && (
-            <IconButton size={44} icon={X} label="清除文件搜索" onPress={() => setQuery('')} />
-          )}
-          <IconButton
-            icon={Upload}
-            size={44}
-            label="导入"
-            disabled={controller.busy || controller.projectActive}
-            onPress={() => {
-              void controller.importFile();
-            }}
-          />
-          <IconButton
-            icon={Plus}
-            size={44}
-            label="新建文件"
-            disabled={controller.busy || controller.projectActive}
-            onPress={controller.newFile}
-          />
-        </View>
         <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
           {(['all', 'text', 'image'] as const).map(value => (
             <Pressable
@@ -238,7 +206,7 @@ export const FilesPane = memo(function FilesPane({ controller }: { controller: F
               accessibilityState={{ selected: filter === value }}
               onPress={() => setFilter(value)}
               style={{
-                minHeight: 44,
+                minHeight: 40,
                 paddingHorizontal: 10,
                 justifyContent: 'center',
                 borderBottomWidth: 2,
@@ -250,7 +218,7 @@ export const FilesPane = memo(function FilesPane({ controller }: { controller: F
               </T>
             </Pressable>
           ))}
-          <T tone="muted" style={{ flex: 1, textAlign: 'right', fontSize: 11 }}>
+          <T tone="muted" style={{ flex: 1, textAlign: 'right', fontSize: 11, paddingRight: 4 }}>
             {entries.length}
           </T>
         </View>

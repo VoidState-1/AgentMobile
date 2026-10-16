@@ -218,9 +218,12 @@ export function NumberField({
   label,
   unit,
   accessibilityLabel,
+  onFocus,
+  onBlur,
   ...props
 }: Omit<TextInputProps, 'multiline' | 'style'> & { label: string; unit?: string }) {
   const theme = useWorkbenchTheme();
+  const [focused, setFocused] = useState(false);
   return (
     <View
       testID="number-setting"
@@ -236,6 +239,14 @@ export function NumberField({
         autoCorrect={false}
         keyboardType={props.keyboardType ?? 'number-pad'}
         placeholderTextColor={theme.muted}
+        onFocus={event => {
+          setFocused(true);
+          onFocus?.(event);
+        }}
+        onBlur={event => {
+          setFocused(false);
+          onBlur?.(event);
+        }}
         style={{
           width: 86,
           minHeight: 44,
@@ -245,7 +256,8 @@ export function NumberField({
           fontSize: 16,
           color: theme.text,
           borderBottomWidth: 1,
-          borderBottomColor: theme.border,
+          borderBottomColor: focused ? theme.accent : theme.border,
+          ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
         }}
       />
       <T tone="secondary" numberOfLines={1} style={{ width: 44, fontSize: 12 }}>

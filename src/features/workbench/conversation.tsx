@@ -455,6 +455,7 @@ export const Conversation = memo(function Conversation({
               paddingHorizontal: 4,
               paddingVertical: 5,
               color: theme.text,
+              ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
             }}
           />
           {adding && (

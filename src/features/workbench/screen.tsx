@@ -18,11 +18,13 @@ import {
   MessageSquare,
   PanelLeft,
   Plus,
+  Search,
   Settings2,
+  Upload,
   X,
 } from '@/shared/ui/icons';
 import { useWorkbench } from './use-workbench';
-import type { DialogsCapability } from './use-workbench';
+import type { DialogsCapability, FilesCapability } from './use-workbench';
 import { useWorkbenchTheme, workbenchMetrics as metrics } from '@/shared/theme';
 import { RunActivity } from './run-activity';
 import { Brand, Button, IconButton, T } from '@/shared/ui/primitives';
@@ -175,7 +177,19 @@ function ProjectEmptyState({ controller, wide }: { controller: DialogsCapability
   );
 }
 
-function WorkbenchHeader({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
+function WorkbenchHeader({
+  controller,
+  files,
+  fileQuery,
+  onFileQueryChange,
+  wide,
+}: {
+  controller: DialogsCapability;
+  files?: FilesCapability;
+  fileQuery?: string;
+  onFileQueryChange?: (query: string) => void;
+  wide: boolean;
+}) {
   const theme = useWorkbenchTheme();
   const [editing, setEditing] = useState<{ id: string; value: string }>();
   const saving = useRef(false);
@@ -208,6 +222,7 @@ function WorkbenchHeader({ controller, wide }: { controller: DialogsCapability; 
         borderBottomWidth: 1,
         borderColor: theme.border,
         backgroundColor: theme.surface,
+        gap: 6,
       }}
     >
       {!wide && (
@@ -218,50 +233,125 @@ function WorkbenchHeader({ controller, wide }: { controller: DialogsCapability; 
           onPress={() => controller.setDrawerOpen(true)}
         />
       )}
-      <View testID="conversation-bar" style={{ flex: 1, minWidth: 0, paddingHorizontal: 7 }}>
-        {editing && current?.id === editing.id ? (
-          <TextInput
-            autoFocus
-            selectTextOnFocus
-            accessibilityLabel="对话名称"
-            value={editing.value}
-            maxLength={60}
-            onChangeText={value => setEditing({ ...editing, value })}
-            onSubmitEditing={() => {
-              void finish();
+      {controller.tab === 'files' ? (
+        <View style={{ flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+          <T style={{ fontSize: 15, fontWeight: '600', paddingLeft: wide ? 8 : 2, paddingRight: 2 }}>
+            文件
+          </T>
+          <View
+            style={{
+              flex: 1,
+              minWidth: 0,
+              height: 34,
+              flexDirection: 'row',
+              alignItems: 'center',
+              backgroundColor: theme.inset,
+              borderRadius: metrics.radius,
+              paddingHorizontal: 8,
+              gap: 6,
             }}
-            onBlur={() => {
-              void finish();
-            }}
-            onKeyPress={event => {
-              if (event.nativeEvent.key === 'Escape') setEditing(undefined);
-            }}
-            style={{ height: 44, fontSize: 16, color: theme.text, padding: 0 }}
-          />
-        ) : (
-          <Pressable
-            accessibilityRole="button"
-            accessibilityLabel={controller.tab === 'agent' && current ? '重命名当前对话' : title}
-            disabled={controller.busy || controller.tab !== 'agent' || !current}
-            onPress={() => current && setEditing({ id: current.id, value: current.title })}
-            style={{ minHeight: 44, justifyContent: 'center' }}
           >
-            <T numberOfLines={1} style={{ fontSize: 15, fontWeight: '600' }}>
-              {title}
-            </T>
-          </Pressable>
-        )}
-      </View>
-      {controller.tab === 'agent' && controller.projectId && (
-        <IconButton
-          icon={Plus}
-          label="新建对话"
-          size={44}
-          disabled={controller.busy}
-          onPress={() => {
-            void controller.newConversation();
-          }}
-        />
+            <Search size={14} color={theme.muted} />
+            <TextInput
+              accessibilityLabel="搜索文件"
+              placeholder="搜索文件"
+              placeholderTextColor={theme.muted}
+              value={fileQuery ?? ''}
+              onChangeText={onFileQueryChange}
+              style={{
+                flex: 1,
+                minWidth: 0,
+                height: '100%',
+                fontSize: 13,
+                color: theme.text,
+                padding: 0,
+                ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
+              }}
+            />
+            {!!fileQuery && (
+              <IconButton
+                size={24}
+                icon={X}
+                label="清除文件搜索"
+                onPress={() => onFileQueryChange?.('')}
+              />
+            )}
+          </View>
+          {files && (
+            <>
+              <IconButton
+                icon={Upload}
+                size={36}
+                label="导入"
+                disabled={files.busy || files.projectActive}
+                onPress={() => {
+                  void files.importFile();
+                }}
+              />
+              <IconButton
+                icon={Plus}
+                size={36}
+                label="新建文件"
+                disabled={files.busy || files.projectActive}
+                onPress={files.newFile}
+              />
+            </>
+          )}
+        </View>
+      ) : (
+        <>
+          <View testID="conversation-bar" style={{ flex: 1, minWidth: 0, paddingHorizontal: 7 }}>
+            {editing && current?.id === editing.id ? (
+              <TextInput
+                autoFocus
+                selectTextOnFocus
+                accessibilityLabel="对话名称"
+                value={editing.value}
+                maxLength={60}
+                onChangeText={value => setEditing({ ...editing, value })}
+                onSubmitEditing={() => {
+                  void finish();
+                }}
+                onBlur={() => {
+                  void finish();
+                }}
+                onKeyPress={event => {
+                  if (event.nativeEvent.key === 'Escape') setEditing(undefined);
+                }}
+                style={{
+                  height: 44,
+                  fontSize: 16,
+                  color: theme.text,
+                  padding: 0,
+                  ...(Platform.OS === 'web' ? ({ outlineStyle: 'none' } as unknown as object) : {}),
+                }}
+              />
+            ) : (
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={controller.tab === 'agent' && current ? '重命名当前对话' : title}
+                disabled={controller.busy || controller.tab !== 'agent' || !current}
+                onPress={() => current && setEditing({ id: current.id, value: current.title })}
+                style={{ minHeight: 44, justifyContent: 'center' }}
+              >
+                <T numberOfLines={1} style={{ fontSize: 15, fontWeight: '600' }}>
+                  {title}
+                </T>
+              </Pressable>
+            )}
+          </View>
+          {controller.tab === 'agent' && controller.projectId && (
+            <IconButton
+              icon={Plus}
+              label="新建对话"
+              size={44}
+              disabled={controller.busy}
+              onPress={() => {
+                void controller.newConversation();
+              }}
+            />
+          )}
+        </>
       )}
     </View>
   );
@@ -275,6 +365,7 @@ export function WorkbenchScreen() {
   const wide = width >= 1100;
   const { drawerOpen, setDrawerOpen, tab, selectTab } = controller;
   const [keyboard, setKeyboard] = useState(false);
+  const [fileQuery, setFileQuery] = useState('');
   useEffect(() => {
     const show = Keyboard.addListener('keyboardDidShow', () => setKeyboard(true));
     const hide = Keyboard.addListener('keyboardDidHide', () => setKeyboard(false));
@@ -334,7 +425,13 @@ export function WorkbenchScreen() {
               </View>
             )}
             <View style={{ flex: 1, minWidth: 0, minHeight: 0 }}>
-              <WorkbenchHeader controller={controller} wide={wide} />
+              <WorkbenchHeader
+                controller={controller}
+                files={capabilities.files}
+                fileQuery={fileQuery}
+                onFileQueryChange={setFileQuery}
+                wide={wide}
+              />
               {!!controller.error && !controller.editorOpen && (
                 <View
                   accessibilityRole="alert"
@@ -389,7 +486,11 @@ export function WorkbenchScreen() {
                         controller={capabilities.conversation}
                       />
                     ) : controller.tab === 'files' ? (
-                      <FilesPane key={controller.projectId} controller={capabilities.files} />
+                      <FilesPane
+                        key={controller.projectId}
+                        controller={capabilities.files}
+                        query={fileQuery}
+                      />
                     ) : (
                       <HistoryPane controller={capabilities.git} />
                     )}
