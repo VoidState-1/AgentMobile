@@ -184,8 +184,8 @@ export function ProjectTree({
                           onPress={() => {
                             setMenu(undefined);
                             void (archived
-                              ? controller.restoreConversation(item)
-                              : controller.selectConversation(item.id, project.id));
+                              ? controller.restoreConversation(item, false)
+                              : controller.selectConversation(item.id, project.id, false));
                           }}
                           onLongPress={() =>
                             setMenu(value => (value === item.id ? undefined : item.id))

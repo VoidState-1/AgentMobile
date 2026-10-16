@@ -10,8 +10,12 @@ interface WorkbenchUi {
   appearance: AppearanceMode;
   commitDrafts: Record<string, string>;
   setCommitDraft: (projectId: string, text: string) => void;
-  selectProject: (projectId?: string, conversationId?: string) => void;
-  selectConversation: (conversationId: string) => void;
+  selectProject: (
+    projectId?: string,
+    conversationId?: string,
+    navigateToConversation?: boolean,
+  ) => void;
+  selectConversation: (conversationId: string, navigateToConversation?: boolean) => void;
   selectTab: (tab: WorkbenchTab) => void;
   setAppearance: (appearance: AppearanceMode) => void;
 }
@@ -22,8 +26,14 @@ export const useWorkbenchUi = create<WorkbenchUi>(set => ({
   commitDrafts: {},
   setCommitDraft: (projectId, text) =>
     set(state => ({ commitDrafts: { ...state.commitDrafts, [projectId]: text } })),
-  selectProject: (projectId, conversationId) => set({ projectId, conversationId, tab: 'agent' }),
-  selectConversation: conversationId => set({ conversationId, tab: 'agent' }),
+  selectProject: (projectId, conversationId, navigateToConversation = true) =>
+    set(state => ({
+      projectId,
+      conversationId,
+      tab: navigateToConversation ? 'agent' : state.tab,
+    })),
+  selectConversation: (conversationId, navigateToConversation = true) =>
+    set(state => ({ conversationId, tab: navigateToConversation ? 'agent' : state.tab })),
   selectTab: tab => set({ tab }),
   setAppearance: appearance => set({ appearance }),
 }));

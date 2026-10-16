@@ -33,7 +33,11 @@ export function useProjectNavigation(context: NavigationContext) {
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
   const [conversationToRename, setConversationToRename] = useState<string>();
-  async function selectConversation(id: string, projectId = ui.projectId) {
+  async function selectConversation(
+    id: string,
+    projectId = ui.projectId,
+    navigateToConversation = true,
+  ) {
     const select = () =>
       action(async () => {
         if (!runtime || !projectId) return;
@@ -46,10 +50,10 @@ export function useProjectNavigation(context: NavigationContext) {
         installConversation(conversation);
         if (projectId !== ui.projectId) {
           setEditor(undefined);
-          ui.selectProject(projectId, id);
-        } else ui.selectConversation(id);
+          ui.selectProject(projectId, id, navigateToConversation);
+        } else ui.selectConversation(id, navigateToConversation);
         setSheet(undefined);
-        setDrawerOpen(false);
+        if (navigateToConversation) setDrawerOpen(false);
         setError('');
       });
     if (projectId !== ui.projectId)
@@ -118,7 +122,7 @@ export function useProjectNavigation(context: NavigationContext) {
       },
     });
   }
-  async function restoreConversation(conversation: Conversation) {
+  async function restoreConversation(conversation: Conversation, navigateToConversation = true) {
     const restore = () =>
       action(async () => {
         if (!runtime) return;
@@ -126,9 +130,9 @@ export function useProjectNavigation(context: NavigationContext) {
         await runtime.conversations.restore(conversation.id);
         installConversation(conversation);
         if (conversation.projectId !== ui.projectId) setEditor(undefined);
-        ui.selectProject(conversation.projectId, conversation.id);
+        ui.selectProject(conversation.projectId, conversation.id, navigateToConversation);
         setSheet(undefined);
-        setDrawerOpen(false);
+        if (navigateToConversation) setDrawerOpen(false);
         setNotice('对话已恢复。');
       });
     if (conversation.projectId !== ui.projectId)
