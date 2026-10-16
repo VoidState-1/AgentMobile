@@ -3,7 +3,7 @@ import type { RunView } from '@/core/runs/queries';
 import { AppError } from '@/core/errors';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { WorkbenchSheet, ActionContext, EditorSession } from './types';
-import { safePath, isImage, mimeFor } from '@/core/workspace/path';
+import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
 import { fileName } from '@/shared/format';
 
 interface EditorContext extends ActionContext, EditorSession {
@@ -32,9 +32,10 @@ export function useEditorActions(context: EditorContext) {
     if (!runtime || !document) return;
     if (active?.projectId === document.projectId)
       throw new Error('任务仍在运行，请停止或等待完成后保存。');
-    const name = document.name.trim();
-    if (!/^[^/\\]+\.(md|txt)$/i.test(name) && !document.image)
-      throw new Error('文件名称请以 .md 或 .txt 结尾。');
+    const name = safePath(document.name.trim());
+    if (name.includes('/')) throw new Error('请输入文件名称，不包含文件夹路径。');
+    if (!canMoveWithinFormat(document.path, name))
+      throw new Error('请保留图片的原始格式扩展名；文本不能使用图片扩展名。');
     let target = document.path;
     if (document.fresh) {
       target = 'documents/' + safePath(name);
@@ -157,8 +158,6 @@ export function useEditorActions(context: EditorContext) {
     await action(async () => {
       const selection = await runtime.io.pickFile();
       if (!selection) return;
-      if (!/\.(md|txt|png|jpg|jpeg|webp)$/i.test(selection.name))
-        throw new Error('支持 Markdown、文本和 PNG/JPEG/WebP 图片。');
       const path = (isImage(selection.name) ? 'assets/' : 'documents/') + safePath(selection.name);
       await runtime.workspace.write(ui.projectId!, path, selection.bytes, null, {
         message: '导入 ' + selection.name,
@@ -195,15 +194,8 @@ export function useEditorActions(context: EditorContext) {
     await action(async () => {
       const targetName = safePath(name.trim());
       if (targetName.includes('/')) throw new Error('请输入文件名称，不包含文件夹路径。');
-      if (
-        document.image
-          ? mimeFor(targetName) !== mimeFor(document.path)
-          : !/\.(md|txt)$/i.test(targetName)
-      ) {
-        throw new Error(
-          document.image ? '请保留图片的原始格式扩展名。' : '文本文件请使用 .md 或 .txt。',
-        );
-      }
+      if (!canMoveWithinFormat(document.path, targetName))
+        throw new Error('请保留图片的原始格式扩展名；文本不能使用图片扩展名。');
       const target = document.path.slice(0, document.path.lastIndexOf('/') + 1) + targetName;
       await runtime.workspace.move(document.projectId, document.path, target, document.revision!);
       const current = await runtime.workspace.preview(document.projectId, target);

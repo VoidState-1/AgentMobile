@@ -118,6 +118,44 @@ async function fixture(
   };
 }
 
+it('writer 可隔离创建、移动和合入代码及无扩展名文本，二进制与未授权写入不产生回执', async () => {
+  const f = await fixture(['src/main.ts', 'src/main.mjs', 'Dockerfile']);
+  const head = await f.workspace.git.head(f.project.id);
+  expect(
+    (await f.write('src/main.ts', 'export const text = "中文😀";\r\n', null)).isError,
+  ).not.toBe(true);
+  expect((await f.write('Dockerfile', 'FROM scratch\n', null)).isError).not.toBe(true);
+  const read = await f.tools
+    .find(tool => tool.name === 'read_text')!
+    .execute('read', { path: 'src/main.ts' });
+  const file = JSON.parse(read.content[0].type === 'text' ? read.content[0].text : '{}');
+  expect(
+    (
+      await f.tools
+        .find(tool => tool.name === 'move_file')!
+        .execute('move', {
+          from: 'src/main.ts',
+          to: 'src/main.mjs',
+          expectedRevision: file.revision,
+        })
+    ).isError,
+  ).not.toBe(true);
+  const writes = await f.proposals.repository.writes();
+  expect((await f.write('Dockerfile', '\0', null, 'binary')).isError).toBe(true);
+  expect((await f.write('outside.py', 'print(1)', null)).isError).toBe(true);
+  expect(await f.proposals.repository.writes()).toHaveLength(writes.length);
+  expect((await f.workspace.files(f.project.id)).some(item => item.path === 'src/main.mjs')).toBe(
+    false,
+  );
+  await f.ready();
+  expect((await f.proposals.apply('root', f.overlay.id)).applied).toBe(true);
+  expect((await f.workspace.readText(f.project.id, 'src/main.mjs')).text).toBe(
+    'export const text = "中文😀";\r\n',
+  );
+  expect((await f.workspace.readText(f.project.id, 'Dockerfile')).text).toBe('FROM scratch\n');
+  expect(await f.workspace.git.head(f.project.id)).toBe(head);
+});
+
 it('候选写入不改变真实文件/index/HEAD，稳定回执不重复；合入归属根与子，整组撤销保留用户工作区/index', async () => {
   const f = await fixture(undefined, true);
   const status = await f.workspace.status(f.project.id);

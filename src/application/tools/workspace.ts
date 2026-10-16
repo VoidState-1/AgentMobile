@@ -3,7 +3,7 @@ import { Type } from 'typebox';
 import type { ControlledTool } from '@/core/agent/tools';
 import type { RunToolsContext } from './context';
 import { defineTool, assertRunning, result, textLimit, revision } from './common';
-import { canAgentWriteText } from '@/core/workspace/path';
+import { isImage } from '@/core/workspace/path';
 import { fileReadTools, scopedFileReader } from './file-read';
 
 export function workspaceTools(context: RunToolsContext): ControlledTool[] {
@@ -28,7 +28,8 @@ export function workspaceTools(context: RunToolsContext): ControlledTool[] {
       effect: 'workspace-write',
       name: 'write_text',
       label: '修改文字',
-      description: '创建或修改 UTF-8 文本。修改必须使用读取时的修订号；创建使用 null。',
+      description:
+        '创建或修改 UTF-8 文本，包括代码、配置及无扩展名文件，不执行代码。修改必须使用读取时的修订号；创建使用 null。',
       parameters: Type.Object(
         {
           path: Type.String({ maxLength: 220 }),
@@ -41,7 +42,7 @@ export function workspaceTools(context: RunToolsContext): ControlledTool[] {
       execute: async (callId, args, signal) => {
         assertRunning(signal);
         const path = String(args.path);
-        if (!canAgentWriteText(path)) throw new AppError('VALIDATION', '只允许写入 .md 或 .txt');
+        if (isImage(path)) throw new AppError('VALIDATION', '文字工具不能写入图片文件。');
         await workspace.write(
           projectId,
           path,

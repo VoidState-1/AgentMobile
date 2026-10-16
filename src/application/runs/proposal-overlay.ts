@@ -4,7 +4,9 @@ import type { ControlledTool } from '@/core/agent/tools';
 import type { ContentCodec } from '@/core/storage/codec';
 import type { ChangeProposal, ProposalWrite } from '@/core/runs/proposals';
 import type { RunState } from '@/core/runs/types';
-import { safePath, canAgentWriteText, canMoveWithinFormat } from '@/core/workspace/path';
+import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
+import { validateText } from '@/core/workspace/text';
+import { validateImage } from '@/core/workspace/image';
 import { AppError } from '@/core/errors';
 import { canonical } from '@/core/mcp/rules';
 import type { WorkspaceApplication } from '@/application/workspace/service';
@@ -66,12 +68,17 @@ export class ProposalOverlay {
         throw new AppError('CONFLICT', '提案已收束，不能继续修改。');
       const id = this.proposal.id + ':' + invocation;
       const parts = [];
-      for (const change of changes)
+      for (const change of changes) {
+        if (change.bytes) {
+          if (isImage(change.path)) validateImage(change.path, change.bytes);
+          else validateText(change.bytes);
+        }
         parts.push({
           path: this.scope(change.path),
           expected: change.expected,
           after: change.bytes ? await this.workspace.git.revision(change.bytes) : null,
         });
+      }
       const fingerprint = canonical(parts);
       const previous = await this.repository.write(id);
       if (previous) {
@@ -179,7 +186,7 @@ export class ProposalOverlay {
         name: 'write_text',
         label: '修改隔离提案',
         description:
-          '只在授权路径修改隔离候选 .md/.txt。使用候选修订号；创建为 null。不会改变真实工作区、index 或 HEAD。',
+          '只在授权路径修改隔离候选 UTF-8 文本，支持代码、配置和无扩展名文件。使用候选修订号；创建为 null。不会改变真实工作区、index 或 HEAD。',
         parameters: Type.Object(
           {
             path: Type.String({ maxLength: 220 }),
@@ -191,8 +198,7 @@ export class ProposalOverlay {
         execute: async (callId, args, signal) => {
           assertRunning(signal);
           const path = this.scope(args.path);
-          if (!canAgentWriteText(path))
-            throw new AppError('VALIDATION', '只允许写入 .md 或 .txt 提案。');
+          if (isImage(path)) throw new AppError('VALIDATION', '文字工具不能写入图片提案。');
           await this.change(round() + ':' + callId, [
             { path, bytes: this.codec.encodeText(args.text), expected: args.expectedRevision },
           ]);

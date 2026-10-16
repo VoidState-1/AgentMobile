@@ -5,6 +5,7 @@ import { fileQueryLimits } from '@/core/workspace/file-reader';
 import type { ContentCodec } from '@/core/storage/codec';
 import { contentLimits } from '@/core/agent/settings';
 import { AppError } from '@/core/errors';
+import { validateText } from '@/core/workspace/text';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { textEnd } from '@/core/runs/trace-storage';
 import { defineTool, assertRunning, result, textLimit } from './common';
@@ -67,8 +68,7 @@ export function fileReadTools(
   const text = async (path: string, signal?: AbortSignal) => {
     const file = await reader.read(path, signal);
     if (isImage(file.path)) throw new AppError('VALIDATION', '图片请通过图片工具读取。');
-    if (file.bytes.length > contentLimits.textFileBytes)
-      throw new AppError('LIMIT', '文字资料超过 1 MB 限制。');
+    validateText(file.bytes);
     return {
       path: file.path,
       revision: file.revision,

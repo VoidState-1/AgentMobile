@@ -2,10 +2,11 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                     |
-| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------ |
-| 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的真实分支、类型化差异范围和任务增删统计。   |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路径与修订、文件日志、真实暂存提交、任务撤销和快照语义。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                            |
+| -------- | ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1.2.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：取消文本扩展名白名单，统一 UTF-8/NUL 校验、重命名与隔离提案边界。 |
+| 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的真实分支、类型化差异范围和任务增删统计。                          |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路径与修订、文件日志、真实暂存提交、任务撤销和快照语义。                        |
 
 ## 1. 工作区边界
 
@@ -13,11 +14,11 @@
 
 [safePath](../src/core/workspace/path.ts) 将输入规范化为 NFC，要求工作区相对路径。长度最多 220 个 UTF-16 单位，拒绝前后空格、反斜杠、冒号、控制字符、绝对路径、空组件、`.`、`..`、`.git` 及其前缀、末尾点/空格和 Windows 保留设备名。校验不是对任意设备路径做简单字符串拼接。
 
-`project.json` 是宿主管理文件，不允许普通写入、移动、删除、提案合入或手工暂存选取。Agent 只能生成 `.md`/`.txt` 文本，支持移动/删除授权图片，不能直接生成图片 bytes 或任意源码。
+`project.json` 是宿主管理文件，不允许普通写入、移动、删除、提案合入或手工暂存选取。Agent 可生成任意合法相对路径下的 UTF-8 文本，包括代码、配置、自定义扩展名和无扩展名文件；支持移动/删除授权图片，不能直接生成图片 bytes，也不执行代码。文件类型放开不改变受保护路径和项目占用规则。
 
 ## 2. 支持的内容与修订
 
-文本按 UTF-8 处理，单文件最多 1 MiB；一般文件最多 20 MiB。支持 PNG/JPEG/WebP，保存时验证格式头与尺寸，单边最多 16,000、总像素最多 2,400 万；这不是完整图像解码校验。转发模型的图片有独立 4 MiB 上限。详细常量见 [Agent 限制](agent-runtime.md)。
+文本不限扩展名，必须是有效 UTF-8 且不含 NUL 字节，单文件最多 1 MiB；一般文件最多 20 MiB。普通导入选择器允许任意文件，工作区写入按内容校验：非 PNG/JPEG/WebP 路径作为文本验证，二进制或其他编码不会经过替换字符解码后保存。UTF-8 BOM、中文、emoji、CRLF/LF 按原始 bytes 保留，不进行编码转换或格式化。读取、预览、Agent 读取、writer 候选写入及提案合入共用文本校验。文本可在不同扩展名及无扩展名之间移动；图片仍须保持原图片格式，文本与图片不能靠重命名互相转换。支持 PNG/JPEG/WebP，保存时验证格式头与尺寸，单边最多 16,000、总像素最多 2,400 万；这不是完整图像解码校验。转发模型的图片有独立 4 MiB 上限。详细常量见 [Agent 限制](agent-runtime.md)。
 
 文件 revision 是标准 Git blob OID，按实际 bytes 计算。新建 expectedRevision=null 表示目标必须不存在；已有文件修改/删除/移动必须带当前 revision。相同大小/mtime 不代表内容相同；目录视图缓存用 Web contentVersion 或原生 contentStamp，写前仍读取真实 bytes。
 
@@ -114,7 +115,7 @@ checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字�
 
 ## 10. 验证入口
 
-[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts)。
+[text-files.test](../tests/text-files.test.ts)、[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts) 与 [通用文本 E2E](../tests/e2e/text-files.spec.ts)。
 
 ## 分支与任务差异摘要
 

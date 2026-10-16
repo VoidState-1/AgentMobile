@@ -54,14 +54,8 @@ export class ProposalService {
     const paths = [...new Set((launch.selectedPaths ?? []).map(path => safePath(path)))];
     if (new Set(paths.map(path => path.toLowerCase())).size !== paths.length)
       throw new AppError('VALIDATION', '提案路径大小写重复。');
-    if (
-      !paths.length ||
-      paths.some(
-        path =>
-          path.toLowerCase() === 'project.json' || (!isImage(path) && !/\.(md|txt)$/i.test(path)),
-      )
-    )
-      throw new AppError('VALIDATION', '写作提案只允许授权文字和图片路径。');
+    if (!paths.length || paths.some(path => path.toLowerCase() === 'project.json'))
+      throw new AppError('VALIDATION', '写作提案需要授权路径，不能包含项目配置。');
     const id = 'proposal-' + source.id;
     let proposal = await this.repository.get(id);
     if (!proposal) {

@@ -1,4 +1,4 @@
-import { isImage } from '@/core/workspace/path';
+import { isImage, isMarkdown } from '@/core/workspace/path';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { ArrowLeft, Download, FileText, Image as ImageIcon, Trash2, X } from '@/shared/ui/icons';
 import { IconButton, Input, T, Toolbar, ToolbarAction } from '@/shared/ui/primitives';
@@ -173,7 +173,21 @@ export const Editor = memo(function Editor({
         </View>
       ) : document.reading ? (
         <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
-          <Markdown content={document.text} loadImage={loadImage} />
+          {isMarkdown(document.path) ? (
+            <Markdown content={document.text} loadImage={loadImage} />
+          ) : (
+            <T
+              selectable
+              testID="file-plain-preview"
+              style={{
+                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+                fontSize: 14,
+                lineHeight: 24,
+              }}
+            >
+              {document.text}
+            </T>
+          )}
         </ScrollView>
       ) : (
         <Input

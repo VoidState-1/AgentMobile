@@ -4,6 +4,7 @@ import type { Project } from '@/core/projects';
 import type { ProjectFile } from '@/core/workspace/types';
 import { safePath, isImage, mimeFor } from '@/core/workspace/path';
 import { contentLimits } from '@/core/agent/settings';
+import { validateText } from '@/core/workspace/text';
 import type { StorageStat } from '@/core/storage/contracts';
 import type { Operation } from '@/core/workspace/journal';
 
@@ -125,8 +126,7 @@ export class WorkspaceReader {
   async readText(projectId: string, path: string) {
     if (isImage(path)) throw new AppError('VALIDATION', '图片请通过图片工具读取');
     const { bytes, revision } = await this.read(projectId, path);
-    if (bytes.length > contentLimits.textFileBytes)
-      throw new AppError('LIMIT', '文本超过 1 MB 限制');
+    validateText(bytes);
     return { text: this.context.codec.decodeText(bytes), revision };
   }
 
@@ -135,9 +135,10 @@ export class WorkspaceReader {
     return { revision, content: this.display(path, bytes) };
   }
   private display(path: string, bytes: Uint8Array): string {
-    return isImage(path)
-      ? 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(bytes)
-      : this.context.codec.decodeText(bytes);
+    if (isImage(path))
+      return 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(bytes);
+    validateText(bytes);
+    return this.context.codec.decodeText(bytes);
   }
 
   async workingTree(projectId: string) {

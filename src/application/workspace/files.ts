@@ -3,8 +3,9 @@ import type { WorkspaceContext } from './context';
 import type { Project } from '@/core/projects';
 import type { Operation } from '@/core/workspace/journal';
 import type { CandidateMergeInput, CandidateMergeResult } from '@/core/runs/proposals';
-import { safePath, isImage } from '@/core/workspace/path';
+import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';
+import { validateText } from '@/core/workspace/text';
 import { contentLimits } from '@/core/agent/settings';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
@@ -66,9 +67,10 @@ export class FileCommands {
         const bytes = candidate[path];
         if (bytes && bytes.length > MAX_FILE_BYTES)
           throw new AppError('LIMIT', '文件超过 20 MB 限制');
-        if (bytes && !isImage(path) && bytes.length > contentLimits.textFileBytes)
-          throw new AppError('LIMIT', '文本超过 1 MB 限制');
-        if (bytes && isImage(path)) validateImage(path, bytes);
+        if (bytes) {
+          if (isImage(path)) validateImage(path, bytes);
+          else validateText(bytes);
+        }
         changes.push({ path, before: current, after });
       }
       // Entire batch is preflighted inside the sole project queue, before journaling.
@@ -142,9 +144,8 @@ export class FileCommands {
     if (path.toLowerCase() === 'project.json')
       throw new AppError('VALIDATION', '项目配置由宿主管理');
     if (bytes.length > MAX_FILE_BYTES) throw new AppError('LIMIT', '文件超过 20 MB 限制');
-    if (!isImage(path) && bytes.length > contentLimits.textFileBytes)
-      throw new AppError('LIMIT', '文本超过 1 MB 限制');
     if (isImage(path)) validateImage(path, bytes);
+    else validateText(bytes);
     return this.mutations.serial(projectId, options.owner, async () => {
       const operationId = options.operationId ?? this.context.id();
       const existing = await this.context.journal.get(projectId, operationId);
@@ -201,14 +202,18 @@ export class FileCommands {
   }
 
   async move(projectId: string, from: string, to: string, revision: string, owner?: string) {
-    safePath(from);
-    safePath(to);
-    if (from === 'project.json' || to === 'project.json')
+    from = safePath(from);
+    to = safePath(to);
+    if (from.toLowerCase() === 'project.json' || to.toLowerCase() === 'project.json')
       throw new AppError('VALIDATION', '项目配置由宿主管理');
+    if (!canMoveWithinFormat(from, to))
+      throw new AppError('VALIDATION', '移动不能转换图片格式或在图片与文本之间转换。');
     return this.mutations.serial(projectId, owner, async () => {
       const before = await this.reader.read(projectId, from);
       if (before.revision !== revision)
         throw new AppError('CONFLICT', 'VERSION_CONFLICT：文件已变化');
+      if (isImage(from)) validateImage(to, before.bytes);
+      else validateText(before.bytes);
       if (await this.reader.bytesOrNull(projectId, to))
         throw new AppError('CONFLICT', '目标文件已存在');
       return this.mutations.prepare(

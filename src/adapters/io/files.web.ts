@@ -8,7 +8,7 @@ export async function pickFile(
   return new Promise((resolve, reject) => {
     const input = document.createElement('input');
     input.type = 'file';
-    input.accept = kind === 'image' ? '.png,.jpg,.jpeg,.webp' : '.txt,.md,.png,.jpg,.jpeg,.webp';
+    if (kind === 'image') input.accept = '.png,.jpg,.jpeg,.webp';
     input.onchange = async () => {
       try {
         const file = input.files?.[0];

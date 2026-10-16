@@ -26,6 +26,10 @@ export function safePath(input: string, allowRoot = false): string {
   return path;
 }
 
+export function isMarkdown(path: string): boolean {
+  return /\.(md|markdown)$/i.test(path);
+}
+
 export function mimeFor(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase();
   return (
@@ -34,16 +38,13 @@ export function mimeFor(path: string): string {
         string,
         string
       >
-    )[ext ?? ''] ?? (ext === 'md' ? 'text/markdown' : 'text/plain')
+    )[ext ?? ''] ?? (isMarkdown(path) ? 'text/markdown' : 'text/plain')
   );
 }
 
 export function isImage(path: string): boolean {
   return mimeFor(path).startsWith('image/');
 }
-export const canAgentWriteText = (path: string): boolean => /\.(md|txt)$/i.test(path);
 export function canMoveWithinFormat(from: string, to: string): boolean {
-  return isImage(from)
-    ? isImage(to) && mimeFor(from) === mimeFor(to)
-    : !isImage(to) && canAgentWriteText(to);
+  return isImage(from) ? isImage(to) && mimeFor(from) === mimeFor(to) : !isImage(to);
 }

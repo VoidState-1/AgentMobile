@@ -90,7 +90,7 @@ export class DelegationSession implements DelegationPort {
         label: '委派子 Agent',
         effect: 'delegate',
         description:
-          '异步启动 reader/reviewer 只读分析或 writer 隔离写作。共享固定输入快照，精确授权 paths；writer 可包含允许创建的 .md/.txt/图片目标路径。最多并发 2 个/总计 4 个，预算属于整组。返回 runId 后可继续创建或等待。',
+          '异步启动 reader/reviewer 只读分析或 writer 隔离写作。共享固定输入快照，精确授权 paths；writer 可包含新建 UTF-8 文本（含代码、配置、无扩展名文件）或图片目标路径。最多并发 2 个/总计 4 个，预算属于整组。返回 runId 后可继续创建或等待。',
         parameters: Type.Object(
           {
             role: Type.Union([
@@ -245,9 +245,7 @@ export class DelegationSession implements DelegationPort {
         paths.some(
           path =>
             path.toLowerCase() === 'project.json' ||
-            (definition.workspace === 'proposal'
-              ? !/\.(md|txt|png|jpg|jpeg|webp)$/i.test(path)
-              : !files.some(file => file.path === path)),
+            (definition.workspace !== 'proposal' && !files.some(file => file.path === path)),
         )
       )
         throw new AppError('VALIDATION', '子任务资料范围包含不存在或受保护的路径。');

@@ -278,7 +278,9 @@ it('writer 生成结束但终态尚未落库时取消，持久化 cancelled 优�
       await held.promise;
     }
   };
-  const id = await f.delegation.spawn('writer', { ...request('W'), role: 'writer' });
+  const paths = ['documents/notes.md', 'src/new.ts', 'Dockerfile'];
+  const id = await f.delegation.spawn('writer', { ...request('W'), role: 'writer', paths });
+  expect((await f.repository.launch(id))?.selectedPaths).toEqual(paths);
   await vi.waitFor(() => expect(f.inputs).toHaveLength(1));
   f.gates.get('W')!.release();
   await entered.promise;

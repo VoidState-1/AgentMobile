@@ -7,10 +7,7 @@ import { contentLimits } from '@/core/agent/settings';
 
 export async function pickFile(kind?: 'image') {
   const result = await DocumentPicker.getDocumentAsync({
-    type:
-      kind === 'image'
-        ? ['image/png', 'image/jpeg', 'image/webp']
-        : ['text/plain', 'text/markdown', 'image/png', 'image/jpeg', 'image/webp'],
+    type: kind === 'image' ? ['image/png', 'image/jpeg', 'image/webp'] : '*/*',
     copyToCacheDirectory: true,
   });
   if (result.canceled) return;
