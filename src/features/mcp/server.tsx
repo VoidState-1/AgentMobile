@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
-import { Platform, Pressable, View } from 'react-native';
+import { Pressable, Switch, View } from 'react-native';
+import { ChevronDown, ChevronRight } from '@/shared/ui/icons';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { McpAttempt, McpServer, McpServerInput } from '@/core/mcp/types';
 import type { Project } from '@/core/projects';
@@ -8,6 +9,7 @@ import {
   ConfigPage,
   FormScroll,
   Loading,
+  NumberField,
   Section,
   Toggle,
   useDraftGuard,
@@ -159,7 +161,6 @@ function ServerEditor({
   return (
     <ConfigPage
       title={server ? server.name : '添加 MCP 连接'}
-      subtitle="Streamable HTTP"
       onBack={() => guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/mcp')))}
       footer={
         <View style={{ gap: 6 }}>
@@ -200,11 +201,10 @@ function ServerEditor({
             onChangeText={url => update({ url })}
             placeholder="https://example.com/mcp"
           />
-          <T tone="muted" style={{ fontSize: 11 }}>
-            填写完整端点，不会自动补路径。使用 HTTPS，本机开发地址可用 HTTP。
-          </T>
-          <Field
-            label="MCP 请求超时（秒）"
+          <NumberField
+            label="请求超时"
+            accessibilityLabel="MCP 请求超时（秒）"
+            unit="秒"
             value={String(draft.timeoutMs / 1000)}
             keyboardType="number-pad"
             editable={!busy}
@@ -212,20 +212,12 @@ function ServerEditor({
           />
           <Toggle
             label="启用 MCP 连接"
-            hint="停用后新任务不再获得该服务工具，运行中的任务使用原配置。"
             value={draft.enabled}
             disabled={busy}
             onChange={enabled => update({ enabled })}
           />
         </Section>
-        <Section
-          title="认证"
-          hint={
-            Platform.OS === 'web'
-              ? 'Token 仅在浏览器内存保存；刷新后需要重新填写。'
-              : 'Token 保存在设备安全存储，与模型凭证分开。'
-          }
-        >
+        <Section title="认证">
           <Choices
             label="MCP 认证方式"
             value={draft.auth}
@@ -275,10 +267,7 @@ function ServerEditor({
         </Section>
         {server && (
           <>
-            <Section
-              title="检测与工具发现"
-              hint="只获取目录，不执行工具。输入定义变化会撤销对应授权，新工具默认关闭。"
-            >
+            <Section title="检测与工具发现">
               <Button
                 label={probing ? '正在发现工具' : '检测并发现工具'}
                 variant="secondary"
@@ -308,10 +297,10 @@ function ServerEditor({
                 </T>
               )}
             </Section>
-            <Section
-              title="项目工具授权"
-              hint="每个项目最多启用 32 个远程工具。允许后 Agent 可自动调用，参数会发送到服务器。只读标记由服务声明。"
-            >
+            <Section title="项目工具授权">
+              <T tone="secondary" style={{ fontSize: 12 }}>
+                允许后，Agent 可自动向此服务器发送工具参数。
+              </T>
               {projects.length ? (
                 <Choices
                   label="授权项目"
@@ -331,59 +320,87 @@ function ServerEditor({
               {server.tools.map(tool => (
                 <View
                   key={tool.name}
-                  style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 12, gap: 7 }}
+                  style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 4, gap: 4 }}
                 >
-                  <Toggle
-                    label={'允许自动调用 ' + tool.name}
-                    hint={
-                      tool.unavailableReason ??
-                      (tool.title || (tool.readOnlyHint ? '服务声明：只读' : '可能修改远端状态'))
-                    }
-                    value={config.grants[projectId]?.[server.id]?.[tool.name] === tool.fingerprint}
-                    disabled={busy || dirty || !projectId || !!tool.unavailableReason}
-                    onChange={allow => {
-                      void action(() =>
-                        runtime!.mcp.configuration.grant(
-                          projectId,
-                          server.id,
-                          tool.name,
-                          allow,
-                          tool.fingerprint,
-                        ),
-                      );
-                    }}
-                  />
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10 }}>
+                    <Pressable
+                      accessibilityRole="button"
+                      accessibilityLabel={'查看工具定义 ' + tool.name}
+                      accessibilityState={{ expanded: expanded === tool.name }}
+                      aria-expanded={expanded === tool.name}
+                      onPress={() => setExpanded(expanded === tool.name ? undefined : tool.name)}
+                      style={{
+                        flex: 1,
+                        minHeight: 44,
+                        flexDirection: 'row',
+                        alignItems: 'center',
+                        gap: 6,
+                      }}
+                    >
+                      <View style={{ flex: 1, minWidth: 0 }}>
+                        <T numberOfLines={1}>{tool.name}</T>
+                        <T tone={tool.readOnlyHint ? 'muted' : 'warning'} style={{ fontSize: 12 }}>
+                          {tool.readOnlyHint ? '服务声明只读' : '可能修改远端状态'}
+                        </T>
+                      </View>
+                      {expanded === tool.name ? (
+                        <ChevronDown size={14} color={theme.muted} />
+                      ) : (
+                        <ChevronRight size={14} color={theme.muted} />
+                      )}
+                    </Pressable>
+                    <Switch
+                      accessibilityLabel={'允许自动调用 ' + tool.name}
+                      trackColor={{ true: theme.accent, false: theme.border }}
+                      value={
+                        config.grants[projectId]?.[server.id]?.[tool.name] === tool.fingerprint
+                      }
+                      disabled={busy || dirty || !projectId || !!tool.unavailableReason}
+                      onValueChange={allow => {
+                        void action(() =>
+                          runtime!.mcp.configuration.grant(
+                            projectId,
+                            server.id,
+                            tool.name,
+                            allow,
+                            tool.fingerprint,
+                          ),
+                        );
+                      }}
+                    />
+                  </View>
+                  {!!tool.unavailableReason && (
+                    <T tone="warning" style={{ fontSize: 12 }}>
+                      {tool.unavailableReason}
+                    </T>
+                  )}
                   {!!tool.description && (
                     <T
                       tone="secondary"
-                      numberOfLines={expanded === tool.name ? undefined : 3}
-                      style={{ fontSize: 11, lineHeight: 19 }}
+                      numberOfLines={expanded === tool.name ? undefined : 2}
+                      style={{ fontSize: 12, lineHeight: 19 }}
                     >
                       {tool.description}
                     </T>
                   )}
-                  <Pressable
-                    accessibilityRole="button"
-                    accessibilityLabel={'查看工具定义 ' + tool.name}
-                    onPress={() => setExpanded(expanded === tool.name ? undefined : tool.name)}
-                  >
-                    <T tone="accent" style={{ fontSize: 11 }}>
-                      {expanded === tool.name ? '收起定义' : '查看输入定义'}
-                    </T>
-                  </Pressable>
                   {expanded === tool.name && (
-                    <T selectable tone="muted" style={{ fontSize: 11, lineHeight: 18 }}>
-                      {JSON.stringify(tool.inputSchema, null, 2)}
-                    </T>
+                    <View
+                      style={{ padding: 8, backgroundColor: theme.inset, borderRadius: 4, gap: 4 }}
+                    >
+                      {!!tool.title && <T>{tool.title}</T>}
+                      <T selectable tone="secondary" style={{ fontSize: 12, lineHeight: 19 }}>
+                        {JSON.stringify(tool.inputSchema, null, 2)}
+                      </T>
+                    </View>
                   )}
                 </View>
               ))}
             </Section>
             {!!unknown.length && (
-              <Section
-                title="待核对的远端调用"
-                hint="网络中断或回执保存失败不代表远端未执行。解除限制前，请自行核对服务器执行状态。"
-              >
+              <Section title="待核对的远端调用">
+                <T tone="warning" style={{ fontSize: 12 }}>
+                  远端可能已执行，解除重试限制前请核对。
+                </T>
                 {unknown.map(attempt => (
                   <View key={attempt.id} style={{ gap: 7 }}>
                     <T tone="warning" style={{ fontSize: 12 }}>

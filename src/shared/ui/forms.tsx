@@ -6,6 +6,8 @@ import {
   Pressable,
   ScrollView,
   Switch,
+  TextInput,
+  type TextInputProps,
   View,
 } from 'react-native';
 import { useNavigation, useRouter } from 'expo-router';
@@ -63,7 +65,7 @@ export function useDraftGuard(dirty: boolean) {
         </View>
       }
     >
-      <T tone="secondary">保存后才能让新任务使用这些设置。</T>
+      <T tone="secondary">离开将丢弃当前修改。</T>
     </Sheet>
   );
   return { exit, guard, allow };
@@ -91,7 +93,12 @@ export function ConfigPage({
     <KeyboardAvoidingView
       behavior={Platform.OS === 'web' ? undefined : 'padding'}
       testID={theme.dark ? 'config-dark' : 'config-light'}
-      style={{ flex: 1, paddingTop: inset.top, backgroundColor: theme.background }}
+      style={{
+        flex: 1,
+        paddingTop: inset.top,
+        paddingBottom: footer ? 0 : inset.bottom,
+        backgroundColor: theme.surface,
+      }}
     >
       <View
         style={{
@@ -103,7 +110,7 @@ export function ConfigPage({
         <View
           style={{
             width: '100%',
-            maxWidth: 960,
+            maxWidth: 820,
             alignSelf: 'center',
             paddingHorizontal: 6,
             minHeight: 48,
@@ -117,12 +124,16 @@ export function ConfigPage({
             label="返回"
             onPress={onBack ?? (() => (router.canGoBack() ? router.back() : router.replace('/')))}
           />
-          <View style={{ flex: 1 }}>
-            <T accessibilityRole="header" style={{ fontWeight: '600', fontSize: 17 }}>
+          <View style={{ flex: 1, minWidth: 0, paddingVertical: 5 }}>
+            <T
+              accessibilityRole="header"
+              numberOfLines={1}
+              style={{ fontWeight: '600', fontSize: 15 }}
+            >
               {title}
             </T>
             {!!subtitle && (
-              <T tone="muted" style={{ fontSize: 11 }}>
+              <T tone="muted" numberOfLines={1} style={{ fontSize: 11 }}>
                 {subtitle}
               </T>
             )}
@@ -130,7 +141,7 @@ export function ConfigPage({
           {action}
         </View>
       </View>
-      <View style={{ flex: 1, width: '100%', maxWidth: 960, alignSelf: 'center', minHeight: 0 }}>
+      <View style={{ flex: 1, width: '100%', maxWidth: 820, alignSelf: 'center', minHeight: 0 }}>
         {children}
       </View>
       {footer && (
@@ -139,16 +150,16 @@ export function ConfigPage({
             backgroundColor: theme.surface,
             borderTopWidth: 1,
             borderTopColor: theme.border,
-            paddingBottom: Math.max(inset.bottom, 12),
+            paddingBottom: Math.max(inset.bottom, 8),
           }}
         >
           <View
             style={{
-              maxWidth: 960,
+              maxWidth: 820,
               width: '100%',
               alignSelf: 'center',
-              paddingHorizontal: 20,
-              paddingTop: 12,
+              paddingHorizontal: 12,
+              paddingTop: 8,
             }}
           >
             {footer}
@@ -163,7 +174,7 @@ export function FormScroll({ children }: { children: ReactNode }) {
   return (
     <ScrollView
       keyboardShouldPersistTaps="handled"
-      contentContainerStyle={{ padding: 12, gap: 12 }}
+      contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12, gap: 2 }}
     >
       {children}
     </ScrollView>
@@ -172,34 +183,74 @@ export function FormScroll({ children }: { children: ReactNode }) {
 
 export function Section({
   title,
-  hint,
+  action,
   children,
 }: {
   title: string;
-  hint?: string;
+  action?: ReactNode;
   children: ReactNode;
 }) {
   const theme = useWorkbenchTheme();
   return (
     <View
       style={{
-        gap: 12,
-        padding: 12,
-        backgroundColor: theme.surface,
-        borderRadius: 6,
-        borderWidth: 1,
+        gap: 6,
+        paddingVertical: 8,
+        borderBottomWidth: 1,
         borderColor: theme.border,
       }}
     >
-      <View>
-        <T style={{ fontWeight: '600', fontSize: 13 }}>{title}</T>
-        {!!hint && (
-          <T tone="secondary" style={{ fontSize: 11, marginTop: 3 }}>
-            {hint}
-          </T>
-        )}
+      <View style={{ flexDirection: 'row', alignItems: 'center', minHeight: 32, gap: 4 }}>
+        <T
+          accessibilityRole="header"
+          style={{ flex: 1, fontWeight: '600', fontSize: 13, color: theme.accent }}
+        >
+          {title}
+        </T>
+        {action}
       </View>
       {children}
+    </View>
+  );
+}
+
+export function NumberField({
+  label,
+  unit,
+  accessibilityLabel,
+  ...props
+}: Omit<TextInputProps, 'multiline' | 'style'> & { label: string; unit?: string }) {
+  const theme = useWorkbenchTheme();
+  return (
+    <View
+      testID="number-setting"
+      style={{ flexDirection: 'row', alignItems: 'center', minHeight: 48, gap: 10 }}
+    >
+      <T numberOfLines={1} style={{ flex: 1, minWidth: 0 }}>
+        {label}
+      </T>
+      <TextInput
+        {...props}
+        accessibilityLabel={accessibilityLabel ?? label}
+        autoCapitalize="none"
+        autoCorrect={false}
+        keyboardType={props.keyboardType ?? 'number-pad'}
+        placeholderTextColor={theme.muted}
+        style={{
+          width: 86,
+          minHeight: 44,
+          paddingHorizontal: 8,
+          paddingVertical: 8,
+          textAlign: 'right',
+          fontSize: 16,
+          color: theme.text,
+          borderBottomWidth: 1,
+          borderBottomColor: theme.border,
+        }}
+      />
+      <T tone="secondary" numberOfLines={1} style={{ width: 44, fontSize: 12 }}>
+        {unit ?? ''}
+      </T>
     </View>
   );
 }
@@ -219,8 +270,8 @@ export function Toggle({
 }) {
   const theme = useWorkbenchTheme();
   return (
-    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 12 }}>
-      <View style={{ flex: 1 }}>
+    <View style={{ flexDirection: 'row', alignItems: 'center', gap: 10, minHeight: 44 }}>
+      <View style={{ flex: 1, minWidth: 0 }}>
         <T style={{ fontSize: 13 }}>{label}</T>
         {!!hint && (
           <T tone="muted" style={{ fontSize: 11 }}>
@@ -234,6 +285,7 @@ export function Toggle({
         onValueChange={onChange}
         disabled={disabled}
         trackColor={{ true: theme.accent, false: theme.border }}
+        thumbColor={Platform.OS === 'android' ? theme.surface : undefined}
       />
     </View>
   );
@@ -254,9 +306,18 @@ export function Choices<TValue extends string>({
 }) {
   const theme = useWorkbenchTheme();
   return (
-    <View style={{ gap: 8 }}>
+    <View style={{ gap: 5 }}>
       <T style={{ fontSize: 12 }}>{label}</T>
-      <View style={{ flexDirection: 'row', gap: 6, flexWrap: 'wrap' }}>
+      <View
+        style={{
+          flexDirection: 'row',
+          gap: 3,
+          flexWrap: 'wrap',
+          padding: 3,
+          borderRadius: 6,
+          backgroundColor: theme.inset,
+        }}
+      >
         {options.map(option => (
           <Pressable
             key={option.value}
@@ -265,15 +326,18 @@ export function Choices<TValue extends string>({
             accessibilityState={{ selected: value === option.value }}
             onPress={() => onChange(option.value)}
             disabled={disabled}
-            style={{
+            style={({ pressed }) => ({
+              flexGrow: 1,
+              flexShrink: 1,
               minHeight: 44,
-              paddingHorizontal: 12,
+              paddingHorizontal: 8,
               justifyContent: 'center',
-              borderRadius: 8,
-              borderWidth: 1,
-              borderColor: value === option.value ? theme.accent : theme.border,
-              backgroundColor: value === option.value ? theme.accentSoft : theme.inset,
-            }}
+              alignItems: 'center',
+              borderRadius: 4,
+              backgroundColor:
+                value === option.value ? theme.surface : pressed ? theme.accentSoft : 'transparent',
+              opacity: disabled ? 0.45 : 1,
+            })}
           >
             <T tone={value === option.value ? 'accent' : 'secondary'} style={{ fontSize: 12 }}>
               {option.label}
@@ -287,5 +351,5 @@ export function Choices<TValue extends string>({
 
 export function Loading() {
   const theme = useWorkbenchTheme();
-  return <ActivityIndicator color={theme.accent} style={{ padding: 40 }} />;
+  return <ActivityIndicator color={theme.accent} style={{ padding: 20 }} />;
 }

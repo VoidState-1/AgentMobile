@@ -5,6 +5,7 @@ import type { SkillBundle } from '@/core/skills/types';
 import { Choices, ConfigPage, FormScroll, Loading, Section, Toggle } from '@/shared/ui/forms';
 import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
 import { useWorkbenchTheme } from '@/shared/theme';
+import { ChevronRight } from '@/shared/ui/icons';
 import { useSkills } from './common';
 
 export function SkillsPage() {
@@ -20,7 +21,7 @@ export function SkillsPage() {
   return (
     <ConfigPage
       title="Agent Skills"
-      subtitle="复用工作流程，按需加载说明"
+      subtitle={config.skills.length + ' 个技能'}
       action={
         <Button label="新建技能" variant="secondary" onPress={() => router.push('/skills/edit')} />
       }
@@ -29,10 +30,7 @@ export function SkillsPage() {
         <Loading />
       ) : (
         <FormScroll>
-          <Section
-            title="技能库"
-            hint="支持通用 SKILL.md 与含 references/assets 的 ZIP。导入后按项目启用。"
-          >
+          <Section title="技能库">
             <Button
               label="导入 SKILL.md / ZIP"
               variant="secondary"
@@ -51,6 +49,7 @@ export function SkillsPage() {
             />
             <Field
               label="搜索技能"
+              hideLabel
               value={search}
               onChangeText={setSearch}
               placeholder="名称或描述"
@@ -65,20 +64,18 @@ export function SkillsPage() {
               />
             ) : (
               <T tone="muted" style={{ fontSize: 12 }}>
-                先创建项目，再启用技能。技能库可独立管理。
+                未选择项目
               </T>
             )}
             {!skills.length && (
               <T tone="secondary" style={{ fontSize: 12 }}>
-                {config.skills.length
-                  ? '没有匹配的技能。'
-                  : '还没有技能。可以新建，或导入现有技能包。'}
+                {config.skills.length ? '没有匹配的技能。' : '暂无技能'}
               </T>
             )}
             {skills.map(skill => (
               <View
                 key={skill.name}
-                style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 12, gap: 7 }}
+                style={{ borderTopWidth: 1, borderColor: theme.border, paddingTop: 6, gap: 2 }}
               >
                 <Pressable
                   accessibilityRole="button"
@@ -86,22 +83,32 @@ export function SkillsPage() {
                   onPress={() =>
                     router.push({ pathname: '/skills/edit', params: { name: skill.name } })
                   }
-                  style={{ gap: 3 }}
+                  style={({ pressed }) => ({
+                    gap: 2,
+                    minHeight: 44,
+                    justifyContent: 'center',
+                    backgroundColor: pressed ? theme.inset : 'transparent',
+                  })}
                 >
-                  <T tone="accent" style={{ fontSize: 13, fontWeight: '600' }}>
-                    {skill.name}
-                  </T>
-                  <T tone="secondary" numberOfLines={3} style={{ fontSize: 11, lineHeight: 19 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                    <T tone="accent" style={{ fontSize: 13, fontWeight: '600' }}>
+                      {skill.name}
+                    </T>
+                    <T tone="muted" style={{ flex: 1, fontSize: 11, textAlign: 'right' }}>
+                      {skill.files.length} 个文件
+                    </T>
+                    <ChevronRight size={15} color={theme.muted} />
+                  </View>
+                  <T tone="secondary" numberOfLines={2} style={{ fontSize: 12, lineHeight: 19 }}>
                     {skill.description}
                   </T>
                   <T tone="muted" style={{ fontSize: 10 }}>
-                    {skill.files.length} 个文件 · {skill.revision.slice(0, 7)}
+                    {skill.revision.slice(0, 7)}
                     {skill.warnings.length ? ' · 查看兼容说明' : ''}
                   </T>
                 </Pressable>
                 <Toggle
                   label={'启用技能 ' + skill.name}
-                  hint="本项目内所有对话可使用；修改只影响新任务。"
                   value={config.grants[projectId]?.[skill.name] === skill.revision}
                   disabled={busy || !projectId}
                   onChange={allow => {
@@ -112,15 +119,6 @@ export function SkillsPage() {
                 />
               </View>
             ))}
-          </Section>
-          <Section title="如何调用">
-            <T tone="secondary" style={{ fontSize: 12, lineHeight: 21 }}>
-              启用后，Agent 会根据任务选择技能并加载正文。你也可以在消息中输入
-              $技能名，明确指定使用。引用文件按需读取，工作轨迹会显示加载步骤。
-            </T>
-            <T tone="muted" style={{ fontSize: 11, lineHeight: 20 }}>
-              技能说明不增加工具权限。当前支持文字和图片资源；脚本可以保存和阅读，执行能力尚未实现。更新正文或资源后，需要重新启用对应项目。
-            </T>
           </Section>
           {!!config.issues.length && (
             <Section title="需要处理的技能">

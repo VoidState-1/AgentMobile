@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { FlatList, Platform, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { ModelsApi as ModelConfigurationService } from '@/application/services';
 import type { ProviderConnection, ProviderPresetId } from '@/core/models/types';
@@ -189,9 +189,9 @@ function ConnectionEditor({
         data={models}
         keyExtractor={item => item.id}
         keyboardShouldPersistTaps="handled"
-        contentContainerStyle={{ padding: 18, gap: 10 }}
+        contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }}
         ListHeaderComponent={
-          <View style={{ gap: 16, marginBottom: 6 }}>
+          <View style={{ gap: 8, marginBottom: 4 }}>
             <Section title="连接信息">
               <Field
                 label="连接名称"
@@ -226,14 +226,6 @@ function ConnectionEditor({
                 keyboardType="url"
                 onChangeText={baseUrl => update({ baseUrl })}
               />
-              <T tone="muted" style={{ fontSize: 11 }}>
-                请求地址：{draft.baseUrl.replace(/\/+$/, '')}/
-                {draft.protocol === 'anthropic-messages'
-                  ? 'messages'
-                  : draft.protocol === 'gemini'
-                    ? 'models/模型:streamGenerateContent'
-                    : 'chat/completions'}
-              </T>
               {draft.protocol === 'anthropic-messages' && (
                 <Field
                   label="Anthropic API 版本"
@@ -261,19 +253,12 @@ function ConnectionEditor({
                 hint={
                   connection && runtime!.models.affectedDefaults(connection.id)
                     ? '该连接被默认选择引用。停用后新任务会提示重新选择。'
-                    : '停用后保留配置和历史。'
+                    : undefined
                 }
                 onChange={enabled => update({ enabled })}
               />
             </Section>
-            <Section
-              title="认证与凭证"
-              hint={
-                Platform.OS === 'web'
-                  ? '刷新页面后需要重新填写密钥。'
-                  : '密钥写入设备安全存储，编辑时只显示保存状态。'
-              }
-            >
+            <Section title="认证与凭证">
               {draft.protocol === 'chat-completions' && (
                 <Choices
                   label="认证方式"
@@ -328,7 +313,7 @@ function ConnectionEditor({
                 </>
               )}
             </Section>
-            <Section title="服务检测" hint="读取模型目录，不生成内容。发现失败仍可手工添加。">
+            <Section title="服务检测">
               <Button
                 label="检测连接并发现模型"
                 variant="secondary"
@@ -340,11 +325,6 @@ function ConnectionEditor({
                 <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
               )}
               <CheckResult result={connection?.check} history={connection?.checkHistory} />
-              {dirty && (
-                <T tone="muted" style={{ fontSize: 11 }}>
-                  先保存当前草稿，再使用已保存配置检测。
-                </T>
-              )}
             </Section>
             <View
               style={{
@@ -378,6 +358,7 @@ function ConnectionEditor({
             </View>
             <Field
               label="搜索模型"
+              hideLabel
               value={search}
               placeholder="显示名或请求 ID"
               onChangeText={setSearch}
@@ -396,7 +377,7 @@ function ConnectionEditor({
         }
         ListEmptyComponent={
           <T tone="muted" style={{ padding: 12, fontSize: 12 }}>
-            {connection ? '暂无匹配模型。可发现目录或手工添加。' : '保存连接后可添加模型。'}
+            {connection ? '暂无匹配模型' : '保存连接后可添加模型'}
           </T>
         }
         renderItem={({ item }) => (
@@ -410,19 +391,20 @@ function ConnectionEditor({
                 params: { id: item.id, connectionId: item.connectionId },
               })
             }
-            style={{
-              padding: 14,
-              borderRadius: 9,
-              borderWidth: 1,
+            style={({ pressed }) => ({
+              minHeight: 56,
+              paddingHorizontal: 4,
+              paddingVertical: 8,
+              borderBottomWidth: 1,
               borderColor: theme.border,
-              backgroundColor: theme.surface,
+              backgroundColor: pressed ? theme.inset : theme.surface,
               flexDirection: 'row',
               gap: 10,
               alignItems: 'center',
               opacity: dirty ? 0.5 : 1,
-            }}
+            })}
           >
-            <View style={{ flex: 1 }}>
+            <View style={{ flex: 1, minWidth: 0 }}>
               <T style={{ fontSize: 13, fontWeight: '500' }}>
                 {item.favorite ? '★ ' : ''}
                 {item.name}
@@ -444,7 +426,7 @@ function ConnectionEditor({
         )}
         ListFooterComponent={
           connection ? (
-            <View style={{ gap: 8, marginTop: 16 }}>
+            <View style={{ gap: 6, marginTop: 10 }}>
               <Button
                 label="复制连接"
                 variant="secondary"
@@ -458,9 +440,6 @@ function ConnectionEditor({
                   });
                 }}
               />
-              <T tone="muted" style={{ fontSize: 11 }}>
-                复制模型与参数，副本需要单独填写密钥。
-              </T>
               <Button
                 label="删除连接"
                 variant="danger"

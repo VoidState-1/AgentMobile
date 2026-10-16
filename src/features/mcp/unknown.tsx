@@ -4,9 +4,11 @@ import type { AppServices as Runtime } from '@/application/services';
 import type { McpAttempt } from '@/core/mcp/types';
 import { Section } from '@/shared/ui/forms';
 import { Button, Sheet, T } from '@/shared/ui/primitives';
+import { useWorkbenchTheme } from '@/shared/theme';
 
 /** Global receipts remain reachable even after a connection has been deleted. */
 export function UnknownCalls({ runtime }: { runtime: Runtime }) {
+  const theme = useWorkbenchTheme();
   const [attempts, setAttempts] = useState<McpAttempt[]>([]);
   const [selected, setSelected] = useState<McpAttempt>();
   const [busy, setBusy] = useState(false);
@@ -33,12 +35,15 @@ export function UnknownCalls({ runtime }: { runtime: Runtime }) {
   if (!attempts.length && !error) return null;
   return (
     <>
-      <Section
-        title="待核对的远端调用"
-        hint="包含已删除连接的记录。远端可能已执行，请核对后再允许相同调用。"
-      >
+      <Section title="待核对的远端调用">
+        <T tone="warning" style={{ fontSize: 12 }}>
+          远端可能已执行，解除重试限制前请核对。
+        </T>
         {attempts.map(attempt => (
-          <View key={attempt.id} style={{ gap: 6 }}>
+          <View
+            key={attempt.id}
+            style={{ gap: 5, paddingVertical: 8, borderBottomWidth: 1, borderColor: theme.border }}
+          >
             <T tone="warning" style={{ fontSize: 12 }}>
               {attempt.serverName} · {attempt.tool} ·{' '}
               {attempt.state === 'unknown' ? '远端结果未知' : '等待回执或尚未收束'}

@@ -91,9 +91,8 @@ function Navigation({ controller, changes }: { controller: DialogsCapability; ch
             key={id}
             accessibilityRole="tab"
             accessibilityLabel={name}
-            accessibilityState={{ selected, disabled: id !== 'settings' && !controller.projectId }}
+            accessibilityState={{ selected }}
             aria-selected={selected}
-            disabled={id !== 'settings' && !controller.projectId}
             onPress={() => controller.selectTab(id)}
             style={({ pressed }) => ({
               flex: 1,
@@ -136,6 +135,42 @@ function Navigation({ controller, changes }: { controller: DialogsCapability; ch
           </Pressable>
         );
       })}
+    </View>
+  );
+}
+
+function ProjectEmptyState({ controller, wide }: { controller: DialogsCapability; wide: boolean }) {
+  const theme = useWorkbenchTheme();
+  const Icon = tabs.find(tab => tab.id === controller.tab)?.icon ?? MessageSquare;
+  const hasProjects = controller.projects.length > 0;
+  const title = hasProjects
+    ? '选择项目'
+    : controller.tab === 'files'
+      ? '项目文件'
+      : controller.tab === 'history'
+        ? '项目版本'
+        : '创建第一个项目';
+  return (
+    <View
+      testID="project-empty-state"
+      style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 12, gap: 10 }}
+    >
+      <Icon size={25} color={theme.accent} />
+      <T accessibilityRole="header" style={{ fontSize: 16, fontWeight: '600' }}>
+        {title}
+      </T>
+      {controller.tab !== 'agent' && (
+        <T tone="secondary" style={{ fontSize: 13 }}>
+          {hasProjects ? (wide ? '从左侧选择项目' : '选择项目后查看') : '创建项目后查看'}
+        </T>
+      )}
+      {(!hasProjects || !wide) && (
+        <Button
+          label={hasProjects ? '选择项目' : '新建项目'}
+          icon={hasProjects ? PanelLeft : Plus}
+          onPress={hasProjects ? () => controller.setDrawerOpen(true) : controller.newProject}
+        />
+      )}
     </View>
   );
 }
@@ -341,10 +376,7 @@ export function WorkbenchScreen() {
               ) : controller.tab === 'settings' ? (
                 <WorkbenchSettings controller={controller} />
               ) : !controller.projectId ? (
-                <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', gap: 16 }}>
-                  <T style={{ fontSize: 18, fontWeight: '600' }}>创建第一个项目</T>
-                  <Button label="新建项目" icon={Plus} onPress={controller.newProject} />
-                </View>
+                <ProjectEmptyState controller={controller} wide={wide} />
               ) : (
                 <>
                   {controller.runs.some(

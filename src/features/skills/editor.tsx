@@ -5,7 +5,7 @@ import { Image } from 'expo-image';
 import { Pressable, View } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import type { SkillBundle, SkillVersionPage } from '@/core/skills/types';
-import { resourceKind, skillPath } from '@/core/skills/rules';
+import { resourceKind, skillLimits, skillPath } from '@/core/skills/rules';
 import { mimeFor } from '@/core/workspace/path';
 import {
   Choices,
@@ -53,6 +53,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
   const theme = useWorkbenchTheme();
   const skill = config.skills.find(skill => skill.name === name);
   const [source, setSource] = useState(name ? '' : template);
+  const sourceBytes = Buffer.byteLength(source, 'utf8');
   const [savedSource, setSavedSource] = useState(name ? '' : template);
   const [files, setFiles] = useState<SkillBundle['files']>([]);
   const [baseCommit, setBaseCommit] = useState(config.commit);
@@ -144,7 +145,6 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
   return (
     <ConfigPage
       title={name ?? '新建技能'}
-      subtitle="SKILL.md 与配套资料"
       onBack={() =>
         guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/skills')))
       }
@@ -173,12 +173,10 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
         <Loading />
       ) : (
         <FormScroll>
-          <Section
-            title="技能说明"
-            hint="通用 YAML 元数据 + Markdown 正文。name 使用小写字母、数字和单连字符，description 描述何时使用。"
-          >
+          <Section title="SKILL.md">
             <Field
               label="SKILL.md 内容"
+              hideLabel
               value={source}
               onChangeText={value => {
                 setSource(value);
@@ -188,16 +186,15 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
               multiline
               textAlignVertical="top"
               maxLength={65_536}
-              style={{ minHeight: 260, fontSize: 12, lineHeight: 21 }}
+              style={{ minHeight: 220, fontSize: 14, lineHeight: 21 }}
             />
-            <T tone="muted" style={{ fontSize: 10 }}>
-              SKILL.md 最大 64 KB。技能与资源保存在独立本地 Git 库中。
-            </T>
+            {sourceBytes >= skillLimits.instructionBytes * 0.9 && (
+              <T tone="warning" style={{ fontSize: 12 }}>
+                {(sourceBytes / 1024).toFixed(1)} / {skillLimits.instructionBytes / 1024} KB
+              </T>
+            )}
           </Section>
-          <Section
-            title="配套资源"
-            hint="相对路径以技能目录为根。文本和图片可按需读取，脚本仅可阅读。"
-          >
+          <Section title="配套资源">
             {files
               .filter(file => file.path !== 'SKILL.md')
               .map(file => (
@@ -242,7 +239,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
               ))}
             {!files.some(file => file.path !== 'SKILL.md') && (
               <T tone="muted" style={{ fontSize: 12 }}>
-                暂无配套资源，可添加参考说明或模板，也可通过 ZIP 导入。
+                暂无资源
               </T>
             )}
             <Button
@@ -255,10 +252,7 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
             />
           </Section>
           {skill && (
-            <Section
-              title="项目启用"
-              hint="技能说明和资源变化后会撤销旧启用记录。已运行任务仍读取启动时版本。"
-            >
+            <Section title="项目启用">
               {projects.length ? (
                 <Choices
                   label="启用项目"
@@ -272,16 +266,13 @@ function Editor({ name, controller }: { name?: string; controller: ReturnType<ty
               )}
               <Toggle
                 label={'启用技能 ' + name}
-                hint={dirty ? '先保存当前草稿，再启用。' : '在该项目的所有对话中可用。'}
+                hint={dirty ? '先保存草稿，再启用。' : undefined}
                 value={config.grants[projectId]?.[name!] === skill.revision}
                 disabled={busy || dirty || !projectId}
                 onChange={allow => {
                   void action(() => runtime!.skills.grant(projectId, name!, allow, skill.revision));
                 }}
               />
-              <T selectable tone="secondary" style={{ fontSize: 12 }}>
-                明确调用：${name}
-              </T>
               {skill.warnings.map(warning => (
                 <T key={warning} tone="warning" style={{ fontSize: 11 }}>
                   {warning}

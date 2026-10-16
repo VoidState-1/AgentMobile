@@ -1,5 +1,13 @@
 import { useState } from 'react';
-import { FlatList, Modal, Pressable, View, useWindowDimensions } from 'react-native';
+import {
+  FlatList,
+  KeyboardAvoidingView,
+  Modal,
+  Platform,
+  Pressable,
+  View,
+  useWindowDimensions,
+} from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import type { ModelsApi as ModelConfigurationService } from '@/application/services';
 import type { ModelConfiguration } from '@/core/models/types';
@@ -68,18 +76,27 @@ export function ModelPicker({
     }
   };
   return (
-    <Modal visible transparent animationType="none" onRequestClose={onClose}>
-      <View
+    <Modal
+      visible
+      transparent
+      animationType="none"
+      onRequestClose={() => {
+        if (!busy) onClose();
+      }}
+    >
+      <KeyboardAvoidingView
+        behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={{
           flex: 1,
           backgroundColor: theme.overlay,
           justifyContent: width < 700 ? 'flex-end' : 'center',
           alignItems: 'center',
-          padding: width < 700 ? 0 : 24,
+          padding: width < 700 ? 0 : 16,
         }}
       >
         <Pressable
           accessibilityLabel="关闭模型选择"
+          disabled={busy}
           onPress={onClose}
           style={{ position: 'absolute', inset: 0 }}
         />
@@ -88,26 +105,38 @@ export function ModelPicker({
             width: '100%',
             maxWidth: 560,
             height: Math.min(height * 0.86, 650),
-            paddingBottom: Math.max(12, inset.bottom),
-            borderRadius: 16,
+            paddingBottom: Math.max(8, inset.bottom),
+            borderRadius: 8,
+            borderBottomLeftRadius: width < 700 ? 0 : 8,
+            borderBottomRightRadius: width < 700 ? 0 : 8,
             backgroundColor: theme.surface,
             borderWidth: 1,
             borderColor: theme.border,
             overflow: 'hidden',
           }}
         >
-          <View style={{ padding: 16, flexDirection: 'row', alignItems: 'center' }}>
+          <View
+            style={{
+              paddingLeft: 12,
+              paddingRight: 4,
+              minHeight: 48,
+              borderBottomWidth: 1,
+              borderColor: theme.border,
+              flexDirection: 'row',
+              alignItems: 'center',
+            }}
+          >
             <View style={{ flex: 1 }}>
-              <T style={{ fontWeight: '600', fontSize: 16 }}>选择模型</T>
-              <T tone="muted" style={{ fontSize: 11 }}>
-                应用到下一条消息，正在运行的任务保留原配置。
+              <T accessibilityRole="header" style={{ fontWeight: '600', fontSize: 15 }}>
+                选择模型
               </T>
             </View>
-            <IconButton icon={X} label="关闭" onPress={onClose} />
+            <IconButton icon={X} label="关闭" disabled={busy} onPress={onClose} />
           </View>
-          <View style={{ paddingHorizontal: 16, gap: 10, paddingBottom: 12 }}>
+          <View style={{ padding: 12, gap: 8 }}>
             <Field
               label="搜索可用模型"
+              hideLabel
               placeholder="模型或连接名称"
               value={search}
               onChangeText={setSearch}
@@ -134,7 +163,7 @@ export function ModelPicker({
             keyboardShouldPersistTaps="handled"
             ListEmptyComponent={
               <T tone="muted" style={{ padding: 20, fontSize: 12 }}>
-                没有可选模型。请添加连接与模型，或调整筛选。
+                {search || filter === 'favorite' ? '没有匹配的模型' : '暂无可用模型'}
               </T>
             }
             renderItem={({ item }) => (
@@ -157,8 +186,9 @@ export function ModelPicker({
                   );
                 }}
                 style={{
-                  paddingHorizontal: 20,
-                  paddingVertical: 12,
+                  paddingHorizontal: 12,
+                  paddingVertical: 8,
+                  minHeight: 52,
                   flexDirection: 'row',
                   gap: 10,
                   alignItems: 'center',
@@ -168,7 +198,7 @@ export function ModelPicker({
                   borderBottomColor: theme.border,
                 }}
               >
-                <View style={{ flex: 1 }}>
+                <View style={{ flex: 1, minWidth: 0 }}>
                   <T style={{ fontSize: 13, fontWeight: '500' }}>
                     {item.favorite ? '★ ' : ''}
                     {item.name}
@@ -185,7 +215,15 @@ export function ModelPicker({
               </Pressable>
             )}
           />
-          <View style={{ paddingHorizontal: 16, paddingTop: 12, gap: 7 }}>
+          <View
+            style={{
+              paddingHorizontal: 12,
+              paddingTop: 8,
+              gap: 6,
+              borderTopWidth: 1,
+              borderColor: theme.border,
+            }}
+          >
             {conversationId &&
               (configuration.defaults.sessions[conversationId] ||
                 configuration.sessionModes?.[conversationId]) && (
@@ -213,7 +251,7 @@ export function ModelPicker({
             </View>
           </View>
         </View>
-      </View>
+      </KeyboardAvoidingView>
     </Modal>
   );
 }

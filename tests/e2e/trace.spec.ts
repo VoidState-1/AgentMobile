@@ -173,9 +173,12 @@ for (const protocol of protocols)
     const reasoningLabel = protocol === 'chat-completions' ? '思考过程' : '推理摘要';
     await page.getByRole('button', { name: '展开' + reasoningLabel, exact: true }).click();
     await expect(
-      trace.getByText('服务返回的' + (protocol === 'chat-completions' ? '公开内容' : '摘要'), {
-        exact: true,
-      }),
+      trace
+        .getByTestId('trace-reasoning')
+        .getByText(
+          protocol === 'anthropic-messages' ? '查看资料' : '先确认现有资料，再核对项目文件。',
+          { exact: true },
+        ),
     ).toBeVisible();
     await page.getByRole('button', { name: '查看工具详情 浏览项目文件', exact: true }).click();
     await expect(trace.getByText('结果', { exact: true })).toBeVisible();
@@ -266,6 +269,6 @@ test('重启收束正在生成的轨迹，并保留收到的推理摘要', async
   await page.reload();
   await expect(page.getByText('已中断', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '展开推理摘要', exact: true }).click();
-  await expect(page.getByText('服务返回的摘要 · 未完整结束', { exact: true })).toBeVisible();
+  await expect(page.getByText('未完整结束', { exact: true })).toBeVisible();
   await expect(page.getByText('中断前已收到的摘要。', { exact: true })).toBeVisible();
 });

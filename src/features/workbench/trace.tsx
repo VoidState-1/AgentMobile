@@ -183,12 +183,13 @@ function Reasoning({
             gap: 6,
           }}
         >
-          <T tone="muted" style={{ fontSize: 10 }}>
-            服务返回的{item.visibility === 'summary' ? '摘要' : '公开内容'}
-            {item.state === 'cancelled' || item.state === 'interrupted' || item.state === 'error'
-              ? ' · 未完整结束'
-              : ''}
-          </T>
+          {(item.state === 'cancelled' ||
+            item.state === 'interrupted' ||
+            item.state === 'error') && (
+            <T tone="warning" style={{ fontSize: 12 }}>
+              未完整结束
+            </T>
+          )}
           {item.text ? (
             <TraceText item={item} runsApi={runsApi} />
           ) : (

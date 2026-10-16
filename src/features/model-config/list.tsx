@@ -1,9 +1,9 @@
 import { useEffect, useState } from 'react';
-import { FlatList, Platform, Pressable, View } from 'react-native';
+import { FlatList, Pressable, View } from 'react-native';
 import { useRouter } from 'expo-router';
 import { providerPresets, protocolNames } from '@/core/models/presets';
 import { Button, Field, T } from '@/shared/ui/primitives';
-import { ChevronRight, Plus, ShieldCheck } from '@/shared/ui/icons';
+import { ChevronRight, Plus } from '@/shared/ui/icons';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { Choices, ConfigPage, Loading, Section, useConfiguration } from './common';
 
@@ -55,10 +55,10 @@ export function ConnectionList() {
             (item.name + item.baseUrl).toLowerCase().includes(search.toLowerCase()),
           )}
           keyExtractor={item => item.id}
-          contentContainerStyle={{ padding: 18, gap: 10 }}
+          contentContainerStyle={{ paddingHorizontal: 12, paddingBottom: 12 }}
           ListHeaderComponent={
-            <View style={{ gap: 16, marginBottom: 8 }}>
-              <Section title="运行方式" hint="新的选择只影响下一次任务。">
+            <View style={{ gap: 10, marginBottom: 4 }}>
+              <Section title="运行方式">
                 <Choices
                   label="运行模式"
                   value={config.mode}
@@ -101,8 +101,8 @@ export function ConnectionList() {
                 </View>
               </Section>
               {adding && (
-                <Section title="选择连接模板" hint="可创建多份同供应商连接，各自保存密钥。">
-                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 8 }}>
+                <Section title="选择连接模板">
+                  <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 6 }}>
                     {providerPresets.map(preset => (
                       <Button
                         key={preset.id}
@@ -119,20 +119,13 @@ export function ConnectionList() {
                   </View>
                 </Section>
               )}
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 8 }}>
-                <ShieldCheck size={16} color={theme.secondary} />
-                <T tone="secondary" style={{ fontSize: 11, flex: 1 }}>
-                  {Platform.OS === 'web'
-                    ? '浏览器密钥仅保留在当前页面会话，刷新后需补填；服务需要允许跨域。'
-                    : '凭证保存在设备安全存储，配置与检测保存在本地数据库。'}
-                </T>
-              </View>
               {!!error && <T tone="danger">{error}</T>}
               {!!runtime.models.recoveryIssues.length && (
                 <T tone="warning">{runtime.models.recoveryIssues.join('\n')}</T>
               )}
               <Field
                 label="搜索连接"
+                hideLabel
                 placeholder="名称或服务地址"
                 value={search}
                 onChangeText={setSearch}
@@ -141,7 +134,6 @@ export function ConnectionList() {
           }
           ListEmptyComponent={
             <Section title={search ? '没有匹配的连接' : '添加第一个模型服务'}>
-              <T tone="secondary">选择供应商模板，保存连接后可以发现模型，也可以手工添加。</T>
               {!search && <Button label="选择供应商" onPress={() => setAdding(true)} />}
             </Section>
           }
@@ -152,22 +144,22 @@ export function ConnectionList() {
               onPress={() =>
                 router.push({ pathname: '/models/connection', params: { id: item.id } })
               }
-              style={{
-                padding: 16,
-                borderWidth: 1,
+              style={({ pressed }) => ({
+                paddingVertical: 10,
+                paddingHorizontal: 4,
+                borderBottomWidth: 1,
                 borderColor: theme.border,
-                backgroundColor: theme.surface,
-                borderRadius: 11,
+                backgroundColor: pressed ? theme.inset : theme.surface,
                 flexDirection: 'row',
                 alignItems: 'center',
-                gap: 12,
-              }}
+                gap: 10,
+              })}
             >
               <View
                 style={{
-                  width: 38,
-                  height: 38,
-                  borderRadius: 10,
+                  width: 30,
+                  height: 30,
+                  borderRadius: 5,
                   backgroundColor: theme.accentSoft,
                   justifyContent: 'center',
                   alignItems: 'center',
@@ -177,8 +169,10 @@ export function ConnectionList() {
                   {item.name[0].toUpperCase()}
                 </T>
               </View>
-              <View style={{ flex: 1 }}>
-                <T style={{ fontWeight: '600', fontSize: 14 }}>{item.name}</T>
+              <View style={{ flex: 1, minWidth: 0 }}>
+                <T numberOfLines={1} style={{ fontWeight: '600', fontSize: 14 }}>
+                  {item.name}
+                </T>
                 <T tone="muted" numberOfLines={1} style={{ fontSize: 11 }}>
                   {item.baseUrl}
                 </T>

@@ -1,4 +1,4 @@
-import type { ComponentType, ReactNode } from 'react';
+import { useState, type ComponentType, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   KeyboardAvoidingView,
@@ -17,7 +17,7 @@ import {
   type ViewStyle,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
-import { X, Command, type LucideProps } from '@/shared/ui/icons';
+import { X, Command, MoreHorizontal, type LucideProps } from '@/shared/ui/icons';
 import { useWorkbenchTheme, workbenchMetrics } from '@/shared/theme';
 
 export type IconComponent = ComponentType<LucideProps>;
@@ -156,7 +156,7 @@ export function IconButton({
       style={({ pressed }) => ({
         width: size,
         height: size,
-        borderRadius: 9,
+        borderRadius: workbenchMetrics.radius,
         alignItems: 'center',
         justifyContent: 'center',
         backgroundColor: selected ? theme.accentSoft : pressed ? theme.inset : 'transparent',
@@ -168,11 +168,16 @@ export function IconButton({
   );
 }
 
-export function Field({ label, style, ...props }: TextInputProps & { label: string }) {
+export function Field({
+  label,
+  hideLabel,
+  style,
+  ...props
+}: TextInputProps & { label: string; hideLabel?: boolean }) {
   const theme = useWorkbenchTheme();
   return (
-    <View style={{ gap: 7 }}>
-      <T style={{ fontSize: 12, fontWeight: '500' }}>{label}</T>
+    <View style={{ gap: 5, minWidth: 0 }}>
+      {!hideLabel && <T style={{ fontSize: 12, fontWeight: '500' }}>{label}</T>}
       <TextInput
         accessibilityLabel={label}
         placeholderTextColor={theme.muted}
@@ -186,8 +191,8 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
             borderColor: theme.border,
             backgroundColor: theme.inset,
             borderRadius: workbenchMetrics.radius,
-            paddingHorizontal: 12,
-            paddingVertical: 11,
+            paddingHorizontal: 10,
+            paddingVertical: 9,
             color: theme.text,
             fontSize: 16,
           },
@@ -195,6 +200,52 @@ export function Field({ label, style, ...props }: TextInputProps & { label: stri
         ]}
       />
     </View>
+  );
+}
+
+export function OverflowMenu({
+  label,
+  disabled,
+  items,
+}: {
+  label: string;
+  disabled?: boolean;
+  items: { label: string; onPress: () => void; disabled?: boolean }[];
+}) {
+  const [open, setOpen] = useState(false);
+  const theme = useWorkbenchTheme();
+  return (
+    <>
+      <IconButton
+        icon={MoreHorizontal}
+        label={label}
+        disabled={disabled}
+        onPress={() => setOpen(true)}
+      />
+      <Sheet visible={open} title={label} onClose={() => setOpen(false)}>
+        {items.map(item => (
+          <Pressable
+            key={item.label}
+            accessibilityRole="button"
+            accessibilityLabel={item.label}
+            disabled={item.disabled}
+            onPress={() => {
+              setOpen(false);
+              item.onPress();
+            }}
+            style={({ pressed }) => ({
+              minHeight: 44,
+              paddingHorizontal: 4,
+              justifyContent: 'center',
+              backgroundColor: pressed ? theme.inset : 'transparent',
+              opacity: item.disabled ? 0.4 : 1,
+            })}
+          >
+            <T>{item.label}</T>
+          </Pressable>
+        ))}
+      </Sheet>
+    </>
   );
 }
 
@@ -240,7 +291,7 @@ export function Sheet({
           {
             justifyContent: mobile ? 'flex-end' : 'center',
             alignItems: 'center',
-            padding: mobile ? 0 : 24,
+            padding: mobile ? 0 : 16,
             backgroundColor: theme.overlay,
           },
         ]}
@@ -258,40 +309,29 @@ export function Sheet({
             maxWidth: mobile ? undefined : wide ? 920 : 480,
             maxHeight: mobile ? '90%' : '86%',
             backgroundColor: theme.surface,
-            borderRadius: mobile ? 18 : 14,
-            borderBottomLeftRadius: mobile ? 0 : 14,
-            borderBottomRightRadius: mobile ? 0 : 14,
-            paddingBottom: mobile ? Math.max(inset.bottom, 16) : 0,
+            borderRadius: 8,
+            borderBottomLeftRadius: mobile ? 0 : 8,
+            borderBottomRightRadius: mobile ? 0 : 8,
+            paddingBottom: mobile ? inset.bottom : 0,
             overflow: 'hidden',
             borderWidth: 1,
             borderColor: theme.border,
           }}
         >
-          {mobile && (
-            <View
-              style={{
-                alignSelf: 'center',
-                width: 34,
-                height: 4,
-                marginTop: 9,
-                borderRadius: 2,
-                backgroundColor: theme.border,
-              }}
-            />
-          )}
           <View
             style={{
-              paddingHorizontal: 20,
-              paddingVertical: 15,
+              paddingLeft: 12,
+              paddingRight: 4,
+              minHeight: 48,
               flexDirection: 'row',
-              gap: 12,
+              gap: 8,
               alignItems: 'center',
               borderBottomWidth: 1,
               borderBottomColor: theme.border,
             }}
           >
-            <View style={{ flex: 1 }}>
-              <T accessibilityRole="header" style={{ fontWeight: '600', fontSize: 16 }}>
+            <View style={{ flex: 1, minWidth: 0, paddingVertical: 6 }}>
+              <T accessibilityRole="header" style={{ fontWeight: '600', fontSize: 15 }}>
                 {title}
               </T>
               {!!subtitle && (
@@ -305,12 +345,12 @@ export function Sheet({
           <ScrollView
             keyboardShouldPersistTaps="handled"
             style={{ flexShrink: 1 }}
-            contentContainerStyle={{ padding: 20, gap: 18 }}
+            contentContainerStyle={{ padding: 12, gap: 10 }}
           >
             {children}
           </ScrollView>
           {footer && (
-            <View style={{ padding: 16, gap: 10, borderTopWidth: 1, borderTopColor: theme.border }}>
+            <View style={{ padding: 10, gap: 8, borderTopWidth: 1, borderTopColor: theme.border }}>
               {footer}
             </View>
           )}

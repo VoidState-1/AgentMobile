@@ -11,7 +11,8 @@ import {
   type ModelEntry,
 } from '@/core/models/types';
 import { presetModelEvidence, protocolNames } from '@/core/models/presets';
-import { Button, Field, Sheet, T } from '@/shared/ui/primitives';
+import { Button, Field, OverflowMenu, Sheet, T } from '@/shared/ui/primitives';
+import { NumberField } from '@/shared/ui/forms';
 import { useWorkbenchUi } from '@/shared/workbench-state';
 import {
   CheckResult,
@@ -263,16 +264,13 @@ function ModelEditor({
           />
           <Toggle
             label="收藏模型"
-            hint="收藏会优先出现在会话选择器。"
             value={draft.favorite}
             disabled={busy}
             onChange={favorite => update({ favorite })}
           />
           <Toggle
             label="启用模型"
-            hint={
-              defaults ? '此模型被 ' + defaults + ' 处默认选择引用。' : '停用后保留历史与配置。'
-            }
+            hint={defaults ? '此模型被 ' + defaults + ' 处默认选择引用。' : undefined}
             value={draft.enabled}
             disabled={busy}
             onChange={enabled => update({ enabled })}
@@ -283,7 +281,7 @@ function ModelEditor({
             </T>
           )}
         </Section>
-        <Section title="模型能力" hint="能力声明和检测结果独立记录；鉴权或网络失败不会改为不支持。">
+        <Section title="模型能力">
           {(['tools', 'images', 'reasoning'] as const).map(name => (
             <View key={name} style={{ gap: 5 }}>
               <Choices
@@ -317,37 +315,56 @@ function ModelEditor({
               </T>
             </View>
           ))}
-          <T tone="secondary" style={{ fontSize: 11 }}>
-            明确不支持工具的模型不能执行工作区 Agent。未知能力可先配置，再按需验证。
-          </T>
+          {draft.capabilities.tools === 'unsupported' && (
+            <T tone="warning" style={{ fontSize: 12 }}>
+              此模型不支持工具，无法执行 Agent 任务。
+            </T>
+          )}
         </Section>
-        <Section title="运行参数" hint="这里的参数会实际进入每一轮请求，任务启动后固定。">
-          <Field
-            label="最大输出 tokens"
+        <Section
+          title="运行参数"
+          action={
+            <OverflowMenu
+              label="运行参数操作"
+              disabled={busy}
+              items={[
+                {
+                  label: '恢复默认参数',
+                  onPress: () => {
+                    const tokens = Math.min(
+                      defaultModelParameters.maxOutputTokens,
+                      model?.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens,
+                    );
+                    update({ parameters: { ...defaultModelParameters, maxOutputTokens: tokens } });
+                    setOutput(String(tokens));
+                    setTemperature('');
+                    setReasoningBudget('1024');
+                  },
+                },
+              ]}
+            />
+          }
+        >
+          <NumberField
+            label="最大输出"
+            accessibilityLabel="最大输出 tokens"
+            unit="tokens"
             value={output}
             keyboardType="number-pad"
             editable={!busy}
             onChangeText={setOutput}
           />
-          <Field
-            label="温度（留空采用服务默认）"
+          <NumberField
+            label="温度"
+            accessibilityLabel="温度（留空采用服务默认）"
             value={temperature}
             keyboardType="decimal-pad"
             editable={!busy}
-            placeholder={
-              '0–' +
-              (model?.limits?.maxTemperature ??
-                (connection.protocol === 'anthropic-messages' ? 1 : 2))
-            }
+            placeholder="默认"
             onChangeText={setTemperature}
           />
           <Toggle
             label="允许图片输入"
-            hint={
-              draft.capabilities.images === 'unknown'
-                ? '图片能力未知，建议先进行图片检测。'
-                : '允许发送参考图片和工具读取的图片。'
-            }
             value={draft.parameters.allowImages}
             disabled={busy || draft.capabilities.images === 'unsupported'}
             onChange={allowImages => update({ parameters: { ...draft.parameters, allowImages } })}
@@ -399,8 +416,10 @@ function ModelEditor({
                 }}
               />
               {(draft.parameters.reasoningStrategy ?? 'budget') === 'budget' && (
-                <Field
-                  label="推理预算 tokens"
+                <NumberField
+                  label="推理预算"
+                  accessibilityLabel="推理预算 tokens"
+                  unit="tokens"
                   value={reasoningBudget}
                   keyboardType="number-pad"
                   editable={!busy}
@@ -442,43 +461,14 @@ function ModelEditor({
               update({ parameters: { ...draft.parameters, reasoningDisplay } })
             }
           />
-          <T tone="muted" style={{ fontSize: 11, lineHeight: 18 }}>
-            仅显示服务公开返回的推理。DeepSeek 默认显示思考过程，Anthropic / Gemini
-            默认显示摘要。展示类型不改变服务输出，也不会生成隐藏推理。推理计入输出额度；请按模型文档选择参数格式，部分模型无法关闭推理。
-          </T>
-          {connection.protocol === 'chat-completions' &&
-            connection.compatibility !== 'deepseek' && (
-              <T tone="secondary" style={{ fontSize: 11 }}>
-                通用兼容协议没有统一开关；“关闭”不主动请求推理，“服务默认”由服务决定。支持
-                reasoning_content、reasoning 和 reasoning_summary 返回字段。
-              </T>
-            )}
           {!!model?.limits && (
             <T tone="secondary" style={{ fontSize: 11 }}>
               服务公布：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出上限{' '}
               {model.limits.outputTokens?.toLocaleString() ?? '未知'}
             </T>
           )}
-          <Button
-            label="恢复默认参数"
-            variant="ghost"
-            disabled={busy}
-            onPress={() => {
-              const tokens = Math.min(
-                defaultModelParameters.maxOutputTokens,
-                model?.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens,
-              );
-              update({ parameters: { ...defaultModelParameters, maxOutputTokens: tokens } });
-              setOutput(String(tokens));
-              setTemperature('');
-              setReasoningBudget('1024');
-            }}
-          />
         </Section>
-        <Section
-          title="指定模型检测"
-          hint="使用内置样本，可能计费。每项最多 2 次生成、128 输出 tokens、30 秒；不读取工作区。"
-        >
+        <Section title="指定模型检测">
           {(['text', 'tools', 'images'] as const).map(kind => (
             <View key={kind} style={{ gap: 7 }}>
               <Button
@@ -496,13 +486,8 @@ function ModelEditor({
           {!!probing && (
             <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
           )}
-          {dirty && (
-            <T tone="muted" style={{ fontSize: 11 }}>
-              保存当前草稿后再检测。
-            </T>
-          )}
         </Section>
-        <Section title="默认选择" hint="会话选择优先于项目默认，项目默认优先于全局默认。">
+        <Section title="默认选择">
           <Button
             label={config.defaults.global === model?.id && model ? '已为全局默认' : '设为全局默认'}
             variant="secondary"
@@ -552,11 +537,6 @@ function ModelEditor({
                 }}
               />
             )}
-          {!projectId && (
-            <T tone="muted" style={{ fontSize: 11 }}>
-              先打开一个项目，才能设置项目与会话选择。
-            </T>
-          )}
         </Section>
         {model && (
           <Button

@@ -57,33 +57,30 @@ export const ReviewSheet = memo(function ReviewSheet({
       wide
       busy={controller.busy}
       footer={
-        <View
-          style={{
-            flexDirection: 'row',
-            justifyContent: 'space-between',
-            alignItems: 'center',
-            gap: 12,
-          }}
-        >
-          <T tone="secondary" style={{ fontSize: 11, flex: 1 }}>
-            {value.description ??
-              (controller.dirty
-                ? '编辑器中有未保存的修改，请先保存。'
-                : value.restoreRef
-                  ? '恢复到工作区，已有提交历史保留'
-                  : value.area
-                    ? '保存、暂存与提交分别管理'
-                    : '当前没有可撤销的文件变化')}
-          </T>
-          {value.restoreRef && (
-            <Button
-              label={value.task ? '撤销修改' : '恢复此版本'}
-              icon={RotateCcw}
-              disabled={!!controller.projectActive || controller.busy || controller.dirty}
-              onPress={controller.confirmRestore}
-            />
-          )}
-        </View>
+        value.restoreRef ? (
+          <View
+            style={{
+              flexDirection: 'row',
+              justifyContent: 'space-between',
+              alignItems: 'center',
+              gap: 12,
+            }}
+          >
+            {controller.dirty && (
+              <T tone="warning" style={{ fontSize: 12, flex: 1 }}>
+                请先保存编辑器中的修改。
+              </T>
+            )}
+            {value.restoreRef && (
+              <Button
+                label={value.task ? '撤销修改' : '恢复此版本'}
+                icon={RotateCcw}
+                disabled={!!controller.projectActive || controller.busy || controller.dirty}
+                onPress={controller.confirmRestore}
+              />
+            )}
+          </View>
+        ) : undefined
       }
     >
       {!!controller.error && (
@@ -92,7 +89,7 @@ export const ReviewSheet = memo(function ReviewSheet({
         </T>
       )}
       {value.files.length === 0 ? (
-        <View style={{ alignItems: 'center', padding: 35, gap: 12 }}>
+        <View style={{ alignItems: 'center', padding: 16, gap: 8 }}>
           <ArrowLeftRight size={28} color={theme.muted} />
           <T tone="secondary">没有文件变化</T>
         </View>
@@ -101,7 +98,7 @@ export const ReviewSheet = memo(function ReviewSheet({
           <ScrollView
             horizontal
             showsHorizontalScrollIndicator={false}
-            contentContainerStyle={{ gap: 8 }}
+            contentContainerStyle={{ gap: 4 }}
           >
             {value.files.map((entry, entryIndex) => (
               <Pressable
@@ -110,9 +107,9 @@ export const ReviewSheet = memo(function ReviewSheet({
                 accessibilityLabel={'查看变化 ' + entry.path}
                 onPress={() => setIndex(entryIndex)}
                 style={{
-                  paddingHorizontal: 12,
-                  paddingVertical: 9,
-                  borderRadius: 8,
+                  paddingHorizontal: 9,
+                  minHeight: 44,
+                  borderRadius: 4,
                   flexDirection: 'row',
                   alignItems: 'center',
                   gap: 7,
@@ -136,7 +133,7 @@ export const ReviewSheet = memo(function ReviewSheet({
               </T>
             </View>
             {file && isImage(file.path) ? (
-              <View style={{ gap: 14 }}>
+              <View style={{ gap: 8 }}>
                 {[
                   { label: '修改前', uri: file.before },
                   { label: '修改后', uri: file.after },
@@ -149,7 +146,7 @@ export const ReviewSheet = memo(function ReviewSheet({
                       <Image
                         source={{ uri: entry.uri }}
                         contentFit="contain"
-                        style={{ height: 210, backgroundColor: theme.inset, borderRadius: 9 }}
+                        style={{ height: 210, backgroundColor: theme.inset, borderRadius: 4 }}
                       />
                     ) : (
                       <T tone="muted" style={{ fontSize: 12 }}>
@@ -164,7 +161,7 @@ export const ReviewSheet = memo(function ReviewSheet({
                 style={{
                   borderWidth: 1,
                   borderColor: theme.border,
-                  borderRadius: 9,
+                  borderRadius: 4,
                   overflow: 'hidden',
                 }}
               >

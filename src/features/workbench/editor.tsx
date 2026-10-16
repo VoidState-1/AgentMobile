@@ -115,7 +115,7 @@ export const Editor = memo(function Editor({
       </View>
       {!!controller.error && (
         <View
-          style={{ paddingHorizontal: 18, paddingVertical: 10, backgroundColor: theme.dangerSoft }}
+          style={{ paddingHorizontal: 12, paddingVertical: 6, backgroundColor: theme.dangerSoft }}
         >
           <T tone="danger" style={{ fontSize: 12 }}>
             {controller.error}
@@ -137,7 +137,7 @@ export const Editor = memo(function Editor({
         </View>
       )}
       {document.fresh && (
-        <View style={{ paddingHorizontal: 20, paddingTop: 15, paddingBottom: 12, gap: 6 }}>
+        <View style={{ paddingHorizontal: 12, paddingVertical: 10, gap: 5 }}>
           <T tone="secondary" style={{ fontSize: 12 }}>
             文件名称
           </T>
@@ -208,7 +208,7 @@ export const Editor = memo(function Editor({
             backgroundColor: theme.background,
             alignItems: 'center',
             justifyContent: 'center',
-            padding: 18,
+            padding: 12,
           }}
         >
           <Image

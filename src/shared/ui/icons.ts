@@ -16,6 +16,7 @@ export { default as FolderOpen } from 'lucide-react-native/icons/folder-open';
 export { default as GitCommitHorizontal } from 'lucide-react-native/icons/git-commit-horizontal';
 export { default as HardDrive } from 'lucide-react-native/icons/hard-drive';
 export { default as History } from 'lucide-react-native/icons/rotate-ccw-clock';
+export { default as MoreHorizontal } from 'lucide-react-native/icons/ellipsis';
 export { default as Image } from 'lucide-react-native/icons/image';
 export { default as ImageOff } from 'lucide-react-native/icons/image-off';
 export { default as Laptop } from 'lucide-react-native/icons/laptop';

@@ -31,6 +31,12 @@ async function addMcp(page: Page) {
   await expect(
     page.getByRole('switch', { name: '允许自动调用 lookup', exact: true }),
   ).not.toBeChecked();
+  const definition = page.getByRole('button', { name: '查看工具定义 lookup', exact: true });
+  await definition.click();
+  await expect(definition).toHaveAttribute('aria-expanded', 'true');
+  await expect(page.getByText(/"properties"/)).toBeVisible();
+  await definition.click();
+  await expect(definition).toHaveAttribute('aria-expanded', 'false');
   await page.getByRole('switch', { name: '允许自动调用 lookup', exact: true }).click();
   await expect(
     page.getByRole('switch', { name: '允许自动调用 lookup', exact: true }),

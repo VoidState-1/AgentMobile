@@ -77,9 +77,21 @@ export function CheckResult({
   return result ? (
     <View
       style={{
-        padding: 10,
-        borderRadius: 8,
-        backgroundColor: result.status === 'passed' ? theme.successSoft : theme.inset,
+        paddingHorizontal: 8,
+        paddingVertical: 6,
+        borderLeftWidth: 2,
+        borderLeftColor:
+          result.status === 'passed'
+            ? theme.success
+            : result.status === 'failed'
+              ? theme.danger
+              : theme.border,
+        backgroundColor:
+          result.status === 'passed'
+            ? theme.successSoft
+            : result.status === 'failed'
+              ? theme.dangerSoft
+              : theme.inset,
       }}
     >
       <T

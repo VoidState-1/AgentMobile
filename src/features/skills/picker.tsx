@@ -5,6 +5,7 @@ import { useWorkbenchTheme } from '@/shared/theme';
 import { contentLimits } from '@/core/agent/settings';
 import { explicitSkills } from '@/core/skills/rules';
 import { useSkills } from './common';
+import { Layers, Plus } from '@/shared/ui/icons';
 
 export function SkillPicker({
   controller,
@@ -22,7 +23,6 @@ export function SkillPicker({
     <Sheet
       visible
       title="选择技能"
-      subtitle="加入消息，明确指定本次使用。"
       onClose={() => controller.setSheet(undefined)}
       footer={
         <Button label="管理 Agent Skills" variant="secondary" onPress={controller.openSkills} />
@@ -30,7 +30,7 @@ export function SkillPicker({
     >
       {!skills.length && (
         <T tone="secondary" style={{ fontSize: 12 }}>
-          当前项目还没有启用技能。先在技能库中安装并启用。
+          暂无已启用技能
         </T>
       )}
       {skills.map(skill => (
@@ -51,22 +51,27 @@ export function SkillPicker({
               conversation.setPrompt('$' + skill.name + ' ' + conversation.prompt);
             controller.setSheet(undefined);
           }}
-          style={{
-            padding: 12,
-            borderRadius: 8,
-            borderWidth: 1,
+          style={({ pressed }) => ({
+            paddingVertical: 8,
+            minHeight: 52,
+            borderBottomWidth: 1,
             borderColor: theme.border,
-            gap: 4,
-          }}
+            flexDirection: 'row',
+            alignItems: 'center',
+            backgroundColor: pressed ? theme.inset : 'transparent',
+            gap: 8,
+          })}
         >
-          <View style={{ flexDirection: 'row', gap: 8 }}>
+          <Layers size={17} color={theme.accent} />
+          <View style={{ flex: 1, minWidth: 0, gap: 2 }}>
             <T tone="accent" style={{ fontSize: 13, fontWeight: '600' }}>
               {skill.name}
             </T>
+            <T tone="secondary" numberOfLines={2} style={{ fontSize: 12 }}>
+              {skill.description}
+            </T>
           </View>
-          <T tone="secondary" style={{ fontSize: 11 }}>
-            {skill.description}
-          </T>
+          <Plus size={16} color={theme.secondary} />
         </Pressable>
       ))}
     </Sheet>
