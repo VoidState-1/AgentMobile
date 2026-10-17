@@ -1,6 +1,6 @@
 import { expect, type Page } from '@playwright/test';
 import { workspaceChatEvent } from '../workspace-replies';
-import { addModel, openModels, returnToWorkbench } from './model-helpers';
+import { addModel, openModels, returnToWorkbench, setConnectionName } from './model-helpers';
 
 const configured = new WeakSet<Page>();
 
@@ -15,8 +15,9 @@ export async function configureWorkspaceFixture(page: Page) {
   });
   await openModels(page);
   await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
-  await page.getByLabel('连接名称', { exact: true }).fill('工作区测试服务');
-  await page.getByLabel('服务基础地址', { exact: true }).fill('https://workspace-fixture.test/v1');
+  await setConnectionName(page, '工作区测试服务');
+  await page.getByLabel('服务地址', { exact: true }).fill('https://workspace-fixture.test/v1');
+  await page.getByRole('button', { name: '高级设置', exact: true }).click();
   await page.getByRole('button', { name: '认证方式：无需认证', exact: true }).click();
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await addModel(page, '工作区测试模型', 'workspace-fixture');

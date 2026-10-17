@@ -33,7 +33,7 @@ test('模板可搜索并自动识别品牌，第三方显示默认图标，末�
   await page.screenshot({ path: 'work/mobile-ui/providers-icons-dark.png' });
   await page.getByLabel('搜索供应商', { exact: true }).fill('qwen');
   await page.getByRole('button', { name: '通义千问 Qwen · 未保存连接', exact: true }).click();
-  await expect(page.getByLabel('服务基础地址', { exact: true })).toHaveValue(
+  await expect(page.getByLabel('服务地址', { exact: true })).toHaveValue(
     'https://dashscope.aliyuncs.com/compatible-mode/v1',
   );
   await page.getByRole('button', { name: '返回', exact: true }).click();
@@ -42,7 +42,7 @@ test('模板可搜索并自动识别品牌，第三方显示默认图标，末�
   await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
   await expect(editorIcon(page, '默认供应商图标')).toBeVisible();
   await page.screenshot({ path: 'work/mobile-ui/provider-icon-default.png' });
-  await page.getByLabel('服务基础地址', { exact: true }).fill('https://api.openai.com/v1');
+  await page.getByLabel('服务地址', { exact: true }).fill('https://api.openai.com/v1');
   await expect(editorIcon(page, '供应商品牌图标')).toBeVisible();
   expect(errors).toEqual([]);
 });
@@ -69,11 +69,13 @@ test('上传图标后保存和刷新保留，拒绝无效文件，恢复默认�
   await expect(page.getByRole('alert')).toContainText('256 KB');
   await expect(editorIcon(page, '自定义供应商图标')).toBeVisible();
   await page.screenshot({ path: 'work/mobile-ui/provider-icon-upload.png' });
+  await page.getByRole('button', { name: '更多操作', exact: true }).click();
   await page.getByRole('button', { name: '恢复默认供应商图标', exact: true }).click();
   await expect(editorIcon(page, '默认供应商图标')).toBeVisible();
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await page.reload();
   await expect(editorIcon(page, '默认供应商图标')).toBeVisible();
+  await page.getByRole('button', { name: '更多操作', exact: true }).click();
   await expect(page.getByRole('button', { name: '恢复默认供应商图标', exact: true })).toHaveCount(
     0,
   );

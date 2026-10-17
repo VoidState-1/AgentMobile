@@ -10,6 +10,8 @@ export { default as ChevronRight } from 'lucide-react-native/icons/chevron-right
 export { default as CircleAlert } from 'lucide-react-native/icons/circle-alert';
 export { default as Command } from 'lucide-react-native/icons/command';
 export { default as Download } from 'lucide-react-native/icons/download';
+export { default as Eye } from 'lucide-react-native/icons/eye';
+export { default as EyeOff } from 'lucide-react-native/icons/eye-off';
 export { default as FileText } from 'lucide-react-native/icons/file-text';
 export { default as Folder } from 'lucide-react-native/icons/folder';
 export { default as FolderOpen } from 'lucide-react-native/icons/folder-open';
@@ -27,6 +29,7 @@ export { default as Paperclip } from 'lucide-react-native/icons/paperclip';
 export { default as PenLine } from 'lucide-react-native/icons/pen-line';
 export { default as Pencil } from 'lucide-react-native/icons/pencil';
 export { default as Plus } from 'lucide-react-native/icons/plus';
+export { default as RefreshCw } from 'lucide-react-native/icons/refresh-cw';
 export { default as RotateCcw } from 'lucide-react-native/icons/rotate-ccw';
 export { default as Save } from 'lucide-react-native/icons/save';
 export { default as Search } from 'lucide-react-native/icons/search';

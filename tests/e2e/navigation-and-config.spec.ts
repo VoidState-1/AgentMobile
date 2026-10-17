@@ -1,4 +1,5 @@
 import { expect, test } from '@playwright/test';
+import { setConnectionName } from './model-helpers';
 
 for (const width of [360, 1280]) {
   test(`${width}px：无项目时四个底栏可往返，文件空状态可创建项目`, async ({ page }) => {
@@ -55,7 +56,7 @@ test('360px 短屏：配置与输入弹层可操作，深色页面无横向溢�
   await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
   await verify();
   await expect(page.getByRole('button', { name: '保存连接', exact: true })).toBeInViewport();
-  await page.getByLabel('连接名称', { exact: true }).fill('尚未保存');
+  await setConnectionName(page, '尚未保存');
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await expect(page.getByText('有尚未保存的配置', { exact: true })).toBeVisible();
   await expect(page.getByRole('button', { name: '继续编辑', exact: true })).toBeInViewport();

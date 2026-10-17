@@ -6,6 +6,14 @@ export async function openModels(page: Page) {
   await page.getByRole('button', { name: '模型与供应商', exact: true }).click();
   await expect(page.getByRole('button', { name: '添加其他供应商', exact: true })).toBeVisible();
 }
+
+export async function setConnectionName(page: Page, name: string) {
+  const input = page.getByLabel('连接名称', { exact: true });
+  if (!(await input.count()))
+    await page.getByRole('button', { name: '编辑连接名称', exact: true }).click();
+  await input.fill(name);
+}
+
 export async function addConnection(
   page: Page,
   name: string,
@@ -13,21 +21,23 @@ export async function addConnection(
   key = 'fixture-key',
 ) {
   await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
-  await page.getByLabel('连接名称', { exact: true }).fill(name);
-  if (protocol !== 'chat-completions')
+  await setConnectionName(page, name);
+  if (protocol !== 'chat-completions') {
+    await page.getByRole('button', { name: '高级设置', exact: true }).click();
     await page
       .getByRole('button', {
         name: '通信协议：' + (protocol === 'gemini' ? 'Gemini 原生' : 'Anthropic Messages'),
         exact: true,
       })
       .click();
-  await page.getByLabel('服务基础地址', { exact: true }).fill('https://example.test/v1');
+  }
+  await page.getByLabel('服务地址', { exact: true }).fill('https://example.test/v1');
   await page.getByLabel('API Key', { exact: true }).fill(key);
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
-  await expect(page.getByText('凭证已保存 · 留空保留现有凭证', { exact: true })).toBeVisible();
+  await expect(page.getByText('连接已保存。', { exact: true })).toBeVisible();
 }
 export async function addModel(page: Page, name: string, apiId = 'protocol-test', images = false) {
-  await page.getByRole('button', { name: '手工添加', exact: true }).click();
+  await page.getByRole('button', { name: '添加模型', exact: true }).click();
   await page.getByLabel('请求模型 ID', { exact: true }).fill(apiId);
   await page.getByLabel('模型显示名', { exact: true }).fill(name);
   if (images) await page.getByRole('switch', { name: '允许图片输入', exact: true }).click();

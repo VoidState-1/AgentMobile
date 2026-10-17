@@ -86,7 +86,7 @@ test('已保存连接只显示右侧模型数，刷新丢失凭证后显示为�
   await page.getByLabel('搜索供应商', { exact: true }).fill('状态验证');
   await expect(row).toHaveText('状态验证');
   await row.click();
-  await expect(page.getByLabel('连接名称', { exact: true })).toHaveValue('状态验证');
+  await expect(page.getByRole('heading', { name: '状态验证', exact: true })).toBeVisible();
   await page.getByLabel('API Key', { exact: true }).fill('replacement-test-key');
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await page.getByRole('button', { name: '返回', exact: true }).click();
@@ -100,12 +100,14 @@ test('多连接供应商汇总模型数量，展开后长按排序会收起子�
   await page.goto('/');
   await openModels(page);
   await preset(page, 'OpenAI').click();
+  await page.getByRole('button', { name: '高级设置', exact: true }).click();
   await page.getByRole('button', { name: '认证方式：无需认证', exact: true }).click();
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await addModel(page, '模板模型');
   await page.getByRole('button', { name: '返回', exact: true }).click();
+  await page.getByRole('button', { name: '更多操作', exact: true }).click();
   await page.getByRole('button', { name: '复制连接', exact: true }).click();
-  await expect(page.getByLabel('连接名称', { exact: true })).toHaveValue('OpenAI 副本');
+  await expect(page.getByRole('heading', { name: 'OpenAI 副本', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '返回', exact: true }).click();
   const group = page.getByRole('button', { name: 'OpenAI · 2 个连接', exact: true });
   await expect(group).toHaveText('OpenAI2 个模型');

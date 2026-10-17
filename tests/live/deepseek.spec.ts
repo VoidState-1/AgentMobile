@@ -117,7 +117,7 @@ test('DeepSeek 真实图文工作区：连接、整理、追问修改、撤销�
     await page.getByLabel('API Key', { exact: true }).fill(apiKey);
     await page.getByRole('button', { name: '保存连接', exact: true }).click();
     await page.getByRole('button', { name: '检测连接并发现模型', exact: true }).click();
-    await expect(page.getByText(/目录检测通过/)).toBeVisible();
+    await expect(page.getByText(/发现 \d+ 个模型/)).toBeVisible();
     await page.getByRole('button', { name: '编辑模型 deepseek-flash', exact: true }).click();
     await page.getByRole('switch', { name: '允许图片输入', exact: true }).click();
     await page.getByRole('button', { name: '保存模型', exact: true }).click();

@@ -211,8 +211,9 @@ export function Toggle({
         value={value}
         onValueChange={onChange}
         disabled={disabled}
+        {...(Platform.OS === 'web' ? ({ activeThumbColor: theme.surface } as object) : null)}
         trackColor={{ true: theme.accent, false: theme.border }}
-        thumbColor={Platform.OS === 'android' ? theme.surface : undefined}
+        thumbColor={Platform.OS === 'ios' ? undefined : theme.surface}
       />
     </View>
   );

@@ -26,13 +26,13 @@ test('供应商模板直接进入配置，侧栏空状态与设置摘要可直�
   await expect(page.getByLabel('搜索供应商', { exact: true })).toBeVisible();
   await page.screenshot({ path: 'work/mobile-ui/unified-onboarding-light.png' });
   await page.getByRole('button', { name: 'DeepSeek · 未保存连接', exact: true }).click();
-  await expect(page.getByLabel('连接名称', { exact: true })).toHaveValue('DeepSeek');
-  await expect(page.getByLabel('服务基础地址', { exact: true })).toHaveValue(
+  await expect(page.getByRole('heading', { name: 'DeepSeek', exact: true })).toBeVisible();
+  await expect(page.getByLabel('服务地址', { exact: true })).toHaveValue(
     'https://api.deepseek.com',
   );
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
-  await expect(page.getByRole('button', { name: '手工添加', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '添加模型', exact: true })).toHaveCount(0);
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();

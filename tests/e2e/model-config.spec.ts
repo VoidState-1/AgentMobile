@@ -7,6 +7,7 @@ import {
   configureModel,
   openModels,
   returnToWorkbench,
+  setConnectionName,
 } from './model-helpers';
 
 async function createProject(page: Page) {
@@ -63,7 +64,7 @@ for (const protocol of protocols)
     await openModels(page);
     await page.getByRole('button', { name: '打开连接 模拟服务', exact: true }).click();
     await page.getByRole('button', { name: '检测连接并发现模型', exact: true }).click();
-    await expect(page.getByText(/目录检测通过/)).toBeVisible();
+    await expect(page.getByText(/发现 1 个模型/)).toBeVisible();
     await page.getByRole('button', { name: '编辑模型 模拟模型', exact: true }).click();
     for (const label of ['文本检测', '工具检测', '图片检测']) {
       await page.getByRole('button', { name: label + ' · 可能计费', exact: true }).click();
@@ -118,7 +119,7 @@ test('运行中改参数和密钥、浏览配置，后续轮次保留旧配置',
   await expect.poll(() => requests.length).toBe(1);
   await openModels(page);
   await page.getByRole('button', { name: '打开连接 模拟服务', exact: true }).click();
-  await page.getByLabel('替换 API Key', { exact: true }).fill('fixture-new-key');
+  await page.getByLabel('API Key', { exact: true }).fill('fixture-new-key');
   await page.getByRole('button', { name: '保存连接', exact: true }).click();
   await expect(page.getByText('连接已保存。', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '编辑模型 模拟模型', exact: true }).click();
@@ -173,15 +174,16 @@ test('两份连接不串密钥，收藏搜索、复制、未保存保护与刷�
   await openModels(page);
   await page.screenshot({ path: 'work/config-mobile-light.png' });
   await page.getByRole('button', { name: '打开连接 工作连接', exact: true }).click();
-  await page.getByLabel('连接名称', { exact: true }).fill('未保存名称');
+  await setConnectionName(page, '未保存名称');
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '继续编辑', exact: true }).click();
-  await expect(page.getByLabel('连接名称', { exact: true })).toHaveValue('未保存名称');
+  await expect(page.getByRole('heading', { name: '未保存名称', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '返回', exact: true }).click();
   await page.getByRole('button', { name: '放弃修改并离开', exact: true }).click();
   await page.getByRole('button', { name: '打开连接 工作连接', exact: true }).click();
+  await page.getByRole('button', { name: '更多操作', exact: true }).click();
   await page.getByRole('button', { name: '复制连接', exact: true }).click();
-  await expect(page.getByText('凭证缺失 · 可先保存连接，稍后补填', { exact: true })).toBeVisible();
+  await expect(page.getByText('已复制连接，凭证需要重新填写。', { exact: true })).toBeVisible();
   await returnToWorkbench(page);
   await page.getByRole('tab', { name: '设置', exact: true }).click();
   await page.getByRole('button', { name: '深色', exact: true }).click();
@@ -195,4 +197,34 @@ test('两份连接不串密钥，收藏搜索、复制、未保存保护与刷�
   await page.getByRole('button', { name: '发送任务', exact: true }).click();
   await expect(page.getByText(/此连接需要填写 API Key/)).toBeVisible();
   await expect(page.getByLabel('任务目标', { exact: true })).toHaveValue('保留这条草稿');
+});
+
+test('连接表单实时校验，保存后刷新目录发现模型', async ({ page }) => {
+  await page.setViewportSize({ width: 390, height: 844 });
+  await page.goto('/');
+  await openModels(page);
+  await page.getByRole('button', { name: '添加其他供应商', exact: true }).click();
+  const save = page.getByRole('button', { name: '保存连接', exact: true });
+  await expect(save).toBeDisabled();
+  await page.getByLabel('服务地址', { exact: true }).fill('ftp://example.test');
+  await page.getByLabel('服务地址', { exact: true }).blur();
+  await expect(
+    page.getByText('服务地址需要 HTTPS；本机开发地址可使用 HTTP。', { exact: true }),
+  ).toBeVisible();
+  await expect(save).toBeDisabled();
+  await page.getByLabel('服务地址', { exact: true }).fill('https://example.test/v1');
+  await setConnectionName(page, '一次完成连接');
+  await page.getByLabel('API Key', { exact: true }).fill('fixture-key');
+  await page.route('https://example.test/**', route =>
+    route.fulfill({
+      json: { data: [{ id: 'discovered-model', display_name: '发现模型' }], has_more: false },
+    }),
+  );
+  await page.getByRole('button', { name: '保存连接', exact: true }).click();
+  await expect(page.getByText('连接已保存。', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '检测连接并发现模型', exact: true }).click();
+  await expect(page.getByText(/发现 1 个模型/)).toBeVisible();
+  await expect(page.getByRole('button', { name: '编辑模型 发现模型', exact: true })).toBeVisible();
+  await expect(page.getByRole('heading', { name: '一次完成连接', exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: '更多操作', exact: true })).toBeVisible();
 });

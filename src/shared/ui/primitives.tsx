@@ -306,13 +306,120 @@ export function IconButton({
 export function Field({
   label,
   hideLabel,
+  inline,
+  trailing,
+  error,
+  hint,
   style,
   onFocus,
   onBlur,
   ...props
-}: TextInputProps & { label: string; hideLabel?: boolean }) {
+}: TextInputProps & {
+  label: string;
+  hideLabel?: boolean;
+  /** Label and value share one row instead of stacking, for dense object settings. */
+  inline?: boolean;
+  /** Inline control rendered at the input's trailing edge, e.g. a reveal toggle. */
+  trailing?: ReactNode;
+  error?: string;
+  hint?: string;
+}) {
   const theme = useWorkbenchTheme();
   const [focused, setFocused] = useState(false);
+  const input = (
+    <Input
+      accessibilityLabel={label}
+      placeholderTextColor={theme.muted}
+      autoCapitalize="none"
+      autoCorrect={false}
+      onFocus={event => {
+        setFocused(true);
+        onFocus?.(event);
+      }}
+      onBlur={event => {
+        setFocused(false);
+        onBlur?.(event);
+      }}
+      {...props}
+      style={[
+        inline
+          ? {
+              minHeight: 44,
+              paddingHorizontal: 0,
+              paddingVertical: 8,
+              paddingRight: trailing ? 44 : 0,
+              color: theme.text,
+              fontSize: 15,
+            }
+          : {
+              minHeight: 44,
+              borderWidth: 1,
+              borderColor: focused ? theme.accent : error ? theme.danger : theme.border,
+              backgroundColor: theme.inset,
+              borderRadius: workbenchMetrics.radius,
+              paddingHorizontal: 10,
+              paddingVertical: 9,
+              paddingRight: trailing ? 48 : 10,
+              color: theme.text,
+              fontSize: 16,
+            },
+        style,
+      ]}
+    />
+  );
+  const trailingControl = trailing ? (
+    <View
+      style={{
+        position: 'absolute',
+        right: 2,
+        top: 2,
+        bottom: 2,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'center',
+      }}
+    >
+      {trailing}
+    </View>
+  ) : null;
+  if (inline)
+    return (
+      <View style={{ minWidth: 0 }}>
+        <View
+          style={{
+            flexDirection: 'row',
+            alignItems: 'center',
+            minHeight: 48,
+            gap: 10,
+            borderBottomWidth: 1,
+            borderBottomColor: focused ? theme.accent : error ? theme.danger : theme.border,
+          }}
+        >
+          <T numberOfLines={1} variant="caption" style={{ width: 72, color: theme.secondary }}>
+            {label}
+          </T>
+          <View style={{ flex: 1, minWidth: 0 }}>
+            {input}
+            {trailingControl}
+          </View>
+        </View>
+        {!!error && (
+          <T
+            accessibilityRole="alert"
+            tone="danger"
+            variant="meta"
+            style={{ paddingLeft: 82, paddingTop: 2 }}
+          >
+            {error}
+          </T>
+        )}
+        {!error && !!hint && (
+          <T tone="muted" variant="meta" style={{ paddingLeft: 82, paddingTop: 2 }}>
+            {hint}
+          </T>
+        )}
+      </View>
+    );
   return (
     <View style={{ gap: 5, minWidth: 0 }}>
       {!hideLabel && (
@@ -320,35 +427,20 @@ export function Field({
           {label}
         </T>
       )}
-      <Input
-        accessibilityLabel={label}
-        placeholderTextColor={theme.muted}
-        autoCapitalize="none"
-        autoCorrect={false}
-        onFocus={event => {
-          setFocused(true);
-          onFocus?.(event);
-        }}
-        onBlur={event => {
-          setFocused(false);
-          onBlur?.(event);
-        }}
-        {...props}
-        style={[
-          {
-            minHeight: 44,
-            borderWidth: 1,
-            borderColor: focused ? theme.accent : theme.border,
-            backgroundColor: theme.inset,
-            borderRadius: workbenchMetrics.radius,
-            paddingHorizontal: 10,
-            paddingVertical: 9,
-            color: theme.text,
-            fontSize: 16,
-          },
-          style,
-        ]}
-      />
+      <View style={{ minWidth: 0 }}>
+        {input}
+        {trailingControl}
+      </View>
+      {!!error && (
+        <T accessibilityRole="alert" tone="danger" variant="meta">
+          {error}
+        </T>
+      )}
+      {!error && !!hint && (
+        <T tone="muted" variant="meta">
+          {hint}
+        </T>
+      )}
     </View>
   );
 }
