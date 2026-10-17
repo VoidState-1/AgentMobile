@@ -16,7 +16,7 @@ export const toolCategoryNames: Record<ToolCategory, string> = {
 export function toolCategory(tool: string): ToolCategory {
   if (tool === 'inspect_image') return 'image';
   if (tool === 'search_text') return 'search';
-  if (['write_text', 'delete_file', 'move_file'].includes(tool)) return 'write';
+  if (['edit_text', 'write_text', 'delete_file', 'move_file'].includes(tool)) return 'write';
   if (tool.startsWith('git_')) return 'git';
   if (tool === 'load_skill' || tool === 'read_skill_resource') return 'skill';
   if (

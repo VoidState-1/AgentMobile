@@ -6,6 +6,12 @@ import type { CandidateMergeInput, CandidateMergeResult } from '@/core/runs/prop
 import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';
 import { validateText } from '@/core/workspace/text';
+import {
+  applyTextEdits,
+  validateTextEdits,
+  type TextEdit,
+  type TextEditOutcome,
+} from '@/core/workspace/edits';
 import { contentLimits } from '@/core/agent/settings';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
@@ -153,6 +159,7 @@ export class FileCommands {
         if (
           existing.ownerRootRunId !== options.owner ||
           existing.kind !== 'files' ||
+          existing.textEditFingerprint !== undefined ||
           existing.changes[0]?.path !== path ||
           existing.changes[0]?.after !== this.context.codec.encodeBase64(bytes)
         ) {
@@ -182,6 +189,87 @@ export class FileCommands {
         operationId,
         options.owner,
       );
+    });
+  }
+
+  async editText(
+    projectId: string,
+    path: string,
+    edits: readonly TextEdit[],
+    expectedRevision: string,
+    options: { owner?: string; operationId?: string } = {},
+  ): Promise<TextEditOutcome> {
+    path = safePath(path);
+    if (path.toLowerCase() === 'project.json' || isImage(path))
+      throw new AppError('VALIDATION', '精确替换只允许工作区内非受保护的文本文件。');
+    if (typeof expectedRevision !== 'string' || !expectedRevision)
+      throw new AppError('VALIDATION', '精确替换需要读取时的文件修订号，不能创建文件。');
+    const replacements = validateTextEdits(edits);
+    return this.mutations.serial(projectId, options.owner, async () => {
+      const id = options.operationId ?? this.context.id();
+      const fingerprint = await this.context.git.revision(
+        this.context.codec.encodeText(
+          JSON.stringify({ path, expectedRevision, edits: replacements }),
+        ),
+      );
+      const previous = await this.context.journal.get(projectId, id);
+      if (
+        previous &&
+        (previous.kind !== 'files' ||
+          previous.ownerRootRunId !== options.owner ||
+          previous.textEditFingerprint !== fingerprint ||
+          previous.changes.length !== 1 ||
+          previous.changes[0].path !== path ||
+          previous.changes[0].before === null ||
+          previous.changes[0].after === null)
+      )
+        throw new AppError('CONFLICT', '操作 ID 与原始精确替换不匹配。');
+      const before = previous
+        ? this.context.codec.decodeBase64(previous.changes[0].before!)
+        : await this.reader.bytesOrNull(projectId, path);
+      if (before === null)
+        throw new AppError('VALIDATION', '文件不存在，请使用 write_text 新建文件。');
+      validateText(before);
+      if ((await this.context.git.revision(before)) !== expectedRevision)
+        throw new AppError('CONFLICT', 'VERSION_CONFLICT：文件已变化，请重新读取后重新规划替换。');
+      const source = this.context.codec.decodeText(before);
+      const plan = applyTextEdits(source, replacements);
+      const after = this.context.codec.encodeText(plan.text);
+      validateText(after);
+      if (previous && previous.changes[0].after !== this.context.codec.encodeBase64(after))
+        throw new AppError('STORAGE', '精确替换回执与保存的结果不一致。');
+      const operation =
+        previous ??
+        (await this.context.journal.prepare(
+          {
+            id,
+            projectId,
+            kind: 'files',
+            ownerRootRunId: options.owner,
+            actorRunId: options.owner,
+            expectedHead: await this.context.git.head(projectId),
+            message: '精确修改 ' + path,
+            phase: 'prepared',
+            createdAt: new Date().toISOString(),
+          },
+          {
+            changes: [
+              {
+                path,
+                before: this.context.codec.encodeBase64(before),
+                after: this.context.codec.encodeBase64(after),
+              },
+            ],
+            textEditFingerprint: fingerprint,
+          },
+        ));
+      await this.mutations.apply(operation);
+      return {
+        revision: await this.context.git.revision(after),
+        changed: plan.text !== source,
+        replayed: !!previous,
+        changes: plan.changes,
+      };
     });
   }
 

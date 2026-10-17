@@ -7,11 +7,22 @@ import type { RunState } from '@/core/runs/types';
 import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
 import { validateText } from '@/core/workspace/text';
 import { validateImage } from '@/core/workspace/image';
+import {
+  applyTextEdits,
+  validateTextEdits,
+  type TextEdit,
+  type TextEditOutcome,
+} from '@/core/workspace/edits';
 import { AppError } from '@/core/errors';
 import { canonical } from '@/core/mcp/rules';
 import type { WorkspaceApplication } from '@/application/workspace/service';
 import { assertRunning, defineTool, result, revision, textLimit } from '@/application/tools/common';
 import type { ProposalRepository } from './proposal-repository';
+import {
+  editTextDescription,
+  editTextParameters,
+  textEditResult,
+} from '@/application/tools/text-edit';
 
 /** Private Git candidate only. This object has no filesystem/index mutation tool. */
 export class ProposalOverlay {
@@ -57,15 +68,18 @@ export class ProposalOverlay {
       ),
     };
   }
+  private assertWritable() {
+    if (this.recoveryRequired)
+      throw new AppError('STORAGE', '提案写入回执需要恢复，请重新打开应用。');
+    if (this.proposal.state !== 'draft')
+      throw new AppError('CONFLICT', '提案已收束，不能继续修改。');
+  }
   private change(
     invocation: string,
     changes: { path: string; bytes: Uint8Array | null; expected: string | null }[],
   ): Promise<void> {
     return this.exclusive(async () => {
-      if (this.recoveryRequired)
-        throw new AppError('STORAGE', '提案写入回执需要恢复，请重新打开应用。');
-      if (this.proposal.state !== 'draft')
-        throw new AppError('CONFLICT', '提案已收束，不能继续修改。');
+      this.assertWritable();
       const id = this.proposal.id + ':' + invocation;
       const parts = [];
       for (const change of changes) {
@@ -100,50 +114,121 @@ export class ProposalOverlay {
         if (change.bytes) tree[change.path] = change.bytes;
         else delete tree[change.path];
       }
-      const write: ProposalWrite = {
-        id,
-        proposalId: this.proposal.id,
-        projectId: this.proposal.projectId,
-        rootRunId: this.proposal.rootRunId,
-        sourceRunId: this.proposal.sourceRunId,
+      await this.persistChange(
+        invocation,
+        tree,
+        changes.map(change => change.path),
         fingerprint,
-        checkpointKey:
-          'proposals/' +
-          this.proposal.id +
-          '/writes/' +
-          this.codec.encodeHex(this.codec.encodeText(invocation)),
-        previousSnapshot: this.proposal.candidateSnapshot,
-        phase: 'prepared',
-        sequence: ++this.sequence,
+      );
+    });
+  }
+
+  private async persistChange(
+    invocation: string,
+    tree: Record<string, Uint8Array>,
+    paths: string[],
+    fingerprint: string,
+  ) {
+    const write: ProposalWrite = {
+      id: this.proposal.id + ':' + invocation,
+      proposalId: this.proposal.id,
+      projectId: this.proposal.projectId,
+      rootRunId: this.proposal.rootRunId,
+      sourceRunId: this.proposal.sourceRunId,
+      fingerprint,
+      checkpointKey:
+        'proposals/' +
+        this.proposal.id +
+        '/writes/' +
+        this.codec.encodeHex(this.codec.encodeText(invocation)),
+      previousSnapshot: this.proposal.candidateSnapshot,
+      phase: 'prepared',
+      sequence: ++this.sequence,
+    };
+    try {
+      await this.repository.prepare(write);
+      const candidate = await this.workspace.candidateSnapshot(
+        write.projectId,
+        write.rootRunId,
+        tree,
+        write.checkpointKey,
+        write.previousSnapshot,
+      );
+      const next = {
+        ...this.proposal,
+        candidateSnapshot: candidate,
+        changedPaths: [...new Set([...this.proposal.changedPaths, ...paths])],
+        updatedAt: new Date().toISOString(),
       };
-      try {
-        await this.repository.prepare(write);
-        const candidate = await this.workspace.candidateSnapshot(
-          write.projectId,
-          write.rootRunId,
-          tree,
-          write.checkpointKey,
-          write.previousSnapshot,
-        );
-        const changedPaths = [
-          ...new Set([...this.proposal.changedPaths, ...changes.map(change => change.path)]),
-        ];
-        const next = {
-          ...this.proposal,
-          candidateSnapshot: candidate,
-          changedPaths,
-          updatedAt: new Date().toISOString(),
-        };
-        await this.repository.record(next, {
-          ...write,
-          candidateSnapshot: candidate,
-          phase: 'recorded',
-        });
-        this.proposal = next;
-      } catch (error) {
-        this.recoveryRequired = true;
-        throw error;
+      await this.repository.record(next, {
+        ...write,
+        candidateSnapshot: candidate,
+        phase: 'recorded',
+      });
+      this.proposal = next;
+    } catch (error) {
+      this.recoveryRequired = true;
+      throw error;
+    }
+  }
+
+  private editText(
+    invocation: string,
+    path: string,
+    edits: readonly TextEdit[],
+    expectedRevision: string,
+  ): Promise<TextEditOutcome> {
+    path = this.scope(path);
+    if (isImage(path)) throw new AppError('VALIDATION', '精确替换不能修改图片提案。');
+    if (typeof expectedRevision !== 'string' || !expectedRevision)
+      throw new AppError('VALIDATION', '精确替换需要候选文件的当前修订号，不能创建文件。');
+    const replacements = validateTextEdits(edits);
+    return this.exclusive(async () => {
+      this.assertWritable();
+      const fingerprint = await this.workspace.git.revision(
+        this.codec.encodeText(JSON.stringify({ path, expectedRevision, edits: replacements })),
+      );
+      const previous = await this.repository.write(this.proposal.id + ':' + invocation);
+      if (previous) {
+        if (previous.fingerprint !== fingerprint)
+          throw new AppError('CONFLICT', '提案调用与原始精确替换不匹配。');
+        if (previous.phase !== 'recorded' || !previous.candidateSnapshot)
+          throw new AppError('STORAGE', '提案写入回执需要恢复，请重新打开应用。');
       }
+      const tree = await this.workspace.git.tree(
+        this.proposal.projectId,
+        previous?.previousSnapshot ?? this.proposal.candidateSnapshot,
+      );
+      const before = tree[path];
+      if (!before) throw new AppError('VALIDATION', '候选文件不存在，请使用 write_text 新建文件。');
+      validateText(before);
+      if ((await this.workspace.git.revision(before)) !== expectedRevision)
+        throw new AppError(
+          'CONFLICT',
+          'VERSION_CONFLICT：候选文件已变化，请重新读取后重新规划替换。',
+        );
+      const source = this.codec.decodeText(before);
+      const plan = applyTextEdits(source, replacements);
+      const after = this.codec.encodeText(plan.text);
+      validateText(after);
+      const revision = await this.workspace.git.revision(after);
+      if (previous) {
+        const saved = await this.workspace.git.entries(
+          this.proposal.projectId,
+          previous.candidateSnapshot!,
+        );
+        if (saved.find(file => file.path === path)?.revision !== revision)
+          throw new AppError('STORAGE', '精确替换提案回执与候选结果不一致。');
+      } else {
+        tree[path] = after;
+        await this.persistChange(invocation, tree, [path], fingerprint);
+      }
+      return {
+        revision,
+        changed: source !== plan.text,
+        replayed: !!previous,
+        changes: plan.changes,
+      };
     });
   }
   async close(state: RunState) {
@@ -183,10 +268,32 @@ export class ProposalOverlay {
 
       defineTool({
         effect: 'workspace-write',
-        name: 'write_text',
-        label: '修改隔离提案',
+        name: 'edit_text',
+        label: '精确修改隔离提案',
         description:
-          '只在授权路径修改隔离候选 UTF-8 文本，支持代码、配置和无扩展名文件。使用候选修订号；创建为 null。不会改变真实工作区、index 或 HEAD。',
+          '只修改授权路径的隔离候选，不改变真实工作区、index 或 HEAD。' + editTextDescription,
+        parameters: editTextParameters,
+        executionMode: 'sequential',
+        execute: async (callId, args, signal) => {
+          assertRunning(signal);
+          return textEditResult(
+            args.path,
+            await this.editText(
+              round() + ':' + callId,
+              args.path,
+              args.edits,
+              args.expectedRevision,
+            ),
+            this.proposal.id,
+          );
+        },
+      }),
+      defineTool({
+        effect: 'workspace-write',
+        name: 'write_text',
+        label: '提案写入全文',
+        description:
+          '只在授权路径新建或整体重写隔离候选 UTF-8 文本。局部修改使用 edit_text，不能因精确替换失败而自动覆盖全文。整体重写须读取完整原文并使用候选修订号；创建为 null。不会改变真实工作区、index 或 HEAD。',
         parameters: Type.Object(
           {
             path: Type.String({ maxLength: 220 }),

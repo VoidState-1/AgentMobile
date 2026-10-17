@@ -17,12 +17,75 @@ const gate = () => {
   });
   return { promise, release };
 };
-const revision = (body: any) =>
-  body.messages
-    .filter((message: any) => message.role === 'tool')
-    .reverse()
-    .map((message: any) => JSON.parse(message.content))
-    .find((result: any) => result.revision)?.revision;
+const revision = (body: any) => {
+  for (const message of [...body.messages].reverse()) {
+    if (message.role !== 'tool') continue;
+    try {
+      const result = JSON.parse(message.content);
+      if (typeof result.revision === 'string') return result.revision;
+    } catch {
+      // Failed tools return human-readable errors rather than successful JSON receipts.
+    }
+  }
+  throw new Error('模拟模型缺少可用的文件修订回执。');
+};
+
+test('批量替换失败不落部分结果，重读修正后实时刷新且重开保留', async ({ page }) => {
+  await page.goto('/');
+  await project(page, '精确替换纠错');
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
+  await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
+  await page.getByRole('button', { name: '编辑', exact: true }).click();
+  await page
+    .getByLabel('正文', { exact: true })
+    .fill('# 标题\n第一处旧内容。\n保留行。\n第二处旧内容。\n');
+  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭文件', exact: true }).click();
+  await configureModel(page);
+  const repair = gate();
+  let requests = 0;
+  await page.route('https://example.test/v1/chat/completions', async route => {
+    const body = route.request().postDataJSON();
+    const round = ++requests;
+    if (round === 3) await repair.promise;
+    const events =
+      round === 1 || round === 3
+        ? toolEvents('chat-completions', 'read_text', { path: 'documents/notes.md' })
+        : round === 2 || round === 4
+          ? toolEvents('chat-completions', 'edit_text', {
+              path: 'documents/notes.md',
+              expectedRevision: revision(body),
+              edits: [
+                { oldText: '第一处旧内容', newText: '第一处新内容' },
+                { oldText: round === 2 ? '不存在的内容' : '第二处旧内容', newText: '第二处新内容' },
+              ],
+            })
+          : answerEvents('chat-completions', '已完成两处精确修改。');
+    if (round < 5) (events[0] as any).choices[0].delta.tool_calls[0].id = 'edit-call-' + round;
+    await route.fulfill({ contentType: 'text/event-stream', body: sse(events) });
+  });
+  await page.getByLabel('任务目标', { exact: true }).fill('修改两处内容');
+  await page.getByRole('button', { name: '发送任务', exact: true }).click();
+  await expect.poll(() => requests).toBe(3);
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
+  await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
+  await expect(page.getByText('第一处旧内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText('第二处旧内容。', { exact: true })).toBeVisible();
+  repair.release();
+  await expect(page.getByText('第一处新内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText('第二处新内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText('保留行。', { exact: true })).toBeVisible();
+  await page.getByRole('button', { name: '关闭文件', exact: true }).click();
+  await page.getByRole('tab', { name: '对话', exact: true }).click();
+  await expect(page.getByText('已完成两处精确修改。', { exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: '文件', exact: true }).click();
+  await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
+  await expect(page.getByText('第一处新内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText('第二处新内容。', { exact: true })).toBeVisible();
+  await expect(page.getByText('保留行。', { exact: true })).toBeVisible();
+});
 
 test('发送后立即切到资料，启动完成不会把导航切回会话', async ({ page }) => {
   await page.goto('/');
@@ -75,9 +138,12 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
             expectedRevision: null,
           })
         : round === 2
-          ? toolEvents('chat-completions', 'write_text', {
+          ? toolEvents('chat-completions', 'edit_text', {
               path: 'documents/live.md',
-              text: '实时内容第二版。',
+              edits: [
+                { oldText: '第一版', newText: '第二版' },
+                { oldText: '。', newText: '！' },
+              ],
               expectedRevision: revision(body),
             })
           : round === 3
@@ -109,7 +175,7 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
   ).toBeVisible();
   holds[0].release();
   await expect.poll(() => requests).toBe(3);
-  await expect(page.getByText('实时内容第二版。', { exact: true })).toBeVisible();
+  await expect(page.getByText('实时内容第二版！', { exact: true })).toBeVisible();
   await expect(page.getByText('实时内容第一版。', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'work/workspace-live-reading.png' });
   await page.getByRole('tab', { name: 'Git', exact: true }).click();

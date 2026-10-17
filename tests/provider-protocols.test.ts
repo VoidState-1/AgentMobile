@@ -95,6 +95,48 @@ describe.each(protocols)('%s 原生协议模拟', protocol => {
     expect(limited.stopReason).toBe('length');
     expect(limited.content.some(p => p.type === 'toolCall')).toBe(false);
   });
+  it('Pi 经原生协议执行批量精确替换，工具结果携带新修订和局部摘要', async () => {
+    const storage = await testStorage();
+    cleanups.push(storage.cleanup);
+    const workspace = createWorkspace(storage.files, storage.metadata, randomUUID);
+    const project = await workspace.create('协议精确编辑');
+    const path = 'src/main.ts';
+    await workspace.write(
+      project.id,
+      path,
+      contentCodec.encodeText('const first = 1;\nconst second = 2;\n'),
+      null,
+    );
+    const before = await workspace.readText(project.id, path);
+    const bodies: any[] = [];
+    vi.stubGlobal('fetch', async (_url: string, init: RequestInit) => {
+      bodies.push(JSON.parse(String(init.body)));
+      return streamed(
+        bodies.length === 1
+          ? toolEvents(protocol, 'edit_text', {
+              path,
+              expectedRevision: before.revision,
+              edits: [
+                { oldText: 'first = 1', newText: 'first = 10' },
+                { oldText: 'second = 2', newText: 'second = 20' },
+              ],
+            })
+          : answerEvents(protocol, '已完成两处修改。'),
+      );
+    });
+    const task = await startTestRun(workspace, project.id, '修改两个常量', {
+      model: snapshot(protocol),
+      secret: 'fixture',
+    });
+    expect((await task.done).state).toBe('completed');
+    expect((await workspace.readText(project.id, path)).text).toBe(
+      'const first = 10;\nconst second = 20;\n',
+    );
+    expect(bodies).toHaveLength(2);
+    expect(JSON.stringify(bodies[1])).toContain('editCount');
+    expect((await workspace.readText(project.id, path)).revision).not.toBe(before.revision);
+  });
+
   it('Pi 工具循环写入 Git，参数与认证进入正确字段，签名跨轮回传', async () => {
     const storage = await testStorage();
     cleanups.push(storage.cleanup);

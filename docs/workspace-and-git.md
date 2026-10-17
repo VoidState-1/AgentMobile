@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                            |
 | -------- | ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 1.3.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：补充批量精确替换契约、差异摘要、请求指纹及中断重试。              |
 | 1.2.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：取消文本扩展名白名单，统一 UTF-8/NUL 校验、重命名与隔离提案边界。 |
 | 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的真实分支、类型化差异范围和任务增删统计。                          |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理路径与修订、文件日志、真实暂存提交、任务撤销和快照语义。                        |
@@ -23,6 +24,31 @@
 文件 revision 是标准 Git blob OID，按实际 bytes 计算。新建 expectedRevision=null 表示目标必须不存在；已有文件修改/删除/移动必须带当前 revision。相同大小/mtime 不代表内容相同；目录视图缓存用 Web contentVersion 或原生 contentStamp，写前仍读取真实 bytes。
 
 `read_text` 的 offset/length 使用 UTF-16 单位，返回 revision、source、truncated 和 nextOffset。Agent 必须分段读完所需内容后再写；长度限制不是把被截断内容视为完整资料。`list_files` 默认 200、最多 500 条，游标与来源/manifest 绑定；`search_text` 最多返回 100 条匹配。
+
+### 2.1 Agent 批量精确替换
+
+局部修改使用 `edit_text({path, expectedRevision, edits})`。一次调用只编辑一个已有文件，`expectedRevision` 必须来自该来源的读取结果，不能为 null。主任务读取/修改真实工作区；writer 读取/修改其授权候选树。核心算法位于 [edits](../src/core/workspace/edits.ts)，两条执行路径共用。
+
+```json
+{
+  "path": "src/main.ts",
+  "expectedRevision": "读取返回的实际 revision",
+  "edits": [
+    { "oldText": "const first = 1;", "newText": "const first = 10;" },
+    { "oldText": "const second = 2;", "newText": "const second = 20;" }
+  ]
+}
+```
+
+- 每批 1–100 项，所有 oldText/newText 合计最多 240,000 UTF-16 单位；结果仍受 1 MiB UTF-8 文本限制。
+- oldText 非空，必须在同一份原始内容中精确且唯一匹配，包括对自身重叠出现的检查；各项范围不能重复、相交或嵌套。新文本不参与后续匹配，数组次序不影响定位。
+- newText 为空表示删除；插入通过把唯一原文锚点包含在 oldText/newText 中表达。允许相邻替换；全部校验通过后才保存一次文件操作意图，不逐项落盘。
+- 不做模糊匹配、Unicode 归一化或换行转换，保留未修改部分的 BOM、缩进、CRLF/LF、中文及 emoji。NUL 和不完整 Unicode 字符被拒绝。
+- 无匹配、多处匹配、范围重叠、版本过期、文件不存在、越权或结果超限均返回工具错误。模型应重新读取并调整替换，不能自动降级为全文覆盖。
+- 返回 saved、revision、changed、replayed、editCount 与 changes。changes 按原文位置排列，含原请求项号、原文起始行、before/after 预览；最多 20 项、预览正文合计最多 6,000 UTF-16 单位，每侧最多 200，截断由 truncated 标明，不影响实际编辑。
+- 相同运行/轮次/callId 重试必须与原请求指纹一致；回执会返回当时的结果及 `replayed=true`，不重新匹配当前文件、不覆盖后续修改。此时 revision 是原调用结果，继续编辑须重新读取当前修订。无变化替换也保存回执，changed 为 false。
+
+`write_text` 继续用于新建和整体重写，整体重写需要完整原文及当前修订。界面编辑器保存用户输入仍使用原有 write 用例，不经过模型精确替换。局部编辑的底层完整 before/after 日志与恢复机制沿用，减少的是模型传输内容，不承诺跨 Git/业务数据库事务或多文件原子编辑。
 
 ## 3. 项目队列与占用
 
@@ -47,7 +73,7 @@ MutationCoordinator 持有每项目 SerialQueue、运行 owner 和恢复 blocked
 
 恢复读实际 before/after：等于 after 则跳过重复效果，等于 before 则继续，第三种内容则阻断。operation ID 不能用不同参数重试。commit 意图将 `AgentMobile-Operation: <id>` 放进提交说明，恢复可查到已生成提交并避免重复公开提交。
 
-幂等范围是已经保存的 operation 意图及对应恢复。write_text 使用 run/round/callId 形成稳定操作 ID；当前普通 remove/move 用例内部生成新 ID，公共 WorkspaceApi 也不提供调用者通用幂等键。因此不能对所有新发起的文件命令承诺重复调用无效果；错误后先读当前状态，不能无条件自动重试。
+幂等范围是已经保存的 operation 意图及对应恢复。write_text 与 edit_text 使用 run/round/callId 形成稳定操作 ID；edit_text 另将路径、基础修订和整批替换的请求指纹写入操作正文，以原始 before/after 校验回执，重试不重新编辑当前内容；当前普通 remove/move 用例内部生成新 ID，公共 WorkspaceApi 也不提供调用者通用幂等键。因此不能对所有新发起的文件命令承诺重复调用无效果；错误后先读当前状态，不能无条件自动重试。
 
 recorded 与必要项目元数据写入成功后，才发送 `{projectId,paths,commit}` 变更通知。commit 字段表示通知时的公开 HEAD，**不表示每次文件操作生成了公开提交**。UI 据此实时刷新文件，无需等待完整 Agent 结束。
 
@@ -115,7 +141,7 @@ checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字�
 
 ## 10. 验证入口
 
-[text-files.test](../tests/text-files.test.ts)、[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts) 与 [通用文本 E2E](../tests/e2e/text-files.spec.ts)。
+[text-edits.test](../tests/text-edits.test.ts)、[text-edit-tools.test](../tests/text-edit-tools.test.ts)、[text-files.test](../tests/text-files.test.ts)、[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts) 与 [通用文本 E2E](../tests/e2e/text-files.spec.ts)。
 
 ## 分支与任务差异摘要
 

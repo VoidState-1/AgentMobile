@@ -5,6 +5,7 @@ import type { RunToolsContext } from './context';
 import { defineTool, assertRunning, result, textLimit, revision } from './common';
 import { isImage } from '@/core/workspace/path';
 import { fileReadTools, scopedFileReader } from './file-read';
+import { editTextDescription, editTextParameters, textEditResult } from './text-edit';
 
 export function workspaceTools(context: RunToolsContext): ControlledTool[] {
   const { workspace, projectId, runId, codec, settings } = context;
@@ -26,10 +27,32 @@ export function workspaceTools(context: RunToolsContext): ControlledTool[] {
 
     defineTool({
       effect: 'workspace-write',
+      name: 'edit_text',
+      label: '精确修改文字',
+      description: editTextDescription,
+      parameters: editTextParameters,
+      executionMode: 'sequential',
+      execute: async (callId, args, signal) => {
+        assertRunning(signal);
+        const outcome = await workspace.editText(
+          projectId,
+          args.path,
+          args.edits,
+          args.expectedRevision,
+          {
+            owner: runId,
+            operationId: runId + '-' + context.round() + '-' + callId,
+          },
+        );
+        return textEditResult(args.path, outcome);
+      },
+    }),
+    defineTool({
+      effect: 'workspace-write',
       name: 'write_text',
-      label: '修改文字',
+      label: '写入全文',
       description:
-        '创建或修改 UTF-8 文本，包括代码、配置及无扩展名文件，不执行代码。修改必须使用读取时的修订号；创建使用 null。',
+        '新建或整体重写 UTF-8 文本，包括代码、配置及无扩展名文件，不执行代码。局部修改优先使用 edit_text，不能因精确替换失败而自动覆盖全文。整体重写必须读取完整原文并使用当前修订号；新建使用 null。',
       parameters: Type.Object(
         {
           path: Type.String({ maxLength: 220 }),

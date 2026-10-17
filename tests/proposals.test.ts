@@ -118,6 +118,106 @@ async function fixture(
   };
 }
 
+it('writer 批量替换使用候选修订和同一原文，整批失败无写入，重试不回滚后续候选', async () => {
+  const source = '\uFEFFconst first = "旧值😀";\r\nconst second = 2;\r\n';
+  const path = 'src/main.ts';
+  const f = await fixture([path], false, async (workspace, id) => {
+    await workspace.write(id, path, contentCodec.encodeText(source), null);
+  });
+  const revision = (await f.workspace.readText(f.project.id, path)).revision;
+  const edit = f.tools.find(tool => tool.name === 'edit_text')!;
+  const args = {
+    path,
+    expectedRevision: revision,
+    edits: [
+      { oldText: '旧值😀', newText: '新值😀' },
+      { oldText: 'second = 2', newText: 'second = 3' },
+    ],
+  };
+  const rejected = await edit.execute('invalid', {
+    ...args,
+    edits: [args.edits[0], { oldText: 'missing', newText: 'x' }],
+  });
+  expect(rejected.isError).toBe(true);
+  expect(await f.proposals.repository.writes()).toHaveLength(0);
+  expect((await edit.execute('outside', { ...args, path: 'outside.ts' })).isError).toBe(true);
+  const result = await edit.execute('edit', args);
+  expect(result.isError).not.toBe(true);
+  const outcome = JSON.parse(result.content[0].type === 'text' ? result.content[0].text : '{}');
+  expect(outcome).toMatchObject({ isolated: true, replayed: false, editCount: 2 });
+  const changed = source.replace('旧值😀', '新值😀').replace('second = 2', 'second = 3');
+  expect((await f.workspace.readText(f.project.id, path)).text).toBe(source);
+  const current = f.overlay.snapshot().candidateSnapshot;
+  expect(contentCodec.decodeText(await f.workspace.git.readAt(f.project.id, current, path))).toBe(
+    changed,
+  );
+  await f.write(path, changed + '// 后续候选\r\n', outcome.revision, 'later');
+  const latest = f.overlay.snapshot().candidateSnapshot;
+  const replay = await edit.execute('edit', args);
+  expect(replay.isError).not.toBe(true);
+  expect(JSON.parse(replay.content[0].type === 'text' ? replay.content[0].text : '{}')).toEqual({
+    ...outcome,
+    replayed: true,
+  });
+  expect(f.overlay.snapshot().candidateSnapshot).toBe(latest);
+  expect(
+    (await edit.execute('edit', { ...args, edits: [{ oldText: source, newText: changed }] }))
+      .isError,
+  ).toBe(true);
+  expect(await f.proposals.repository.writes()).toHaveLength(2);
+  await f.ready();
+  expect((await f.proposals.apply('root', f.overlay.id)).applied).toBe(true);
+  expect((await f.workspace.readText(f.project.id, path)).text).toBe(changed + '// 后续候选\r\n');
+});
+
+it('writer 批量替换回执中断时采用完整候选检查点恢复，不重放编辑或修改真实工作区', async () => {
+  const f = await fixture();
+  const batch = f.metadata.batch!;
+  f.metadata.batch = async entries => {
+    if (entries.some(entry => entry.bucket === 'proposal-writes'))
+      throw new Error('edit receipt interrupted');
+    await batch(entries);
+  };
+  const result = await f.tools
+    .find(tool => tool.name === 'edit_text')!
+    .execute('edit-recover', {
+      path: 'documents/notes.md',
+      expectedRevision: f.original.revision,
+      edits: [
+        { oldText: '我的资料', newText: '恢复后的标题' },
+        { oldText: '在这里写下你的想法', newText: 'PRIVATE_EDIT_AFTER' },
+      ],
+    });
+  expect(result.isError).toBe(true);
+  expect(JSON.stringify(await f.metadata.all('proposal-writes'))).not.toContain(
+    'PRIVATE_EDIT_AFTER',
+  );
+  await expect(f.overlay.close('completed')).rejects.toMatchObject({ code: 'STORAGE' });
+  f.metadata.batch = batch;
+  await f.proposals.recover();
+  await recoverRuns(
+    f.runs,
+    f.workspace,
+    [],
+    async id => (await f.proposals.repository.get(id))?.candidateSnapshot,
+  );
+  const proposal = (await f.proposals.repository.get(f.overlay.id))!;
+  expect(proposal.state).toBe('interrupted');
+  expect(
+    contentCodec.decodeText(
+      await f.workspace.git.readAt(f.project.id, proposal.candidateSnapshot, 'documents/notes.md'),
+    ),
+  ).toBe(
+    f.original.text
+      .replace('我的资料', '恢复后的标题')
+      .replace('在这里写下你的想法', 'PRIVATE_EDIT_AFTER'),
+  );
+  expect((await f.workspace.readText(f.project.id, 'documents/notes.md')).text).toBe(
+    f.original.text,
+  );
+  expect((await f.proposals.repository.writes()).map(write => write.phase)).toEqual(['recorded']);
+});
+
 it('writer 可隔离创建、移动和合入代码及无扩展名文本，二进制与未授权写入不产生回执', async () => {
   const f = await fixture(['src/main.ts', 'src/main.mjs', 'Dockerfile']);
   const head = await f.workspace.git.head(f.project.id);

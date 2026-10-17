@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                     |
 | -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| 2.1.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：记录精确替换请求指纹、回执重建与候选检查点恢复。           |
 | 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录 f5、物理版本 6、Run schema 4 与移除执行模式索引字段。 |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 记录当前数据格式、数据库布局、事务边界、启动恢复与开发重建。                 |
 
@@ -82,7 +83,7 @@ Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是 Host
 
 ## 6. 同数据库原子边界
 
-`prepareOperation` 原子保存 operation body/header，并分配 scope sequence。相同 ID 与相同不可变意图可复用；意图不匹配返回 CONFLICT。
+`prepareOperation` 原子保存 operation body/header，并分配 scope sequence。精确替换仍使用 files 操作，OperationBody 的 textEditFingerprint 保存路径、基础 revision 与整批替换参数的请求指纹，并纳入 bodyFingerprint 校验；该字段不进入 header 或 UI 操作摘要。重试核对指纹及 owner/path，以日志 before 重建并验证 after，recorded 回执直接返回原结果，不重新改写当前文件。这里增加的是编辑操作正文元数据，不新增 SQL/IDB stores 或历史格式读取分支。相同 ID 与相同不可变意图可复用；意图不匹配返回 CONFLICT。
 
 `writeBusiness` 可以一次原子写入元数据、OperationHeader 更新、RunHeader/Input/Result 更新、TraceNode/Chunk/Frame。典型场景包括：
 

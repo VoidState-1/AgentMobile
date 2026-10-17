@@ -63,11 +63,12 @@ describe('执行轨迹的展示分组', () => {
         'search_text',
         'inspect_image',
         'write_text',
+        'edit_text',
         'git_commit',
         'load_skill',
         'spawn_agent',
         'remote_service',
       ].map(toolCategory),
-    ).toEqual(['read', 'search', 'image', 'write', 'git', 'skill', 'agent', 'remote']);
+    ).toEqual(['read', 'search', 'image', 'write', 'write', 'git', 'skill', 'agent', 'remote']);
   });
 });

@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                   |
 | -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| 2.2.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：区分 Agent editText 内部用例和界面全文保存接口。         |
 | 2.1.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：补充通用文本写入、预览、移动和任意类型选择器的校验契约。 |
 | 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：删除 setMode，增加带配置修订校验的供应商排序接口。       |
 | 1.2.0    | 2026-10-16T22:42:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 补充尚未提交源码的 prepareIcon、连接 icon 和图片选择参数。                 |
@@ -46,6 +47,8 @@
 | `subscribe / recoveryIssues`      | 已记录修改通知、启动恢复问题                                                   |
 
 `workspace.write` 的非图片内容必须是有效 UTF-8 且不含 NUL，最多 1 MiB，不限扩展名；代码、配置及无扩展名文件与普通文本使用相同修订和日志语义。`preview` 在解码非图片前执行同样校验。无效内容返回 VALIDATION，超限返回 LIMIT。移动可改变文本扩展名，但图片只能保持同一格式，文本与图片不能互相转换。
+
+Agent 的 edit_text 通过内部 WorkspaceApplication.editText 调用批量替换；它不加入 AppServices.workspace 的 UI API。界面仍通过 workspace.write 保存完整输入。editText 的请求指纹属于操作正文，公开操作摘要不暴露替换输入或完整 before/after；模型工具结果只返回新修订及有界变化预览。
 
 `WorkspaceSnapshot.operations` 只含 ID、归属、阶段和路径摘要，不含 Base64 before/after 正文。`write/remove/move` 返回的字符串可能为内部 checkpoint，无变化时也可能为 HEAD，不能拿它直接渲染“已提交”。公开版本来自 `head/historyPage/commitStaged`。
 

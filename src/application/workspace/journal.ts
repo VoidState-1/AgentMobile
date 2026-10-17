@@ -58,7 +58,12 @@ export class OperationJournal {
     return { ...header, ...body };
   }
   async save(operation: Operation, metadata?: readonly MetadataEntry[]): Promise<void> {
-    const { changes: _changes, indexChanges: _indexChanges, ...header } = operation;
+    const {
+      changes: _changes,
+      indexChanges: _indexChanges,
+      textEditFingerprint: _textEditFingerprint,
+      ...header
+    } = operation;
     const next = { ...header, revision: header.revision + 1 };
     await this.store.writeBusiness({
       operations: [{ header: next, expectedRevision: header.revision }],

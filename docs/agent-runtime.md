@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                          |
 | -------- | ------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| 1.2.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：增加 edit_text，明确局部修改策略、授权效果和有界结果。          |
 | 1.1.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：主任务与 writer 支持通用 UTF-8 文本，明确内容校验和不执行代码。 |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 描述 Pi 边界、运行状态、调度预算、停止语义与隔离提案。                            |
 
@@ -129,7 +130,9 @@ ControlledTool 必须声明 effect：read、workspace-write、git-index、git-co
 | reviewer | snapshot 固定资料快照 | read                  | 不可 |
 | writer   | proposal 私有候选树   | read、workspace-write | 不可 |
 
-文件工具：list_files/read_text/search_text/inspect_image/write_text/delete_file/move_file。write_text 整文件写回 UTF-8 文本，不限扩展名，仍要求当前修订号（创建为 null）；主工作区和隔离提案均在记录操作意图前拒绝含 NUL 或无效 UTF-8 内容，1 MiB 文件与 240,000 UTF-16 工具输入限制继续适用。默认系统提示词允许编写代码和配置，但不授予执行能力。Git：git_status/git_diff/git_stage/git_unstage/git_commit；Skills：load_skill/read_skill_resource；MCP：由冻结目录生成 `mcp_<serverIndex>_<toolIndex>`；委派工具见下文。模型图片工具只有允许图片输入时才提供或转发。
+文件工具：list_files/read_text/search_text/inspect_image/edit_text/write_text/delete_file/move_file。edit_text 是已有文本局部修改的默认工具，要求同一修订的批量唯一/不重叠精确替换；write_text 用于新建或整体重写，仍要求当前修订号（创建为 null）。两者均为 workspace-write，writer 仅作用于授权候选；主工作区和隔离提案均在记录操作意图前拒绝含 NUL 或无效 UTF-8 内容，1 MiB 文件与 240,000 UTF-16 工具输入限制继续适用。默认系统提示词允许编写代码和配置，但不授予执行能力。Git：git_status/git_diff/git_stage/git_unstage/git_commit；Skills：load_skill/read_skill_resource；MCP：由冻结目录生成 `mcp_<serverIndex>_<toolIndex>`；委派工具见下文。模型图片工具只有允许图片输入时才提供或转发。
+
+宿主规则要求局部修改使用 edit_text；工具错误后重新读取和规划，不自动改成全文覆盖。两种工作区共用 [替换算法](../src/core/workspace/edits.ts)、[schema 与结果摘要](../src/application/tools/text-edit.ts)，结果中的 replayed 表示原调用回执，后续修改须读取当前修订。完整参数、限制、错误与格式保留语义见 [工作区批量替换](workspace-and-git.md#21-agent-批量精确替换)。
 
 系统提示词、技能 allowed-tools、远程工具说明与子任务返回内容不授予额外 effect。代码级控制与提示约束都要维护，不能只让模型“自行遵守”。
 
