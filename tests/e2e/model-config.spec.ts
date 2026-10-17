@@ -79,11 +79,9 @@ for (const protocol of protocols)
         ),
       ).toBeVisible();
     }
-    await expect(page.getByText(/^依据：实测通过/)).toHaveCount(2);
     await page.getByLabel('最大输出 tokens', { exact: true }).fill('512');
     await page.getByRole('button', { name: '保存模型', exact: true }).click();
     await expect(page.getByText('模型配置已保存。', { exact: true })).toBeVisible();
-    await expect(page.getByText(/^依据：实测通过/)).toHaveCount(2);
     await returnToWorkbench(page);
     await page.getByLabel('任务目标', { exact: true }).fill('创建一份文档');
     await page.getByRole('button', { name: '发送任务', exact: true }).click();
@@ -148,7 +146,7 @@ test('两份连接不串密钥，收藏搜索、复制、未保存保护与刷�
   await openModels(page);
   await addConnection(page, '工作连接', 'chat-completions', 'fixture-B');
   await addModel(page, '工作模型');
-  await page.getByRole('switch', { name: '收藏模型', exact: true }).click();
+  await page.getByRole('button', { name: '收藏模型', exact: true }).click();
   await page.getByRole('button', { name: '保存模型', exact: true }).click();
   await returnToWorkbench(page);
   await page.getByRole('button', { name: '模型设置', exact: true }).click();

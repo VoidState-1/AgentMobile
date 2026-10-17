@@ -36,6 +36,7 @@ export { default as Search } from 'lucide-react-native/icons/search';
 export { default as Settings2 } from 'lucide-react-native/icons/settings-2';
 export { default as ShieldCheck } from 'lucide-react-native/icons/shield-check';
 export { default as Sparkles } from 'lucide-react-native/icons/sparkles';
+export { default as Star } from 'lucide-react-native/icons/star';
 export { default as Square } from 'lucide-react-native/icons/square';
 export { default as Sun } from 'lucide-react-native/icons/sun';
 export { default as Trash2 } from 'lucide-react-native/icons/trash';

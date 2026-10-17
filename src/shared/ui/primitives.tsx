@@ -391,14 +391,19 @@ export function Field({
             alignItems: 'center',
             minHeight: 48,
             gap: 10,
-            borderBottomWidth: 1,
-            borderBottomColor: focused ? theme.accent : error ? theme.danger : theme.border,
           }}
         >
           <T numberOfLines={1} variant="caption" style={{ width: 72, color: theme.secondary }}>
             {label}
           </T>
-          <View style={{ flex: 1, minWidth: 0 }}>
+          <View
+            style={{
+              flex: 1,
+              minWidth: 0,
+              borderBottomWidth: 1,
+              borderBottomColor: focused ? theme.accent : error ? theme.danger : 'transparent',
+            }}
+          >
             {input}
             {trailingControl}
           </View>

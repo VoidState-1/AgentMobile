@@ -23,6 +23,7 @@ import {
   Upload,
   X,
 } from '@/shared/ui/icons';
+import { PageMenu } from '@/shared/ui/page-menu';
 import { Button, Field, IconButton, Input, T } from '@/shared/ui/primitives';
 import { SegmentedControl, ViewTabs } from '@/shared/ui/selection';
 import { ConfirmSheet } from '@/shared/ui/sheets';
@@ -509,63 +510,61 @@ function ConnectionEditor({
               </>
             )}
 
-            <View style={{ borderBottomWidth: 1, borderColor: theme.border }}>
-              <DisclosureRow
-                label="高级设置"
-                expanded={advanced}
-                disabled={busy}
-                onPress={() => setAdvanced(current => !current)}
-              >
-                <T style={styles.disclosureTitle}>高级设置</T>
-              </DisclosureRow>
-              {advanced && (
-                <View style={styles.advanced}>
+            <DisclosureRow
+              label="高级设置"
+              expanded={advanced}
+              disabled={busy}
+              onPress={() => setAdvanced(current => !current)}
+            >
+              <T style={styles.disclosureTitle}>高级设置</T>
+            </DisclosureRow>
+            {advanced && (
+              <View style={styles.advanced}>
+                <SegmentedControl
+                  label="通信协议"
+                  value={draft.protocol}
+                  disabled={busy}
+                  options={Object.entries(protocolNames).map(([value, label]) => ({
+                    value: value as Draft['protocol'],
+                    label,
+                  }))}
+                  onChange={changeProtocol}
+                />
+                {draft.protocol === 'chat-completions' && (
                   <SegmentedControl
-                    label="通信协议"
-                    value={draft.protocol}
+                    label="认证方式"
+                    value={draft.auth}
                     disabled={busy}
-                    options={Object.entries(protocolNames).map(([value, label]) => ({
-                      value: value as Draft['protocol'],
-                      label,
-                    }))}
-                    onChange={changeProtocol}
+                    options={[
+                      { value: 'key', label: 'API Key' },
+                      { value: 'none', label: '无需认证' },
+                    ]}
+                    onChange={changeAuth}
                   />
-                  {draft.protocol === 'chat-completions' && (
-                    <SegmentedControl
-                      label="认证方式"
-                      value={draft.auth}
-                      disabled={busy}
-                      options={[
-                        { value: 'key', label: 'API Key' },
-                        { value: 'none', label: '无需认证' },
-                      ]}
-                      onChange={changeAuth}
-                    />
-                  )}
-                  {draft.protocol === 'chat-completions' && (
-                    <SegmentedControl
-                      label="兼容特性"
-                      value={draft.compatibility}
-                      disabled={busy}
-                      options={[
-                        { value: 'standard', label: '标准兼容' },
-                        { value: 'deepseek', label: 'DeepSeek' },
-                      ]}
-                      onChange={compatibility => update({ compatibility })}
-                    />
-                  )}
-                  {draft.protocol === 'anthropic-messages' && (
-                    <Field
-                      inline
-                      label="API 版本"
-                      value={draft.apiVersion}
-                      editable={!busy}
-                      onChangeText={apiVersion => update({ apiVersion })}
-                    />
-                  )}
-                </View>
-              )}
-            </View>
+                )}
+                {draft.protocol === 'chat-completions' && (
+                  <SegmentedControl
+                    label="兼容特性"
+                    value={draft.compatibility}
+                    disabled={busy}
+                    options={[
+                      { value: 'standard', label: '标准兼容' },
+                      { value: 'deepseek', label: 'DeepSeek' },
+                    ]}
+                    onChange={compatibility => update({ compatibility })}
+                  />
+                )}
+                {draft.protocol === 'anthropic-messages' && (
+                  <Field
+                    inline
+                    label="API 版本"
+                    value={draft.apiVersion}
+                    editable={!busy}
+                    onChangeText={apiVersion => update({ apiVersion })}
+                  />
+                )}
+              </View>
+            )}
 
             {savedConnection && (
               <View style={[styles.modelsHeader, { borderColor: theme.border }]}>
@@ -674,52 +673,27 @@ function ConnectionEditor({
           />
         )}
       />
-      {menuOpen && (
-        <>
-          <Pressable
-            accessible={false}
-            style={StyleSheet.absoluteFill}
-            onPress={() => setMenuOpen(false)}
-          />
-          <View
-            style={[styles.menu, { backgroundColor: theme.surface, borderColor: theme.border }]}
-          >
-            {!!draft.icon && (
-              <ActionRow
-                label="恢复默认供应商图标"
-                title="恢复默认供应商图标"
-                disabled={busy}
-                onPress={() => {
-                  setMenuOpen(false);
-                  update({ icon: undefined });
-                }}
-              />
-            )}
-            {!!savedConnection && (
-              <>
-                <ActionRow
-                  label="复制连接"
-                  title="复制连接"
-                  disabled={busy || dirty}
-                  onPress={() => {
-                    setMenuOpen(false);
-                    copy();
-                  }}
-                />
-                <ActionRow
-                  label="删除连接"
-                  title="删除连接"
-                  disabled={busy}
-                  onPress={() => {
-                    setMenuOpen(false);
-                    setDeleting(true);
-                  }}
-                />
-              </>
-            )}
-          </View>
-        </>
-      )}
+      <PageMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          ...(draft.icon
+            ? [
+                {
+                  label: '恢复默认供应商图标',
+                  disabled: busy,
+                  onPress: () => update({ icon: undefined }),
+                },
+              ]
+            : []),
+          ...(savedConnection
+            ? [
+                { label: '复制连接', disabled: busy || dirty, onPress: copy },
+                { label: '删除连接', disabled: busy, onPress: () => setDeleting(true) },
+              ]
+            : []),
+        ]}
+      />
       {toast && <Toast message={toast.message} tone={toast.tone} />}
       {guard.guard}
       <ConfirmSheet
@@ -804,20 +778,4 @@ const styles = StyleSheet.create({
   modelsCount: { marginLeft: 5 },
   search: { paddingBottom: 6 },
   detect: { width: 36, height: 36, alignItems: 'center', justifyContent: 'center' },
-  menu: {
-    position: 'absolute',
-    top: 4,
-    right: 6,
-    width: 220,
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 8,
-    borderWidth: 1,
-    zIndex: 20,
-    elevation: 8,
-    shadowColor: '#000000',
-    shadowOpacity: 0.16,
-    shadowRadius: 12,
-    shadowOffset: { width: 0, height: 6 },
-  },
 });

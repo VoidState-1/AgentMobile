@@ -38,7 +38,8 @@ export async function addConnection(
 }
 export async function addModel(page: Page, name: string, apiId = 'protocol-test', images = false) {
   await page.getByRole('button', { name: '添加模型', exact: true }).click();
-  await page.getByLabel('请求模型 ID', { exact: true }).fill(apiId);
+  await page.getByLabel('请求 ID', { exact: true }).fill(apiId);
+  await page.getByRole('button', { name: '编辑模型名称', exact: true }).click();
   await page.getByLabel('模型显示名', { exact: true }).fill(name);
   if (images) await page.getByRole('switch', { name: '允许图片输入', exact: true }).click();
   await page.getByRole('button', { name: '保存模型', exact: true }).click();

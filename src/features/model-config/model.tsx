@@ -1,4 +1,3 @@
-import { useDraftGuard } from '@/shared/use-draft-guard';
 import { geminiResource } from '@/core/models/model-id';
 import { presetModelEvidence, protocolNames } from '@/core/models/presets';
 import {
@@ -9,29 +8,32 @@ import {
   type ModelEntry,
   type ModelInput,
 } from '@/core/models/types';
+import { useWorkbenchTheme } from '@/shared/theme';
+import { useDraftGuard } from '@/shared/use-draft-guard';
 import { FormFooter } from '@/shared/ui/feedback';
-import { ConfigPage, FormScroll, Loading, NumberField, Section, Toggle } from '@/shared/ui/forms';
-import { OverflowMenu } from '@/shared/ui/menus';
-import { Button, Field, T } from '@/shared/ui/primitives';
+import { ConfigPage, FormScroll, Loading, NumberField, Toggle } from '@/shared/ui/forms';
+import { Check, MoreHorizontal, Pencil, Star } from '@/shared/ui/icons';
+import { PageMenu } from '@/shared/ui/page-menu';
+import { Button, Field, IconButton, Input, T } from '@/shared/ui/primitives';
 import { SegmentedControl } from '@/shared/ui/selection';
 import { ConfirmSheet } from '@/shared/ui/sheets';
 import { useWorkbenchUi } from '@/shared/workbench-state';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useEffect, useRef, useState } from 'react';
-import { View } from 'react-native';
+import { Keyboard, Platform, StyleSheet, Switch, View } from 'react-native';
 import { CheckResult } from './check-result';
+import { ProviderIcon } from './provider-icon';
 import { useModelConfiguration, type ModelConfigurationController } from './use-configuration';
 
-const names: Record<CapabilityName, string> = {
+const capabilityNames: Record<CapabilityName, string> = {
   tools: '工具调用',
   images: '图片理解',
   reasoning: '思考能力',
 };
-const sources = {
-  preset: '预设资料',
-  discovery: '服务目录',
-  user: '用户声明',
-  verified: '实测通过',
+const checkNames: Record<Exclude<CheckKind, 'connection'>, { short: string; label: string }> = {
+  text: { short: '文本', label: '文本检测' },
+  tools: { short: '工具', label: '工具检测' },
+  images: { short: '图片', label: '图片检测' },
 };
 const edit = (model: ModelEntry): ModelInput => ({
   id: model.id,
@@ -47,6 +49,8 @@ const edit = (model: ModelEntry): ModelInput => ({
     reasoning: model.capabilities.reasoning.support,
   },
 });
+
+const nameProblem = (name: string) => (name.trim() ? undefined : '请输入模型显示名。');
 
 export function ModelScreen() {
   const controller = useModelConfiguration();
@@ -77,6 +81,7 @@ export function ModelScreen() {
     />
   );
 }
+
 function ModelEditor({
   controller,
   model,
@@ -88,9 +93,10 @@ function ModelEditor({
 }) {
   const { runtime, config, error, busy, action } = controller;
   const router = useRouter();
+  const theme = useWorkbenchTheme();
   const projectId = useWorkbenchUi(state => state.projectId);
-  const connection = config.connections.find(c => c.id === connectionId)!;
   const conversationId = useWorkbenchUi(state => state.conversationId);
+  const connection = config.connections.find(c => c.id === connectionId)!;
   const initial: ModelInput = model
     ? edit(model)
     : {
@@ -114,16 +120,28 @@ function ModelEditor({
   const revision = useRef(model?.revision);
   const [notice, setNotice] = useState('');
   const [deleting, setDeleting] = useState(false);
+  const [menuOpen, setMenuOpen] = useState(false);
+  const [editingName, setEditingName] = useState(false);
+  const [nameFocused, setNameFocused] = useState(false);
+  const [touched, setTouched] = useState({ name: false, apiId: false });
   const probe = useRef<AbortController | undefined>(undefined);
   const [probing, setProbing] = useState<CheckKind>();
   const dirty = signature(draft, output, temperature) !== saved;
   const guard = useDraftGuard(dirty);
+  const nameError = nameProblem(draft.name);
+  const apiIdError = draft.apiId.trim() ? undefined : '请输入请求模型 ID。';
+  const valid = !nameError && !apiIdError;
   useEffect(() => () => probe.current?.abort(), []);
   const update = (value: Partial<ModelInput>) => {
     setDraft({ ...draft, ...value });
     setNotice('');
   };
   const save = () => {
+    if (!valid) {
+      setTouched({ name: true, apiId: true });
+      return;
+    }
+    setMenuOpen(false);
     void action(async () => {
       if (connection.protocol === 'gemini') geminiResource(draft.apiId);
       const value = await runtime!.models.saveModel(
@@ -150,6 +168,7 @@ function ModelEditor({
       setOutput(String(value.parameters.maxOutputTokens));
       setTemperature(value.parameters.temperature?.toString() ?? '');
       setReasoningBudget(String(value.parameters.reasoningBudget ?? 1024));
+      setEditingName(false);
       setNotice('模型配置已保存。');
       if (!model)
         guard.allow(() =>
@@ -186,360 +205,471 @@ function ModelEditor({
       setNotice('默认选择已更新，下次任务使用此模型。');
     });
   };
+  const restoreDefaults = () => {
+    const tokens = Math.min(
+      defaultModelParameters.maxOutputTokens,
+      model?.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens,
+    );
+    update({ parameters: { ...defaultModelParameters, maxOutputTokens: tokens } });
+    setOutput(String(tokens));
+    setTemperature('');
+    setReasoningBudget('1024');
+  };
   const defaults = [
     config.defaults.global,
     ...Object.values(config.defaults.projects),
     ...Object.values(config.defaults.sessions),
   ].filter(id => id === model?.id).length;
+  const globalDefault = config.defaults.global === model?.id;
+  const projectDefault = !!projectId && config.defaults.projects[projectId] === model?.id;
+  const sessionDefault = !!conversationId && config.defaults.sessions[conversationId] === model?.id;
   const disabled = !model || dirty || busy;
   return (
     <ConfigPage
-      title={model ? model.name : '添加模型'}
-      subtitle={connection.name + ' · ' + protocolNames[connection.protocol]}
+      title={model ? '模型设置' : '添加模型'}
       onBack={() =>
         guard.exit(() => (router.canGoBack() ? router.back() : router.replace('/models')))
+      }
+      action={
+        model ? (
+          <IconButton
+            icon={MoreHorizontal}
+            label="更多操作"
+            selected={menuOpen}
+            disabled={busy}
+            onPress={() => setMenuOpen(current => !current)}
+          />
+        ) : undefined
       }
       footer={
         <FormFooter error={error} notice={notice}>
           <Button
             label="保存模型"
             busy={busy && !probing}
-            disabled={!!probing || (!dirty && !!model)}
+            disabled={!!probing || !valid || (!dirty && !!model)}
             onPress={save}
           />
         </FormFooter>
       }
     >
       <FormScroll>
-        <Section title="模型信息">
-          <Field
-            label="请求模型 ID"
-            value={draft.apiId}
-            editable={!busy}
-            placeholder={
-              connection.protocol === 'gemini' ? 'models/供应商模型名称' : '供应商提供的模型 ID'
-            }
-            onChangeText={apiId => {
-              const evidence = {
-                ...unknownCapabilities(),
-                ...presetModelEvidence(connection.presetId, apiId),
-              };
-              update({
-                apiId,
-                ...(!model
-                  ? { name: draft.name === draft.apiId ? apiId : draft.name || apiId }
-                  : {}),
-                capabilities:
-                  model && apiId === model.apiId
-                    ? edit(model).capabilities
-                    : {
-                        tools: evidence.tools.support,
-                        images: evidence.images.support,
-                        reasoning: evidence.reasoning.support,
-                      },
-              });
-            }}
+        <View style={[styles.identity, { borderColor: theme.border }]}>
+          <ProviderIcon
+            presetId={connection.presetId}
+            baseUrl={connection.baseUrl}
+            icon={connection.icon}
+            size={40}
           />
-          <Field
-            label="模型显示名"
-            value={draft.name}
-            maxLength={100}
-            editable={!busy}
-            onChangeText={name => update({ name })}
-          />
-          <Toggle
-            label="收藏模型"
-            value={draft.favorite}
-            disabled={busy}
-            onChange={favorite => update({ favorite })}
-          />
-          <Toggle
-            label="启用模型"
-            hint={defaults ? '此模型被 ' + defaults + ' 处默认选择引用。' : undefined}
-            value={draft.enabled}
-            disabled={busy}
-            onChange={enabled => update({ enabled })}
-          />
-          {model?.catalog.missing && (
-            <T tone="warning" variant="meta">
-              最近一次服务目录未发现此 ID，仍可手工配置与检测。
-            </T>
-          )}
-        </Section>
-        <Section title="模型能力">
-          {(['tools', 'images', 'reasoning'] as const).map(name => (
-            <View key={name} style={{ gap: 5 }}>
-              <SegmentedControl
-                label={names[name]}
-                value={draft.capabilities[name]}
-                disabled={busy}
-                options={[
-                  { value: 'unknown', label: '未知' },
-                  { value: 'supported', label: '支持' },
-                  { value: 'unsupported', label: '不支持' },
-                ]}
-                onChange={support =>
-                  update({
-                    capabilities: { ...draft.capabilities, [name]: support },
-                    ...(name === 'images' && support === 'unsupported'
-                      ? { parameters: { ...draft.parameters, allowImages: false } }
-                      : {}),
-                  })
-                }
-              />
-              <T tone="muted" variant="meta">
-                依据：
-                {model &&
-                model.apiId === draft.apiId &&
-                model.capabilities[name].support === draft.capabilities[name]
-                  ? sources[model.capabilities[name].source]
-                  : '用户声明'}
-                {model?.apiId === draft.apiId && model?.capabilities[name].checkedAt
-                  ? ' · ' + new Date(model.capabilities[name].checkedAt!).toLocaleDateString()
-                  : ''}
-              </T>
+          <View style={styles.identityBody}>
+            <View style={styles.nameRow}>
+              {editingName ? (
+                <>
+                  <Input
+                    accessibilityLabel="模型显示名"
+                    value={draft.name}
+                    maxLength={100}
+                    editable={!busy}
+                    autoFocus
+                    placeholder="未命名模型"
+                    placeholderTextColor={theme.muted}
+                    returnKeyType="done"
+                    onFocus={() => setNameFocused(true)}
+                    onBlur={() => {
+                      setNameFocused(false);
+                      setTouched(current => ({ ...current, name: true }));
+                      setEditingName(false);
+                    }}
+                    onSubmitEditing={() => {
+                      setEditingName(false);
+                      Keyboard.dismiss();
+                    }}
+                    onChangeText={name => update({ name })}
+                    style={[
+                      styles.nameInput,
+                      { color: theme.text },
+                      nameFocused && { backgroundColor: theme.inset },
+                    ]}
+                  />
+                  <IconButton
+                    icon={Check}
+                    label="完成编辑模型名称"
+                    disabled={busy}
+                    size={32}
+                    onPress={() => {
+                      setEditingName(false);
+                      Keyboard.dismiss();
+                    }}
+                  />
+                </>
+              ) : (
+                <>
+                  <T
+                    accessibilityRole="header"
+                    numberOfLines={1}
+                    style={[
+                      styles.nameText,
+                      { color: draft.name.trim() ? theme.text : theme.muted },
+                    ]}
+                  >
+                    {draft.name.trim() || '未命名模型'}
+                  </T>
+                  <IconButton
+                    icon={Pencil}
+                    label="编辑模型名称"
+                    disabled={busy}
+                    size={32}
+                    onPress={() => setEditingName(true)}
+                  />
+                </>
+              )}
             </View>
-          ))}
-          {draft.capabilities.tools === 'unsupported' && (
-            <T tone="warning" variant="caption">
-              此模型不支持工具，无法执行 Agent 任务。
+            <T numberOfLines={1} tone="muted" variant="meta">
+              {connection.name} · {protocolNames[connection.protocol]}
             </T>
-          )}
-        </Section>
-        <Section
-          title="运行参数"
-          action={
-            <OverflowMenu
-              label="运行参数操作"
+            {!!(nameError && touched.name) && (
+              <T tone="danger" variant="meta">
+                {nameError}
+              </T>
+            )}
+            {!draft.enabled && defaults > 0 && (
+              <T tone="warning" variant="meta">
+                停用后有 {defaults} 处默认选择会失效。
+              </T>
+            )}
+          </View>
+          <IconButton
+            icon={Star}
+            label="收藏模型"
+            selected={draft.favorite}
+            disabled={busy}
+            size={36}
+            onPress={() => update({ favorite: !draft.favorite })}
+          />
+          <View style={[styles.enable, { opacity: busy ? 0.4 : 1 }]}>
+            <T variant="meta" style={{ fontSize: 10 }}>
+              启用
+            </T>
+            <Switch
+              accessibilityLabel="启用模型"
+              value={draft.enabled}
               disabled={busy}
-              items={[
-                {
-                  label: '恢复默认参数',
-                  onPress: () => {
-                    const tokens = Math.min(
-                      defaultModelParameters.maxOutputTokens,
-                      model?.limits?.outputTokens ?? defaultModelParameters.maxOutputTokens,
-                    );
-                    update({ parameters: { ...defaultModelParameters, maxOutputTokens: tokens } });
-                    setOutput(String(tokens));
-                    setTemperature('');
-                    setReasoningBudget('1024');
-                  },
-                },
-              ]}
+              onValueChange={enabled => update({ enabled })}
+              {...(Platform.OS === 'web' ? ({ activeThumbColor: theme.surface } as object) : null)}
+              trackColor={{ true: theme.accent, false: theme.border }}
+              thumbColor={Platform.OS === 'ios' ? undefined : theme.surface}
             />
+          </View>
+        </View>
+
+        <Field
+          inline
+          label="请求 ID"
+          value={draft.apiId}
+          editable={!busy}
+          placeholder={
+            connection.protocol === 'gemini' ? 'models/供应商模型名称' : '供应商提供的模型 ID'
           }
-        >
-          <NumberField
-            label="最大输出"
-            accessibilityLabel="最大输出 tokens"
-            unit="tokens"
-            value={output}
-            keyboardType="number-pad"
-            editable={!busy}
-            onChangeText={setOutput}
-          />
-          <NumberField
-            label="温度"
-            accessibilityLabel="温度（留空采用服务默认）"
-            value={temperature}
-            keyboardType="decimal-pad"
-            editable={!busy}
-            placeholder="默认"
-            onChangeText={setTemperature}
-          />
-          <Toggle
-            label="允许图片输入"
-            value={draft.parameters.allowImages}
-            disabled={busy || draft.capabilities.images === 'unsupported'}
-            onChange={allowImages => update({ parameters: { ...draft.parameters, allowImages } })}
-          />
+          error={touched.apiId ? apiIdError : undefined}
+          onBlur={() => setTouched(current => ({ ...current, apiId: true }))}
+          onChangeText={apiId => {
+            const evidence = {
+              ...unknownCapabilities(),
+              ...presetModelEvidence(connection.presetId, apiId),
+            };
+            update({
+              apiId,
+              ...(!model ? { name: draft.name === draft.apiId ? apiId : draft.name || apiId } : {}),
+              capabilities:
+                model && apiId === model.apiId
+                  ? edit(model).capabilities
+                  : {
+                      tools: evidence.tools.support,
+                      images: evidence.images.support,
+                      reasoning: evidence.reasoning.support,
+                    },
+            });
+          }}
+        />
+        {model?.catalog.missing && (
+          <T tone="warning" variant="meta" style={styles.rowNote}>
+            最近一次服务目录未发现此 ID，仍可手工配置与检测。
+          </T>
+        )}
+
+        {(['tools', 'images', 'reasoning'] as const).map(name => (
           <SegmentedControl
-            label="推理模式"
-            value={draft.parameters.reasoning}
+            key={name}
+            inline
+            label={capabilityNames[name]}
+            value={draft.capabilities[name]}
             disabled={busy}
             options={[
-              { value: 'off', label: '关闭' },
-              { value: 'provider-default', label: '服务默认' },
-              ...(connection.protocol !== 'chat-completions' ||
-              connection.compatibility === 'deepseek'
-                ? [{ value: 'on', label: '开启' }]
-                : []),
+              { value: 'unknown', label: '未知' },
+              { value: 'supported', label: '支持' },
+              { value: 'unsupported', label: '不支持' },
             ]}
-            onChange={reasoning => {
-              if (reasoning !== 'on') setReasoningBudget('1024');
+            onChange={support =>
               update({
-                parameters: {
-                  ...draft.parameters,
-                  reasoning: reasoning as ModelEntry['parameters']['reasoning'],
-                  ...(reasoning !== 'on' ? { reasoningBudget: undefined } : {}),
-                },
-              });
-            }}
+                capabilities: { ...draft.capabilities, [name]: support },
+                ...(name === 'images' && support === 'unsupported'
+                  ? { parameters: { ...draft.parameters, allowImages: false } }
+                  : {}),
+              })
+            }
           />
-          {draft.parameters.reasoning === 'on' && connection.protocol !== 'chat-completions' && (
-            <>
-              <SegmentedControl
-                label="推理参数格式"
-                value={draft.parameters.reasoningStrategy ?? 'budget'}
-                disabled={busy}
-                options={[
-                  { value: 'budget', label: 'Token 预算' },
-                  connection.protocol === 'gemini'
-                    ? { value: 'level', label: '推理等级' }
-                    : { value: 'adaptive', label: '自适应' },
-                ]}
-                onChange={reasoningStrategy => {
-                  setReasoningBudget('1024');
-                  update({
-                    parameters: {
-                      ...draft.parameters,
-                      reasoningStrategy,
-                      reasoningBudget: undefined,
-                    },
-                  });
+        ))}
+        {draft.capabilities.tools === 'unsupported' && (
+          <T tone="warning" variant="meta" style={styles.warning}>
+            此模型不支持工具，无法执行 Agent 任务。
+          </T>
+        )}
+        <View style={[styles.blockDivider, { backgroundColor: theme.border }]} />
+
+        <NumberField
+          label="最大输出"
+          accessibilityLabel="最大输出 tokens"
+          unit="tokens"
+          value={output}
+          keyboardType="number-pad"
+          editable={!busy}
+          onChangeText={setOutput}
+        />
+        <NumberField
+          label="温度"
+          accessibilityLabel="温度（留空采用服务默认）"
+          value={temperature}
+          keyboardType="decimal-pad"
+          editable={!busy}
+          placeholder="默认"
+          onChangeText={setTemperature}
+        />
+        <Toggle
+          label="允许图片输入"
+          value={draft.parameters.allowImages}
+          disabled={busy || draft.capabilities.images === 'unsupported'}
+          onChange={allowImages => update({ parameters: { ...draft.parameters, allowImages } })}
+        />
+        <SegmentedControl
+          inline
+          label="推理模式"
+          value={draft.parameters.reasoning}
+          disabled={busy}
+          options={[
+            { value: 'off', label: '关闭' },
+            { value: 'provider-default', label: '服务默认' },
+            ...(connection.protocol !== 'chat-completions' ||
+            connection.compatibility === 'deepseek'
+              ? [{ value: 'on', label: '开启' }]
+              : []),
+          ]}
+          onChange={reasoning => {
+            if (reasoning !== 'on') setReasoningBudget('1024');
+            update({
+              parameters: {
+                ...draft.parameters,
+                reasoning: reasoning as ModelEntry['parameters']['reasoning'],
+                ...(reasoning !== 'on' ? { reasoningBudget: undefined } : {}),
+              },
+            });
+          }}
+        />
+        {draft.parameters.reasoning === 'on' && connection.protocol !== 'chat-completions' && (
+          <>
+            <SegmentedControl
+              inline
+              label="推理格式"
+              value={draft.parameters.reasoningStrategy ?? 'budget'}
+              disabled={busy}
+              options={[
+                { value: 'budget', label: 'Token 预算' },
+                connection.protocol === 'gemini'
+                  ? { value: 'level', label: '推理等级' }
+                  : { value: 'adaptive', label: '自适应' },
+              ]}
+              onChange={reasoningStrategy => {
+                setReasoningBudget('1024');
+                update({
+                  parameters: {
+                    ...draft.parameters,
+                    reasoningStrategy,
+                    reasoningBudget: undefined,
+                  },
+                });
+              }}
+            />
+            {(draft.parameters.reasoningStrategy ?? 'budget') === 'budget' && (
+              <NumberField
+                label="推理预算"
+                accessibilityLabel="推理预算 tokens"
+                unit="tokens"
+                value={reasoningBudget}
+                keyboardType="number-pad"
+                editable={!busy}
+                onChangeText={value => {
+                  setReasoningBudget(value);
+                  update({ parameters: { ...draft.parameters, reasoningBudget: Number(value) } });
                 }}
               />
-              {(draft.parameters.reasoningStrategy ?? 'budget') === 'budget' && (
-                <NumberField
-                  label="推理预算"
-                  accessibilityLabel="推理预算 tokens"
-                  unit="tokens"
-                  value={reasoningBudget}
-                  keyboardType="number-pad"
-                  editable={!busy}
-                  onChangeText={value => {
-                    setReasoningBudget(value);
-                    update({ parameters: { ...draft.parameters, reasoningBudget: Number(value) } });
-                  }}
-                />
-              )}
-              {draft.parameters.reasoningStrategy === 'level' && (
-                <SegmentedControl
-                  label="推理强度"
-                  value={draft.parameters.reasoningEffort ?? 'high'}
-                  disabled={busy}
-                  options={[
-                    { value: 'low', label: '低' },
-                    { value: 'medium', label: '中' },
-                    { value: 'high', label: '高' },
-                  ]}
-                  onChange={reasoningEffort =>
-                    update({ parameters: { ...draft.parameters, reasoningEffort } })
-                  }
-                />
-              )}
-            </>
-          )}
-          <SegmentedControl
-            label="公开推理展示"
-            value={
-              draft.parameters.reasoningDisplay ??
-              (connection.protocol === 'chat-completions' ? 'reasoning' : 'summary')
-            }
-            disabled={busy}
-            options={[
-              { value: 'reasoning', label: '思考过程' },
-              { value: 'summary', label: '推理摘要' },
-            ]}
-            onChange={reasoningDisplay =>
-              update({ parameters: { ...draft.parameters, reasoningDisplay } })
-            }
-          />
-          {!!model?.limits && (
-            <T tone="secondary" variant="meta">
-              服务公布：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出上限{' '}
-              {model.limits.outputTokens?.toLocaleString() ?? '未知'}
-            </T>
-          )}
-        </Section>
+            )}
+            {draft.parameters.reasoningStrategy === 'level' && (
+              <SegmentedControl
+                inline
+                label="推理强度"
+                value={draft.parameters.reasoningEffort ?? 'high'}
+                disabled={busy}
+                options={[
+                  { value: 'low', label: '低' },
+                  { value: 'medium', label: '中' },
+                  { value: 'high', label: '高' },
+                ]}
+                onChange={reasoningEffort =>
+                  update({ parameters: { ...draft.parameters, reasoningEffort } })
+                }
+              />
+            )}
+          </>
+        )}
+        <SegmentedControl
+          inline
+          label="公开推理"
+          value={
+            draft.parameters.reasoningDisplay ??
+            (connection.protocol === 'chat-completions' ? 'reasoning' : 'summary')
+          }
+          disabled={busy}
+          options={[
+            { value: 'reasoning', label: '思考过程' },
+            { value: 'summary', label: '推理摘要' },
+          ]}
+          onChange={reasoningDisplay =>
+            update({ parameters: { ...draft.parameters, reasoningDisplay } })
+          }
+        />
+        {!!model?.limits && (
+          <T tone="muted" variant="meta" style={styles.limits}>
+            服务上限：上下文 {model.limits.contextTokens?.toLocaleString() ?? '未知'} · 输出{' '}
+            {model.limits.outputTokens?.toLocaleString() ?? '未知'}
+          </T>
+        )}
+
         {model && (
           <>
-            <Section title="指定模型检测">
-              {(['text', 'tools', 'images'] as const).map(kind => (
-                <View key={kind} style={{ gap: 7 }}>
+            <View style={[styles.detectRow, { borderColor: theme.border }]}>
+              <T tone="secondary" variant="caption" style={styles.rowLabel}>
+                检测
+              </T>
+              <View style={styles.detectButtons}>
+                {(['text', 'tools', 'images'] as const).map(kind => (
                   <Button
-                    label={
-                      { text: '文本检测', tools: '工具检测', images: '图片检测' }[kind] +
-                      ' · 可能计费'
-                    }
+                    key={kind}
+                    label={checkNames[kind].short}
+                    accessibilityLabel={checkNames[kind].label + ' · 可能计费'}
+                    compact
                     variant="secondary"
-                    disabled={disabled}
                     busy={probing === kind}
+                    disabled={disabled}
                     onPress={() => test(kind)}
+                    style={styles.flex}
                   />
-                  <CheckResult result={model?.checks[kind]} history={model?.checkHistory?.[kind]} />
-                </View>
-              ))}
-              {!!probing && (
-                <Button label="取消检测" variant="ghost" onPress={() => probe.current?.abort()} />
+                ))}
+              </View>
+              {probing ? (
+                <Button
+                  label="取消"
+                  compact
+                  variant="ghost"
+                  onPress={() => probe.current?.abort()}
+                />
+              ) : (
+                <T tone="muted" variant="meta" style={styles.cost}>
+                  计费
+                </T>
               )}
-            </Section>
-            <Section title="默认选择">
+            </View>
+            {(['text', 'tools', 'images'] as const).map(kind => {
+              const result = model.checks[kind];
+              const history = model.checkHistory?.[kind];
+              if (!result && !history?.length) return null;
+              return (
+                <View key={kind} style={styles.check}>
+                  <CheckResult result={result} history={history} />
+                </View>
+              );
+            })}
+          </>
+        )}
+
+        {model && (
+          <View style={[styles.defaultRow, { borderColor: theme.border }]}>
+            <T tone="secondary" variant="caption" style={styles.rowLabel}>
+              默认
+            </T>
+            <View style={styles.detectButtons}>
               <Button
-                label={
-                  config.defaults.global === model?.id && model ? '已为全局默认' : '设为全局默认'
-                }
-                variant="secondary"
+                label="全局"
+                accessibilityLabel={globalDefault ? '已为全局默认' : '设为全局默认'}
+                compact
+                variant={globalDefault ? 'primary' : 'secondary'}
                 disabled={disabled || !draft.enabled || !connection.enabled}
                 onPress={() => select('global')}
+                style={styles.flex}
               />
               <Button
-                label={
-                  projectId && config.defaults.projects[projectId] === model?.id && model
-                    ? '已为项目默认'
-                    : '设为当前项目默认'
-                }
-                variant="secondary"
+                label="项目"
+                accessibilityLabel={projectDefault ? '已为项目默认' : '设为当前项目默认'}
+                compact
+                variant={projectDefault ? 'primary' : 'secondary'}
                 disabled={disabled || !projectId || !draft.enabled || !connection.enabled}
                 onPress={() => select('project')}
+                style={styles.flex}
               />
               <Button
-                label={
-                  conversationId && config.defaults.sessions[conversationId] === model?.id && model
-                    ? '已选用于此会话'
-                    : '用于当前会话'
-                }
-                variant="secondary"
+                label="会话"
+                accessibilityLabel={sessionDefault ? '已选用于此会话' : '用于当前会话'}
+                compact
+                variant={sessionDefault ? 'primary' : 'secondary'}
                 disabled={disabled || !conversationId || !draft.enabled || !connection.enabled}
                 onPress={() => select('session')}
+                style={styles.flex}
               />
-              {projectId && config.defaults.projects[projectId] && (
-                <Button
-                  label="清除项目默认"
-                  variant="ghost"
-                  disabled={busy}
-                  onPress={() => {
+            </View>
+          </View>
+        )}
+      </FormScroll>
+      <PageMenu
+        visible={menuOpen}
+        onClose={() => setMenuOpen(false)}
+        items={[
+          { label: '恢复默认参数', disabled: busy, onPress: restoreDefaults },
+          ...(projectId && config.defaults.projects[projectId]
+            ? [
+                {
+                  label: '清除项目默认',
+                  disabled: busy,
+                  onPress: () => {
                     void action(() =>
                       runtime!.models.setSelection('project', undefined, projectId),
                     );
-                  }}
-                />
-              )}
-              {conversationId && config.defaults.sessions[conversationId] && (
-                <Button
-                  label="清除会话选择"
-                  variant="ghost"
-                  disabled={busy}
-                  onPress={() => {
+                  },
+                },
+              ]
+            : []),
+          ...(conversationId && config.defaults.sessions[conversationId]
+            ? [
+                {
+                  label: '清除会话选择',
+                  disabled: busy,
+                  onPress: () => {
                     void action(() =>
                       runtime!.models.setSelection('session', undefined, conversationId),
                     );
-                  }}
-                />
-              )}
-            </Section>
-          </>
-        )}
-        {model && (
-          <Button
-            label="删除模型"
-            variant="danger"
-            disabled={busy}
-            onPress={() => setDeleting(true)}
-          />
-        )}
-      </FormScroll>
+                  },
+                },
+              ]
+            : []),
+          { label: '删除模型', disabled: busy, onPress: () => setDeleting(true) },
+        ]}
+      />
       {guard.guard}
       <ConfirmSheet
         visible={deleting}
@@ -557,13 +687,60 @@ function ModelEditor({
         }}
         danger
         description={
-          <>
-            <T tone="secondary">
-              {defaults} 处默认选择将失效，下次发送时需要重新选择。历史和正在运行的任务保留原配置。
-            </T>
-          </>
+          <T tone="secondary">
+            {defaults} 处默认选择将失效，下次发送时需要重新选择。历史和正在运行的任务保留原配置。
+          </T>
         }
       />
     </ConfigPage>
   );
 }
+
+const styles = StyleSheet.create({
+  identity: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    paddingVertical: 8,
+    borderBottomWidth: 1,
+  },
+  identityBody: { flex: 1, minWidth: 0 },
+  nameRow: { flexDirection: 'row', alignItems: 'center', gap: 2, minWidth: 0 },
+  nameText: { flexShrink: 1, fontSize: 17, lineHeight: 24, fontWeight: '600' },
+  nameInput: {
+    flex: 1,
+    minWidth: 0,
+    minHeight: 32,
+    paddingHorizontal: 6,
+    paddingVertical: 3,
+    borderRadius: 6,
+    fontSize: 17,
+    fontWeight: '600',
+  },
+  enable: { alignItems: 'center', gap: 1 },
+  blockDivider: { height: 1, marginTop: 8 },
+  rowNote: { paddingTop: 4, paddingLeft: 82 },
+  warning: { paddingTop: 4, paddingLeft: 82 },
+  limits: { paddingTop: 4, paddingLeft: 82 },
+  rowLabel: { width: 72 },
+  detectRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 48,
+    marginTop: 8,
+    borderTopWidth: 1,
+  },
+  detectButtons: { flex: 1, flexDirection: 'row', gap: 6 },
+  flex: { flex: 1 },
+  cost: { fontSize: 10 },
+  check: { paddingTop: 6 },
+  defaultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    minHeight: 48,
+    marginTop: 8,
+    borderTopWidth: 1,
+  },
+});
