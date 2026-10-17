@@ -1,4 +1,5 @@
-import { isImage, isMarkdown } from '@/core/workspace/path';
+import { isMarkdown } from '@/core/workspace/path';
+import { sizeLabel } from '@/shared/format';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { ArrowLeft, Download, FileText, Image as ImageIcon, Trash2, X } from '@/shared/ui/icons';
 import { IconButton, Input, T, Toolbar, ToolbarAction } from '@/shared/ui/primitives';
@@ -22,14 +23,16 @@ export const Editor = memo(function Editor({
   const { preview } = controller;
   const readonly = controller.projectActive;
   const imageVersions = controller.files
-    .filter(file => isImage(file.path))
+    .filter(file => file.kind === 'image')
     .map(file => file.path + ':' + file.revision)
     .join('|');
   const loadImage = useCallback(
     async (target: string) => {
       const path = resolveImagePath(document.path, target);
-      if (!imageVersions || !isImage(path) || !preview) throw new Error('图片不可用');
-      return (await preview(document.projectId, path)).content;
+      if (!imageVersions || !preview) throw new Error('图片不可用');
+      const value = await preview(document.projectId, path);
+      if (value.kind !== 'image' || value.unavailableReason) throw new Error('图片不可用');
+      return value.content;
     },
     [document.path, document.projectId, preview, imageVersions],
   );
@@ -62,7 +65,7 @@ export const Editor = memo(function Editor({
           />
         }
         trailing={
-          !document.image ? (
+          document.kind === 'text' && !document.unavailableReason ? (
             <ToolbarAction
               label={document.reading ? '编辑' : controller.dirty ? '保存' : '完成编辑'}
               text={document.reading ? '编辑' : controller.dirty ? '保存' : '完成'}
@@ -101,7 +104,13 @@ export const Editor = memo(function Editor({
             </T>
           </Pressable>
           <T tone={controller.dirty ? 'warning' : 'muted'} variant="meta">
-            {controller.dirty ? '未保存的修改' : document.image ? '图片预览' : '所有修改已保存'}
+            {controller.dirty
+              ? '未保存的修改'
+              : document.unavailableReason
+                ? '文件已保存'
+                : document.kind === 'image'
+                  ? '图片预览'
+                  : '所有修改已保存'}
           </T>
         </View>
       </Toolbar>
@@ -154,7 +163,19 @@ export const Editor = memo(function Editor({
           />
         </View>
       )}
-      {document.image ? (
+      {document.unavailableReason ? (
+        <View
+          testID="file-unavailable-preview"
+          style={{ flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24, gap: 12 }}
+        >
+          <FileText size={28} color={theme.muted} />
+          <T>{document.name}</T>
+          <T tone="muted">{sizeLabel(document.size)}</T>
+          <T tone="secondary" style={{ textAlign: 'center' }}>
+            {document.unavailableReason}
+          </T>
+        </View>
+      ) : document.kind === 'image' ? (
         <View
           style={{
             flex: 1,
@@ -226,7 +247,7 @@ export const Editor = memo(function Editor({
           borderColor: theme.border,
         }}
       >
-        {document.image ? (
+        {document.kind === 'image' ? (
           <ImageIcon size={14} color={theme.muted} />
         ) : (
           <FileText size={14} color={theme.muted} />

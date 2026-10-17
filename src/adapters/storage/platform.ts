@@ -8,6 +8,7 @@ import * as SecureStore from 'expo-secure-store';
 
 import type { CredentialStore, HostFileSystem } from '@/core/storage/contracts';
 import { missing } from './errors';
+import { storagePath } from './path';
 
 /** Called only while bootstrap is blocked on a format mismatch, with no kernel. */
 export async function rebuildDevelopmentStorage(): Promise<void> {
@@ -52,9 +53,7 @@ export async function createStorage(): Promise<{
   const root = new Directory(Paths.document, 'agent-mobile');
   root.create({ intermediates: true, idempotent: true });
   const uri = (path: string) =>
-    root.uri.replace(/\/+$/, '') +
-    '/' +
-    path.replace(/^\/+/, '').split('/').map(encodeURIComponent).join('/');
+    root.uri.replace(/\/+$/, '') + '/' + storagePath(path).map(encodeURIComponent).join('/');
   const db = await SQLite.openDatabaseAsync('agent-mobile.sqlite');
   let metadata: BusinessStore;
   try {
@@ -70,11 +69,11 @@ export async function createStorage(): Promise<{
       return file.bytes();
     },
     async write(path, bytes) {
-      new Directory(uri(path.slice(0, path.lastIndexOf('/')))).create({
+      const file = new File(uri(path));
+      new Directory(uri(path.slice(0, path.lastIndexOf('/')) || '/')).create({
         intermediates: true,
         idempotent: true,
       });
-      const file = new File(uri(path));
       file.write(bytes);
     },
     async mkdir(path) {
@@ -92,6 +91,18 @@ export async function createStorage(): Promise<{
         return;
       }
       throw missing(path);
+    },
+    async moveFile(from, to) {
+      const source = new File(uri(from));
+      const target = new File(uri(to));
+      if (!source.exists) throw missing(from);
+      new Directory(uri(to.slice(0, to.lastIndexOf('/')) || '/')).create({
+        intermediates: true,
+        idempotent: true,
+      });
+      if (target.exists || new Directory(uri(to)).exists)
+        throw new AppError('CONFLICT', '移动目标已存在。');
+      await source.move(target, { overwrite: false });
     },
     async list(path) {
       const directory = new Directory(uri(path));

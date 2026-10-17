@@ -207,6 +207,16 @@ export async function testStorage() {
     remove: async file => {
       await fs.rm(resolve(file), { recursive: true });
     },
+    moveFile: async (from, to) => {
+      await fs.mkdir(path.dirname(resolve(to)), { recursive: true });
+      try {
+        await fs.lstat(resolve(to));
+        throw new Error('移动目标已存在');
+      } catch (error) {
+        if ((error as { code?: string }).code !== 'ENOENT') throw error;
+      }
+      await fs.rename(resolve(from), resolve(to));
+    },
     list: directory => fs.readdir(resolve(directory)),
     stat: async file => {
       const value = await fs.lstat(resolve(file));

@@ -4,7 +4,8 @@ import type { WorkspaceContext } from './context';
 import type { Operation } from '@/core/workspace/journal';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { GitBaseline, GitStatus } from '@/core/git/contracts';
-import { safePath, isImage, mimeFor } from '@/core/workspace/path';
+import { safePath } from '@/core/workspace/path';
+import { previewContent } from './content';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
 
@@ -55,6 +56,12 @@ export class GitService {
         Boolean(before[path]) === Boolean(after[path])
       )
         continue;
+      const previous = before[path] && previewContent(path, before[path], this.context.codec);
+      const next = after[path] && previewContent(path, after[path], this.context.codec);
+      const unavailableReason =
+        previous && next && previous.kind !== next.kind
+          ? '文件内容类型发生变化，请导出原文件核对。'
+          : (previous?.unavailableReason ?? next?.unavailableReason);
       result.push({
         path,
         status: !before[path]
@@ -62,16 +69,12 @@ export class GitService {
           : !after[path]
             ? ('deleted' as const)
             : ('modified' as const),
-        before: before[path]
-          ? isImage(path)
-            ? 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(before[path])
-            : this.context.codec.decodeText(before[path])
-          : '',
-        after: after[path]
-          ? isImage(path)
-            ? 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(after[path])
-            : this.context.codec.decodeText(after[path])
-          : '',
+        kind: (next ?? previous)!.kind,
+        beforeSize: before[path]?.length ?? null,
+        afterSize: after[path]?.length ?? null,
+        before: unavailableReason ? '' : (previous?.content ?? ''),
+        after: unavailableReason ? '' : (next?.content ?? ''),
+        ...(unavailableReason ? { unavailableReason } : {}),
       });
     }
     return result;

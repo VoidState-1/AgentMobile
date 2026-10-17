@@ -218,6 +218,9 @@ export function useWorkbenchData(context: DataContext) {
               text: latest.content,
               savedText: latest.content,
               revision: latest.revision,
+              kind: latest.kind,
+              size: latest.size,
+              unavailableReason: latest.unavailableReason,
               externalChanged: false,
             };
             setEditor(next);

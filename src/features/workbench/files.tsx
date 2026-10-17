@@ -1,4 +1,3 @@
-import { isImage } from '@/core/workspace/path';
 import type { ProjectFile } from '@/core/workspace/types';
 import { fileName, sizeLabel } from '@/shared/format';
 import { useWorkbenchTheme } from '@/shared/theme';
@@ -70,13 +69,13 @@ export const FilesPane = memo(function FilesPane({
   const theme = useWorkbenchTheme();
   const { width } = useWindowDimensions();
   const compact = width < 700;
-  const [filter, setFilter] = useState<'all' | 'text' | 'image'>('all');
+  const [filter, setFilter] = useState<'all' | 'text' | 'image' | 'binary'>('all');
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set());
   const entries = useMemo(
     () =>
       controller.files.filter(
         file =>
-          (filter === 'all' || (filter === 'image') === isImage(file.path)) &&
+          (filter === 'all' || filter === file.kind) &&
           file.path.toLocaleLowerCase().includes(query.toLocaleLowerCase()),
       ),
     [controller.files, query, filter],
@@ -111,7 +110,7 @@ export const FilesPane = memo(function FilesPane({
               : 'transparent',
       })}
     >
-      {isImage(file.path) ? (
+      {file.kind === 'image' ? (
         <View style={{ width: 24, height: 24, borderRadius: 2, overflow: 'hidden' }}>
           <Thumbnail file={file} controller={controller} />
         </View>
@@ -189,6 +188,7 @@ export const FilesPane = memo(function FilesPane({
           { value: 'all', label: '全部' },
           { value: 'text', label: '文字' },
           { value: 'image', label: '图片' },
+          { value: 'binary', label: '其他' },
         ]}
         trailing={
           <T tone="muted" variant="caption">

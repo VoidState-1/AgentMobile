@@ -62,6 +62,7 @@ export class OperationJournal {
       changes: _changes,
       indexChanges: _indexChanges,
       textEditFingerprint: _textEditFingerprint,
+      fileMove: _fileMove,
       ...header
     } = operation;
     const next = { ...header, revision: header.revision + 1 };

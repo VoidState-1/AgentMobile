@@ -1,5 +1,4 @@
-import { isImage } from '@/core/workspace/path';
-import { fileName } from '@/shared/format';
+import { fileName, sizeLabel } from '@/shared/format';
 import { useWorkbenchTheme } from '@/shared/theme';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { GitStatusBadge } from '@/shared/ui/git-status';
@@ -28,7 +27,7 @@ export const ReviewSheet = memo(function ReviewSheet({
   );
   const file = value.files[index] ?? value.files[0];
   const lines = useMemo(() => {
-    if (!file || isImage(file.path)) return [];
+    if (!file || file.kind !== 'text' || file.unavailableReason) return [];
     let before = 0;
     let after = 0;
     return diffLines(file.before.slice(0, 12000), file.after.slice(0, 12000)).flatMap(part => {
@@ -140,10 +139,22 @@ export const ReviewSheet = memo(function ReviewSheet({
                 </View>
               )}
               <T tone="muted" variant="meta">
-                {isImage(file?.path ?? '') ? '图片对比' : '逐行变化'}
+                {file?.unavailableReason
+                  ? '文件变化'
+                  : file?.kind === 'image'
+                    ? '图片对比'
+                    : '逐行变化'}
               </T>
             </View>
-            {file && isImage(file.path) ? (
+            {file?.unavailableReason ? (
+              <View style={{ padding: 14, gap: 8 }}>
+                <T tone="secondary">{file.unavailableReason}</T>
+                <T tone="muted">
+                  修改前：{file.beforeSize === null ? '不存在' : sizeLabel(file.beforeSize)} ·
+                  修改后：{file.afterSize === null ? '不存在' : sizeLabel(file.afterSize)}
+                </T>
+              </View>
+            ) : file?.kind === 'image' ? (
               <View style={{ gap: 8 }}>
                 {[
                   { label: '修改前', uri: file.before },

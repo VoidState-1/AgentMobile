@@ -3,6 +3,7 @@ import { openWebDatabase, createWebBusinessStore } from './indexeddb-business';
 import { AppError } from '@/core/errors';
 import type { CredentialStore, HostFileSystem, StorageStat } from '@/core/storage/contracts';
 import { missing } from './errors';
+import { storagePath } from './path';
 
 interface StoredFile extends StorageStat {
   path: string;
@@ -42,13 +43,14 @@ export async function createStorage(): Promise<{
   }
   const metadata = await createWebBusinessStore(db);
   const getFile = async (path: string): Promise<StoredFile> => {
+    storagePath(path);
     const file = (await transact('files', 'readonly', store => store.get(path))) as
       StoredFile | undefined;
     if (!file) throw missing(path);
     return file;
   };
   const mkdir = async (path: string): Promise<void> => {
-    const parts = path.split('/').filter(Boolean);
+    const parts = storagePath(path);
     for (let index = 0; index <= parts.length; index++) {
       const current = '/' + parts.slice(0, index).join('/');
       let existing: StoredFile | undefined;
@@ -77,7 +79,8 @@ export async function createStorage(): Promise<{
       return new Uint8Array(file.bytes);
     },
     async write(path, bytes) {
-      await mkdir(path.slice(0, path.lastIndexOf('/')));
+      storagePath(path);
+      await mkdir(path.slice(0, path.lastIndexOf('/')) || '/');
       await transact('files', 'readwrite', store =>
         store.put({
           path,
@@ -94,6 +97,46 @@ export async function createStorage(): Promise<{
       await getFile(path);
       await transact('files', 'readwrite', store => store.delete(path));
     },
+    async moveFile(from, to) {
+      storagePath(from);
+      storagePath(to);
+      await mkdir(to.slice(0, to.lastIndexOf('/')) || '/');
+      await new Promise<void>((resolve, reject) => {
+        const transaction = db.transaction('files', 'readwrite');
+        const store = transaction.objectStore('files');
+        let failure: AppError | undefined;
+        const fail = (error: AppError) => {
+          failure = error;
+          transaction.abort();
+        };
+        transaction.oncomplete = () => resolve();
+        transaction.onabort = () =>
+          reject(failure ?? transaction.error ?? new AppError('STORAGE', '文件移动中断。'));
+        transaction.onerror = () => reject(failure ?? transaction.error);
+        const source = store.get(from);
+        source.onsuccess = () => {
+          const file = source.result as StoredFile | undefined;
+          if (!file || file.kind !== 'file') {
+            fail(new AppError('VALIDATION', '移动来源不是文件。'));
+            return;
+          }
+          const target = store.get(to);
+          target.onsuccess = () => {
+            if (target.result) {
+              fail(new AppError('CONFLICT', '移动目标已存在。'));
+              return;
+            }
+            store.put({
+              ...file,
+              path: to,
+              mtime: Date.now(),
+              contentVersion: crypto.randomUUID(),
+            });
+            store.delete(from);
+          };
+        };
+      });
+    },
     async list(path) {
       await getFile(path);
       const prefix = path === '/' ? '/' : path + '/';
@@ -108,6 +151,7 @@ export async function createStorage(): Promise<{
         .filter(key => !key.includes('/'));
     },
     async stat(path) {
+      storagePath(path);
       // Key cursor reads only the index tuple, never clones a large image blob.
       const cursor = await transact('files', 'readonly', store =>
         store.index('stat').openKeyCursor(IDBKeyRange.bound([path], [path, []])),

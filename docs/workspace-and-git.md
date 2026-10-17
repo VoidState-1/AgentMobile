@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                            |
 | -------- | ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 2.0.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：分离字节存储和文本策略，按内容预览、移动意图恢复与路径边界。      |
 | 1.3.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：补充批量精确替换契约、差异摘要、请求指纹及中断重试。              |
 | 1.2.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：取消文本扩展名白名单，统一 UTF-8/NUL 校验、重命名与隔离提案边界。 |
 | 1.1.0    | 2026-10-16T15:39:09+08:00 | d409b141eeeb219779697a62544c17ea23288a12 | 记录尚未提交源码的真实分支、类型化差异范围和任务增删统计。                          |
@@ -13,17 +14,21 @@
 
 用户项目有独立 Git repository 和共享工作树。UI 通过 WorkspaceApi 操作，Agent 通过明确工具操作。内部 HostFileSystem 和 GitPort 可以读写私有仓库，但不直接暴露给 Agent、技能正文或未来动态 UI。
 
-[safePath](../src/core/workspace/path.ts) 将输入规范化为 NFC，要求工作区相对路径。长度最多 220 个 UTF-16 单位，拒绝前后空格、反斜杠、冒号、控制字符、绝对路径、空组件、`.`、`..`、`.git` 及其前缀、末尾点/空格和 Windows 保留设备名。校验不是对任意设备路径做简单字符串拼接。
+[safePath](../src/core/workspace/path.ts) 将输入规范化为 NFC，要求工作区相对路径。长度最多 220 个 UTF-16 单位，拒绝前后空格、反斜杠、冒号、控制字符、绝对路径、空组件、`.`、`..`、任意大小写的 `.git` 路径组件、末尾点/空格和 Windows 保留设备名。允许 `.gitignore`、`.gitattributes`、`.github` 等普通项目路径。项目 ID 独立校验，原生/浏览器存储适配器也校验内部逻辑路径，拒绝 URI、越界组件和非规范路径。
 
-`project.json` 是宿主管理文件，不允许普通写入、移动、删除、提案合入或手工暂存选取。Agent 可生成任意合法相对路径下的 UTF-8 文本，包括代码、配置、自定义扩展名和无扩展名文件；支持移动/删除授权图片，不能直接生成图片 bytes，也不执行代码。文件类型放开不改变受保护路径和项目占用规则。
+`project.json` 是宿主管理文件，不允许普通写入、移动、删除、提案合入或手工暂存选取。Agent 可生成任意合法相对路径下的 UTF-8 文本，包括代码、配置、自定义扩展名和无扩展名文件；支持移动/删除授权文件，包括二进制附件，不能通过文本工具覆盖非文本内容，也不执行代码。文件类型放开不改变受保护路径和项目占用规则。
 
 ## 2. 支持的内容与修订
 
-文本不限扩展名，必须是有效 UTF-8 且不含 NUL 字节，单文件最多 1 MiB；一般文件最多 20 MiB。普通导入选择器允许任意文件，工作区写入按内容校验：非 PNG/JPEG/WebP 路径作为文本验证，二进制或其他编码不会经过替换字符解码后保存。UTF-8 BOM、中文、emoji、CRLF/LF 按原始 bytes 保留，不进行编码转换或格式化。读取、预览、Agent 读取、writer 候选写入及提案合入共用文本校验。文本可在不同扩展名及无扩展名之间移动；图片仍须保持原图片格式，文本与图片不能靠重命名互相转换。支持 PNG/JPEG/WebP，保存时验证格式头与尺寸，单边最多 16,000、总像素最多 2,400 万；这不是完整图像解码校验。转发模型的图片有独立 4 MiB 上限。详细常量见 [Agent 限制](agent-runtime.md)。
+工作区按原始字节存储，不设文件扩展名或 MIME 白名单。`write` 用于导入及原始字节写入，二进制、其他编码和大文本也可保存、移动、删除、导出及进入 Git；不会为了预览转换原文件。当前用例采用完整文件缓冲和 before/after 日志，单文件操作预算为 20 MiB，常量见 [workspaceLimits](../src/core/workspace/limits.ts)；这是当前用例的资源预算，不是原生文件系统容量限制。
+
+文本读取/编辑使用 `readText/writeText/editText`：有效 UTF-8、无 NUL、最多 1 MiB，不限扩展名。`writeText` 同时校验已有内容与新内容，防止把二进制误当文本覆盖；writer 文本工具也执行该策略。UTF-8 BOM、中文、emoji、CRLF/LF 的未修改字节保持原样。移动与提案合入不执行文本/图片解码校验，改名不转码。
+
+`describeContent` 先识别 PNG/JPEG/WebP 魔数和 PDF 文件头，再识别无 NUL 的严格 UTF-8，否则归为 binary；这是当前展示分类，并非通用文件格式鉴定器。`preview` 返回 text/image/binary 类型、MIME、大小与修订；二进制、超出文本预算或无法安全展示的图片返回空 content 及 unavailableReason，读取原始字节仍然可用。图片预览及模型工具验证格式头与尺寸，单边最多 16,000、总像素最多 2,400 万；这不是完整图像解码。转发模型图片另限 4 MiB。详细文本/模型预算见 [Agent 限制](agent-runtime.md)。
 
 文件 revision 是标准 Git blob OID，按实际 bytes 计算。新建 expectedRevision=null 表示目标必须不存在；已有文件修改/删除/移动必须带当前 revision。相同大小/mtime 不代表内容相同；目录视图缓存用 Web contentVersion 或原生 contentStamp，写前仍读取真实 bytes。
 
-`read_text` 的 offset/length 使用 UTF-16 单位，返回 revision、source、truncated 和 nextOffset。Agent 必须分段读完所需内容后再写；长度限制不是把被截断内容视为完整资料。`list_files` 默认 200、最多 500 条，游标与来源/manifest 绑定；`search_text` 最多返回 100 条匹配。
+`read_text` 的 offset/length 使用 UTF-16 单位，返回 revision、source、truncated 和 nextOffset。Agent 必须分段读完所需内容后再写；长度限制不是把被截断内容视为完整资料。`list_files` 默认 200、最多 500 条，游标与来源/manifest 绑定；`search_text` 跳过非文本和超出文本预算的文件，最多返回 100 条匹配。`inspect_image` 按实际内容确认格式，不依赖文件名后缀。
 
 ### 2.1 Agent 批量精确替换
 
@@ -48,7 +53,7 @@
 - 返回 saved、revision、changed、replayed、editCount 与 changes。changes 按原文位置排列，含原请求项号、原文起始行、before/after 预览；最多 20 项、预览正文合计最多 6,000 UTF-16 单位，每侧最多 200，截断由 truncated 标明，不影响实际编辑。
 - 相同运行/轮次/callId 重试必须与原请求指纹一致；回执会返回当时的结果及 `replayed=true`，不重新匹配当前文件、不覆盖后续修改。此时 revision 是原调用结果，继续编辑须重新读取当前修订。无变化替换也保存回执，changed 为 false。
 
-`write_text` 继续用于新建和整体重写，整体重写需要完整原文及当前修订。界面编辑器保存用户输入仍使用原有 write 用例，不经过模型精确替换。局部编辑的底层完整 before/after 日志与恢复机制沿用，减少的是模型传输内容，不承诺跨 Git/业务数据库事务或多文件原子编辑。
+`write_text` 继续用于新建和整体重写，整体重写需要完整原文及当前修订。界面编辑器通过 writeText 保存完整输入。局部编辑的底层完整 before/after 日志与恢复机制沿用，减少的是模型传输内容，不承诺跨 Git/业务数据库事务或多文件原子编辑。
 
 ## 3. 项目队列与占用
 
@@ -60,7 +65,7 @@ MutationCoordinator 持有每项目 SerialQueue、运行 owner 和恢复 blocked
 
 ## 4. 文件修改日志
 
-[Operation](../src/core/workspace/journal.ts) 分为摘要 header 和正文 body。header 包含 scope、sequence、revision、expectedHead、bodyFingerprint、owner/actor/proposal 归属和 checkpoint/commit。body 保存文件 before/after 的 Base64 或 null 以及 indexChanges。
+[Operation](../src/core/workspace/journal.ts) 分为摘要 header 和正文 body。header 包含 scope、sequence、revision、expectedHead、bodyFingerprint、owner/actor/proposal 归属和 checkpoint/commit。body 保存文件 before/after 的 Base64 或 null、indexChanges，以及移动命令的 fileMove `{from,to}` 意图；fileMove 纳入正文指纹，不进入 header。
 
 | kind           | 用途                                                    | 正常阶段                                                 |
 | -------------- | ------------------------------------------------------- | -------------------------------------------------------- |
@@ -71,7 +76,7 @@ MutationCoordinator 持有每项目 SerialQueue、运行 owner 和恢复 blocked
 
 阶段允许跳过不适用项，但不能倒退；recorded 不能再次更新。prepare 在业务库原子分配 sequence 并保存正文，后续先完成文件/index/Git 再写回执。文件系统不具备整批数据库事务，进程可能停在多个路径之间；日志恢复将其收束。
 
-恢复读实际 before/after：等于 after 则跳过重复效果，等于 before 则继续，第三种内容则阻断。operation ID 不能用不同参数重试。commit 意图将 `AgentMobile-Operation: <id>` 放进提交说明，恢复可查到已生成提交并避免重复公开提交。
+恢复先检查整批文件实际内容：等于 after 则跳过重复效果，等于 before 则继续，第三种内容则在写入前阻断。移动两端都待执行时调用 HostFileSystem.moveFile；原生调用 Expo File.move，Web 在一次 files 事务中改名且不覆盖目标。移动完成但回执未保存时跳过移动；仅一端完成时用记录的 before/after 收束。移动效果不再用 JS 读写正文实现，但预检、日志和 Git 快照仍读取完整字节。operation ID 不能用不同参数重试。commit 意图将 `AgentMobile-Operation: <id>` 放进提交说明，恢复可查到已生成提交并避免重复公开提交。
 
 幂等范围是已经保存的 operation 意图及对应恢复。write_text 与 edit_text 使用 run/round/callId 形成稳定操作 ID；edit_text 另将路径、基础修订和整批替换的请求指纹写入操作正文，以原始 before/after 校验回执，重试不重新编辑当前内容；当前普通 remove/move 用例内部生成新 ID，公共 WorkspaceApi 也不提供调用者通用幂等键。因此不能对所有新发起的文件命令承诺重复调用无效果；错误后先读当前状态，不能无条件自动重试。
 
@@ -137,9 +142,11 @@ AppServices 的 commitStaged 提交当前所有已暂存变化；Agent 的 git_c
 
 checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字节校验，只有缺失对象才新建；损坏或不一致对象返回 STORAGE。不能仅用缓存里的 OID 跳过实际内容检查。
 
-历史默认 30、最大 100 条，游标固定 projectId、head 和 next，沿第一父链读取。当前没有分支切换、merge/rebase、远程同步和 GC 产品能力；私有 refs、操作日志与大文件快照仍可能积累。原生大内容场景的性能需要独立测量，不能因 Git 格式正确就宣称移动端体验达标。
+历史默认 30、最大 100 条，游标固定 projectId、head 和 next，沿第一父链读取。当前没有分支切换、merge/rebase、远程同步和 GC 产品能力；符号链接和 chmod 权限位明确返回不支持，不静默成功。私有 refs、操作日志与大文件快照仍可能积累。原生大内容场景的性能需要独立测量，不能因 Git 格式正确就宣称移动端体验达标。
 
 ## 10. 验证入口
+
+[字节存储与移动恢复](../tests/workspace-bytes.test.ts) 覆盖二进制保留、内容分类、路径边界与移动故障；[原生 SDK 契约模拟](../tests/native-storage.test.ts) 核对 File.move 调用，但不替代原生设备运行验收。
 
 [text-edits.test](../tests/text-edits.test.ts)、[text-edit-tools.test](../tests/text-edit-tools.test.ts)、[text-files.test](../tests/text-files.test.ts)、[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts) 与 [通用文本 E2E](../tests/e2e/text-files.spec.ts)。
 
@@ -149,4 +156,4 @@ checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字�
 
 差异文件用 `status` 枚举表达新增/修改/删除，`stagedOnly` 区分仅发生在 index 的任务变化。两者由应用层投影，中文徽标在 UI 统一渲染，不作为跨层契约。
 
-任务行数摘要复用冻结快照差异；后续手工修改或删除不改变历史任务的统计。完整文本按行比较，支持末行没有换行。图片不统计文本行；统计库每个文本差异使用 25ms/4,096 编辑步上限，预算耗尽时不输出不完整数值，仍可打开真实差异。该查询不改 Git、数据库或恢复日志。
+任务行数摘要复用冻结快照差异；后续手工修改或删除不改变历史任务的统计。完整文本按行比较，支持末行没有换行。图片、二进制、内容类型改变和无法预览的文件不统计文本行；差异保留类型、前后字节数与不可预览原因。统计库每个文本差异使用 25ms/4,096 编辑步上限，预算耗尽时不输出不完整数值。该查询不改 Git、数据库或恢复日志。

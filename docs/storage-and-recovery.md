@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                     |
 | -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| 2.2.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：真实原生移动、内部路径校验、fileMove 正文与部分效果恢复。  |
 | 2.1.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：记录精确替换请求指纹、回执重建与候选检查点恢复。           |
 | 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录 f5、物理版本 6、Run schema 4 与移除执行模式索引字段。 |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 记录当前数据格式、数据库布局、事务边界、启动恢复与开发重建。                 |
@@ -20,7 +21,9 @@
 
 [HostFileSystem / MetadataStore / CredentialStore](../src/core/storage/contracts.ts) 是平台无关端口。BusinessStore 扩展元数据端口，提供有类型的操作、运行和轨迹事务，不暴露 SQL 或 IDBTransaction。
 
-Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是 HostFileSystem 命名空间，不是设备绝对路径；原生由平台 adapter 映射到私有根目录。技能库通过 `skills` 日志 namespace 与 `skill-projects` bucket 隔离，与用户项目共用底层存储但不混用业务查询范围。
+Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是宿主定位文件的逻辑路径，原生由平台 adapter 映射到私有根目录下的真实文件，不再施加文本/图片存储白名单。操作系统沙箱隔离应用，工作区用例负责项目授权、相对路径、版本与恢复；两者职责不同。项目 ID 与内部 storagePath 分别校验，Agent 仍拿不到设备绝对路径。技能库通过 `skills` 日志 namespace 与 `skill-projects` bucket 隔离，与用户项目共用底层存储但不混用业务查询范围。
+
+HostFileSystem 提供字节读写、目录与 stat，以及不覆盖已有目标的 moveFile。原生移动直接调用 Expo File.move；Web 在一次 files 事务中迁移记录并刷新 contentVersion。仅原生移动效果绕过 JS 正文字节搬运，版本预检、操作日志和 Git 快照仍使用完整字节；尚无流式读写、文件监听、符号链接、权限位或外部目录挂载能力。文本与图片能否预览属于应用/工具策略，不影响原始字节存储；当前用例的 20 MiB 文件操作预算见 [工作区](workspace-and-git.md)。
 
 ## 2. 当前格式与实例身份
 
@@ -36,20 +39,20 @@ Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是 Host
 
 精确 DDL 见 [sqlite-business.ts](../src/adapters/storage/sqlite-business.ts)。启用 WAL 与 foreign_keys，写入通过 `withExclusiveTransactionAsync` 串行执行。
 
-| 表                   | 主键/重要索引                                                              | 保存内容                                      |
-| -------------------- | -------------------------------------------------------------------------- | --------------------------------------------- |
-| `application_format` | 固定 id=1                                                                  | format 与 instance_id                         |
-| `records`            | `(bucket,id)`                                                              | 小规模配置、冻结快照、业务状态等 JSON payload |
-| `operation_headers`  | `(namespace,project_id,id)`；scope sequence 唯一；owner、pending 索引      | 阶段、revision、归属、路径、指纹和引用摘要    |
-| `operation_bodies`   | 与 header 相同；引用 header                                                | before/after 与 indexChanges 正文             |
-| `operation_counters` | `(namespace,project_id)`                                                   | 范围内递增 operation sequence                 |
-| `run_headers`        | id；admission_sequence 唯一；project/conversation/history/root/active 索引 | 运行摘要、状态、计数、快照引用、停止原因      |
-| `run_inputs`         | id → run_headers                                                           | 不可变 prompt                                 |
-| `run_results`        | id → run_headers                                                           | response 与 skillActivations                  |
-| `run_counters`       | 固定 id=1                                                                  | 全实例运行入队序号                            |
-| `trace_nodes`        | id；`(run_id,run_sequence)` 唯一                                           | 轨迹类型、顺序、状态、摘要与正文长度          |
-| `trace_text_chunks`  | `(node_id,ordinal)`；offset 索引                                           | 连续追加正文块与 UTF-16 偏移                  |
-| `transcript_frames`  | `(run_id,ordinal)`                                                         | 引擎消息完成帧，独立 opaque payload           |
+| 表                   | 主键/重要索引                                                              | 保存内容                                        |
+| -------------------- | -------------------------------------------------------------------------- | ----------------------------------------------- |
+| `application_format` | 固定 id=1                                                                  | format 与 instance_id                           |
+| `records`            | `(bucket,id)`                                                              | 小规模配置、冻结快照、业务状态等 JSON payload   |
+| `operation_headers`  | `(namespace,project_id,id)`；scope sequence 唯一；owner、pending 索引      | 阶段、revision、归属、路径、指纹和引用摘要      |
+| `operation_bodies`   | 与 header 相同；引用 header                                                | before/after、indexChanges 与可选 fileMove 正文 |
+| `operation_counters` | `(namespace,project_id)`                                                   | 范围内递增 operation sequence                   |
+| `run_headers`        | id；admission_sequence 唯一；project/conversation/history/root/active 索引 | 运行摘要、状态、计数、快照引用、停止原因        |
+| `run_inputs`         | id → run_headers                                                           | 不可变 prompt                                   |
+| `run_results`        | id → run_headers                                                           | response 与 skillActivations                    |
+| `run_counters`       | 固定 id=1                                                                  | 全实例运行入队序号                              |
+| `trace_nodes`        | id；`(run_id,run_sequence)` 唯一                                           | 轨迹类型、顺序、状态、摘要与正文长度            |
+| `trace_text_chunks`  | `(node_id,ordinal)`；offset 索引                                           | 连续追加正文块与 UTF-16 偏移                    |
+| `transcript_frames`  | `(run_id,ordinal)`                                                         | 引擎消息完成帧，独立 opaque payload             |
 
 索引列用于小范围查询，JSON payload 保存当前领域形状。列表读取 headers，不把完整 prompt、结果、Base64 操作正文和轨迹树放在同一个大 JSON record 中反复读写。
 
@@ -83,7 +86,7 @@ Git adapter 使用内部逻辑目录 `/workspaces/<id>/repository`。这是 Host
 
 ## 6. 同数据库原子边界
 
-`prepareOperation` 原子保存 operation body/header，并分配 scope sequence。精确替换仍使用 files 操作，OperationBody 的 textEditFingerprint 保存路径、基础 revision 与整批替换参数的请求指纹，并纳入 bodyFingerprint 校验；该字段不进入 header 或 UI 操作摘要。重试核对指纹及 owner/path，以日志 before 重建并验证 after，recorded 回执直接返回原结果，不重新改写当前文件。这里增加的是编辑操作正文元数据，不新增 SQL/IDB stores 或历史格式读取分支。相同 ID 与相同不可变意图可复用；意图不匹配返回 CONFLICT。
+`prepareOperation` 原子保存 operation body/header，并分配 scope sequence。精确替换仍使用 files 操作，OperationBody 的 textEditFingerprint 保存路径、基础 revision 与整批替换参数的请求指纹；移动命令的 fileMove 保存 from/to。这两类字段均纳入 bodyFingerprint 校验，不进入 header 或 UI 操作摘要。文本编辑重试核对指纹及 owner/path，以日志 before 重建并验证 after，recorded 回执直接返回原结果，不重新改写当前文件。这些正文元数据不新增 SQL/IDB stores 或历史格式读取分支。相同 ID 与相同不可变意图可复用；意图不匹配返回 CONFLICT。
 
 `writeBusiness` 可以一次原子写入元数据、OperationHeader 更新、RunHeader/Input/Result 更新、TraceNode/Chunk/Frame。典型场景包括：
 
@@ -114,7 +117,7 @@ flowchart TD
 
 顺序由 [bootstrap](../src/bootstrap/index.ts) 固定。恢复只读取意图、对象和回执，不创建 Pi 引擎，不重新请求模型，不重放远程工具。
 
-- **文件操作**：依 scope sequence 读取 pending headers，一次加载一条正文；实际文件/index 必须等于 before 或 after，HEAD 必须与意图基线一致，或已找到带 operation marker 的公开提交。校验不通过阻断该项目写入。
+- **文件操作**：依 scope sequence 读取 pending headers，一次加载一条正文；先预检所有文件是否等于 before 或 after，再执行待完成效果；index 也核对 before/after，HEAD 必须与意图基线一致，或已找到带 operation marker 的公开提交。移动意图验证两条记录一致，两端未执行时调用 moveFile；已完成时不重复移动，部分完成时按字节记录收束。出现第三种内容保留现场并阻断该项目写入。文件、Git 与业务回执仍是分步持久化。
 - **MCP**：prepared 转 cancelled；dispatched 转 unknown，保留重试屏障。
 - **Skills**：恢复 skills namespace 工作区日志，再按 Git 最新库快照重建摘要并移除过期授权。
 - **提案候选**：prepared 写入若有 checkpoint ref则验证路径并完成回执，没有 ref则取消该写入；合入用 operation 回执决定 applied/ready/interrupted。
@@ -150,4 +153,4 @@ Web 只删除当前 origin 的 `agent-mobile-prototype` 数据库。其他标签
 
 ## 11. 验证入口
 
-[当前格式/事务测试脚本](../scripts/storage-current-format.mjs)、[范围查询脚本](../scripts/storage-range.mjs)、[journal.test](../tests/journal.test.ts)、[run-repository.test](../tests/run-repository.test.ts)、[trace-storage.test](../tests/trace-storage.test.ts)、[模型配置测试](../tests/model-config.test.ts)、[提案测试](../tests/proposals.test.ts)。原生故障注入脚本的范围与执行方法见 [测试与维护](testing-and-operations.md)。
+[当前格式/事务测试脚本](../scripts/storage-current-format.mjs)、[范围查询脚本](../scripts/storage-range.mjs)、[journal.test](../tests/journal.test.ts)、[字节存储与移动恢复](../tests/workspace-bytes.test.ts)、[原生 SDK 契约模拟](../tests/native-storage.test.ts)、[run-repository.test](../tests/run-repository.test.ts)、[trace-storage.test](../tests/trace-storage.test.ts)、[模型配置测试](../tests/model-config.test.ts)、[提案测试](../tests/proposals.test.ts)。SDK 模拟不证明真机文件移动与进程中断行为；原生故障注入脚本的范围与执行方法见 [测试与维护](testing-and-operations.md)。

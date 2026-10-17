@@ -165,20 +165,41 @@ export class MutationCoordinator {
         if ((await this.context.git.head(projectId)) !== operation.expectedHead)
           throw new AppError('STORAGE', '恢复基线不匹配');
         if (operation.kind !== 'commit') {
+          const pending = [];
           for (const change of operation.changes) {
             const current = await this.reader.bytesOrNull(projectId, change.path);
             const value = current ? this.context.codec.encodeBase64(current) : null;
             if (value !== change.before && value !== change.after)
               throw new AppError('STORAGE', '文件内容与恢复记录不匹配');
-            if (value === change.after) continue;
-            if (change.after === null)
-              await this.context.fs.remove(this.reader.internal(projectId, change.path));
-            else
-              await this.context.fs.write(
-                this.reader.internal(projectId, change.path),
-                this.context.codec.decodeBase64(change.after),
-              );
+            if (value !== change.after) pending.push(change);
           }
+          const move = operation.fileMove;
+          if (
+            move &&
+            (operation.changes.length !== 2 ||
+              operation.changes[0].path !== move.from ||
+              operation.changes[0].after !== null ||
+              operation.changes[1].path !== move.to ||
+              operation.changes[1].before !== null ||
+              operation.changes[0].before === null ||
+              operation.changes[0].before !== operation.changes[1].after)
+          )
+            throw new AppError('STORAGE', '文件移动意图不一致。');
+          if (move && pending.length === 2) {
+            await this.context.fs.moveFile(
+              this.reader.internal(projectId, move.from),
+              this.reader.internal(projectId, move.to),
+            );
+          } else
+            for (const change of pending) {
+              if (change.after === null)
+                await this.context.fs.remove(this.reader.internal(projectId, change.path));
+              else
+                await this.context.fs.write(
+                  this.reader.internal(projectId, change.path),
+                  this.context.codec.decodeBase64(change.after),
+                );
+            }
           const index = await this.context.git.index(projectId);
           for (const change of operation.indexChanges ?? []) {
             const value = index[change.path] ?? null;

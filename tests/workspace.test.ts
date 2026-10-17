@@ -140,13 +140,13 @@ describe('真实 Git 和工作区一致性', () => {
     const { service, project, files, metadata } = await fixture();
     const file = await service.readText(project.id, 'documents/notes.md');
     let failed = false;
-    const write = files.write;
-    files.write = async (path, bytes) => {
-      if (path.endsWith('/moved.md') && !failed) {
+    const moveFile = files.moveFile;
+    files.moveFile = async (from, to) => {
+      if (to.endsWith('/moved.md') && !failed) {
         failed = true;
-        throw new Error('模拟文件写入失败');
+        throw new Error('模拟原生移动中断');
       }
-      await write(path, bytes);
+      await moveFile(from, to);
     };
     await expect(
       service.move(project.id, 'documents/notes.md', 'documents/moved.md', file.revision),

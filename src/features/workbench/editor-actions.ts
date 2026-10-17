@@ -3,7 +3,8 @@ import type { RunView } from '@/core/runs/queries';
 import { AppError } from '@/core/errors';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { WorkbenchSheet, ActionContext, EditorSession } from './types';
-import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
+import { safePath } from '@/core/workspace/path';
+import { describeContent } from '@/core/workspace/content';
 import { fileName } from '@/shared/format';
 
 interface EditorContext extends ActionContext, EditorSession {
@@ -30,19 +31,24 @@ export function useEditorActions(context: EditorContext) {
   async function persistEditor(close = false) {
     const document = editorRef.current;
     if (!runtime || !document) return;
+    if (document.kind !== 'text' || document.unavailableReason)
+      throw new Error('当前文件不能作为文本编辑，请导出后使用对应应用打开。');
     if (active?.projectId === document.projectId)
       throw new Error('任务仍在运行，请停止或等待完成后保存。');
     const name = safePath(document.name.trim());
     if (name.includes('/')) throw new Error('请输入文件名称，不包含文件夹路径。');
-    if (!canMoveWithinFormat(document.path, name))
-      throw new Error('请保留图片的原始格式扩展名；文本不能使用图片扩展名。');
     let target = document.path;
     if (document.fresh) {
       target = 'documents/' + safePath(name);
-      await runtime.workspace.write(document.projectId, target, Buffer.from(document.text), null);
+      await runtime.workspace.writeText(
+        document.projectId,
+        target,
+        Buffer.from(document.text),
+        null,
+      );
     } else {
-      if (document.text !== document.savedText && !document.image) {
-        await runtime.workspace.write(
+      if (document.text !== document.savedText) {
+        await runtime.workspace.writeText(
           document.projectId,
           document.path,
           Buffer.from(document.text),
@@ -64,6 +70,9 @@ export function useEditorActions(context: EditorContext) {
       savedText: document.text,
       name: fileName(target),
       savedName: fileName(target),
+      kind: current.kind,
+      size: current.size,
+      unavailableReason: current.unavailableReason,
     };
     const latest = editorRef.current;
     if (latest?.identity === document.identity) {
@@ -126,7 +135,9 @@ export function useEditorActions(context: EditorContext) {
           text: value.content,
           savedText: value.content,
           revision: value.revision,
-          image: isImage(file.path),
+          kind: value.kind,
+          size: value.size,
+          unavailableReason: value.unavailableReason,
           reading: true,
           fresh: false,
         });
@@ -146,7 +157,8 @@ export function useEditorActions(context: EditorContext) {
         text: '',
         savedText: '',
         revision: null,
-        image: false,
+        kind: 'text',
+        size: 0,
         reading: false,
         fresh: true,
       }),
@@ -158,7 +170,8 @@ export function useEditorActions(context: EditorContext) {
     await action(async () => {
       const selection = await runtime.io.pickFile();
       if (!selection) return;
-      const path = (isImage(selection.name) ? 'assets/' : 'documents/') + safePath(selection.name);
+      const kind = describeContent(selection.name, selection.bytes).kind;
+      const path = (kind === 'text' ? 'documents/' : 'assets/') + safePath(selection.name);
       await runtime.workspace.write(ui.projectId!, path, selection.bytes, null, {
         message: '导入 ' + selection.name,
       });
@@ -194,8 +207,6 @@ export function useEditorActions(context: EditorContext) {
     await action(async () => {
       const targetName = safePath(name.trim());
       if (targetName.includes('/')) throw new Error('请输入文件名称，不包含文件夹路径。');
-      if (!canMoveWithinFormat(document.path, targetName))
-        throw new Error('请保留图片的原始格式扩展名；文本不能使用图片扩展名。');
       const target = document.path.slice(0, document.path.lastIndexOf('/') + 1) + targetName;
       await runtime.workspace.move(document.projectId, document.path, target, document.revision!);
       const current = await runtime.workspace.preview(document.projectId, target);
@@ -205,6 +216,9 @@ export function useEditorActions(context: EditorContext) {
         name: targetName,
         savedName: targetName,
         revision: current.revision,
+        kind: current.kind,
+        size: current.size,
+        unavailableReason: current.unavailableReason,
       };
       const latest = editorRef.current;
       if (latest?.identity === document.identity) setEditor({ ...saved, text: latest.text });

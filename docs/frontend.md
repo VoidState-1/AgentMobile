@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                               |
 | -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------------------- |
+| 2.6.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：二进制文件管理、内容类型筛选与不可预览界面。                         |
 | 2.5.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：edit_text 归入修改工具分组并展示有界编辑回执。                       |
 | 2.4.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：放开文本导入、新建和重命名，仅 Markdown 使用排版预览。               |
 | 2.3.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录供应商长按排序、共享对象行扩展与紧凑连接摘要，删除执行模式控件。 |
@@ -132,7 +133,7 @@ commitDrafts 是按项目分开的界面说明草稿，当前没有写入 Prefer
 
 ## 5. 编辑会话身份与保存
 
-[EditorDocument](../src/features/workbench/types.ts) 保存 identity Symbol、projectId/path/revision、当前与已保存 text/name，以及 image/reading/fresh/externalChanged。每次重新打开文件生成新 identity，即使 path 相同也属于新的编辑会话。
+[EditorDocument](../src/features/workbench/types.ts) 保存 identity Symbol、projectId/path/revision、当前与已保存 text/name、kind/size/unavailableReason，以及 reading/fresh/externalChanged。每次重新打开文件生成新 identity，即使 path 相同也属于新的编辑会话。
 
 [useEditorSession](../src/features/workbench/use-editor-session.ts) 提供唯一 setEditor，同步更新 ref 和 state。不要其他代码直接写 editorRef，否则下一次异步命令读取的内容与已显示 UI 会分叉。
 
@@ -165,11 +166,15 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。原生�
 
 当前实现仍有活跃运行的内存 trace 和内部完整读取路径，UI 分页不能代替整个内核的长任务内存审计。
 
-## 8. 通用文本、Markdown 与图片
+## 8. 原始文件、通用文本、Markdown 与图片
 
-普通导入不再使用文件扩展名/MIME 白名单，支持任意有效 UTF-8 文本（含代码、配置、自定义扩展名和无扩展名文件）；写入用例负责 1 MiB、有效 UTF-8 与无 NUL 校验，二进制和其他编码显示公开错误，不保存乱码。新建/重命名保留合法文件名称和相对路径校验，禁止把文本改成图片扩展名或将图片改成其他格式。
+普通导入不使用文件扩展名/MIME 白名单，调用 write 保存原始字节（当前单文件操作预算 20 MiB）。按内容识别的文本导入 documents/，其余导入 assets/。文件列表可筛选全部/文字/图片/其他，二进制和其他编码不会被当作文本解码。新建/重命名保留合法名称与相对路径校验，改后缀只改名称，不转换字节。
+
+预览使用 kind/mimeType/size/unavailableReason。无法展示的文件显示大小与原因，提供导出、重命名和删除，不提供文本编辑按钮；大文本也可保存而不进入全文编辑。文本编辑器通过 writeText 保存完整输入，执行 1 MiB、严格 UTF-8、无 NUL 及已有内容类型检查。图片按实际内容识别，改为其他后缀仍按原图展示；任务附件也使用内容类型，而非路径后缀判断。
 
 阅读模式仅对 `.md`、`.markdown` 使用 Markdown 排版；其他文本用可选择、等宽的原文预览，保留空白和 Markdown 标记，HTML/SVG/脚本均不执行。编辑模式继续使用原文输入，保存、并发保护、导出与 Git 流程共用原有 AppServices 用例。
+
+差异视图遇到二进制、超预算或两侧类型变化时展示前后字节数与原因，不显示乱码或虚构行数；可预览文本/图片仍展示内容差异。
 
 [Markdown](../src/features/workbench/markdown.tsx) 使用原生组件实现常见子集：标题 1–3、粗体、行内代码、代码围栏、无序列表、引用、分隔线及独立行图片。不是完整 CommonMark/HTML renderer，不承诺表格、全部嵌套结构或可执行 HTML。
 

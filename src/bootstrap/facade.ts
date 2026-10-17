@@ -91,6 +91,8 @@ export function createAppServices(value: AppDependencies): AppServices {
           revision: string | null,
           options?: { message?: string },
         ) => value.workspace.write(id, path, bytes, revision, { message: options?.message }),
+        writeText: (id: string, path: string, bytes: Uint8Array, revision: string | null) =>
+          value.workspace.writeText(id, path, bytes, revision),
         remove: (id: string, path: string, revision: string) =>
           value.workspace.remove(id, path, revision),
         move: (id: string, from: string, to: string, revision: string) =>
@@ -111,7 +113,7 @@ export function createAppServices(value: AppDependencies): AppServices {
           expected: Parameters<AppServices['workspace']['commitStaged']>[2],
         ) => value.workspace.commitStaged(id, message, expected),
       },
-      ['create', 'write', 'remove', 'move', 'stage', 'unstage', 'commitStaged'],
+      ['create', 'write', 'writeText', 'remove', 'move', 'stage', 'unstage', 'commitStaged'],
     ),
     head: expose({ head: (id: string) => value.workspace.git.head(id) }, ['head']).head,
     snapshot: async (id: string, path?: string) => {

@@ -43,7 +43,7 @@ export function gitFileSystem(fs: HostFileSystem) {
         throw new AppError('VALIDATION', '不支持符号链接');
       },
       async chmod() {
-        /* Private files only; symlinks and executables are not supported. */
+        throw new AppError('VALIDATION', '当前存储后端不支持修改文件权限。');
       },
     },
   };

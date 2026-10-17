@@ -477,6 +477,42 @@ it('图片移动与删除按二进制基线预检；冲突保留整批，合入�
   await expect(f.workspace.undoTask({ ...f.child, state: 'completed' })).rejects.toThrow('根任务');
 });
 
+it('writer 可以移动授权二进制并合入，文本工具不能因改名覆盖其字节', async () => {
+  const bytes = new Uint8Array([0, 255, 2]);
+  const source = 'assets/source.bin';
+  const target = 'assets/renamed.txt';
+  const f = await fixture([source, target], false, async (workspace, id) => {
+    await workspace.write(id, source, bytes, null);
+  });
+  const revision = await f.workspace.git.revision(bytes);
+  const move = await f.tools
+    .find(tool => tool.name === 'move_file')!
+    .execute('move-binary', {
+      from: source,
+      to: target,
+      expectedRevision: revision,
+    });
+  expect(move.isError).not.toBe(true);
+  const overwrite = await f.write(target, 'overwrite', revision);
+  expect(overwrite.isError).toBe(true);
+  const read = await f.tools
+    .find(tool => tool.name === 'read_text')!
+    .execute('read-binary', {
+      path: target,
+    });
+  expect(read.isError).toBe(true);
+  expect((await f.workspace.read(f.project.id, source)).bytes).toEqual(bytes);
+  await f.ready();
+  expect((await f.proposals.apply('root', f.overlay.id)).applied).toBe(true);
+  expect((await f.workspace.read(f.project.id, target)).bytes).toEqual(bytes);
+  await expect(f.workspace.read(f.project.id, source)).rejects.toThrow();
+  expect(await f.workspace.preview(f.project.id, target)).toMatchObject({
+    kind: 'binary',
+    content: '',
+    unavailableReason: expect.any(String),
+  });
+});
+
 it('文件合入已记录但提案 applied 回执失败时阻止组完成，重启从文件回执补记提案', async () => {
   const f = await fixture();
   await f.write('documents/new.md', 'merged before receipt', null);

@@ -109,6 +109,17 @@ async function seed(spec) {
       await fs.mkdir(resolve(value), { recursive: true });
     },
     remove: async value => fs.rm(resolve(value)),
+    moveFile: async (from, to) => {
+      try {
+        await fs.stat(resolve(to));
+      } catch (error) {
+        if (error.code !== 'ENOENT') throw error;
+        await fs.mkdir(path.dirname(resolve(to)), { recursive: true });
+        await fs.rename(resolve(from), resolve(to));
+        return;
+      }
+      throw new Error('移动目标已存在');
+    },
     list: async value => fs.readdir(resolve(value)),
     stat: async value => {
       const stat = await fs.stat(resolve(value));

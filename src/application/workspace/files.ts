@@ -3,20 +3,20 @@ import type { WorkspaceContext } from './context';
 import type { Project } from '@/core/projects';
 import type { Operation } from '@/core/workspace/journal';
 import type { CandidateMergeInput, CandidateMergeResult } from '@/core/runs/proposals';
-import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
+import { safePath, isImage } from '@/core/workspace/path';
 import { validateImage } from '@/core/workspace/image';
-import { validateText } from '@/core/workspace/text';
+import { validateTextContent } from '@/core/workspace/content';
 import {
   applyTextEdits,
   validateTextEdits,
   type TextEdit,
   type TextEditOutcome,
 } from '@/core/workspace/edits';
-import { contentLimits } from '@/core/agent/settings';
+import { workspaceLimits } from '@/core/workspace/limits';
 import type { WorkspaceReader } from './reader';
 import type { MutationCoordinator } from './mutations';
 
-const MAX_FILE_BYTES = contentLimits.fileBytes;
+const MAX_FILE_BYTES = workspaceLimits.fileOperationBytes;
 export class FileCommands {
   constructor(
     private readonly context: WorkspaceContext,
@@ -73,10 +73,6 @@ export class FileCommands {
         const bytes = candidate[path];
         if (bytes && bytes.length > MAX_FILE_BYTES)
           throw new AppError('LIMIT', '文件超过 20 MB 限制');
-        if (bytes) {
-          if (isImage(path)) validateImage(path, bytes);
-          else validateText(bytes);
-        }
         changes.push({ path, before: current, after });
       }
       // Entire batch is preflighted inside the sole project queue, before journaling.
@@ -139,19 +135,39 @@ export class FileCommands {
     return project;
   }
 
-  async write(
+  write(
     projectId: string,
     path: string,
     bytes: Uint8Array,
     expectedRevision: string | null,
     options: { owner?: string; operationId?: string; message?: string } = {},
   ) {
+    return this.save(projectId, path, bytes, expectedRevision, options, false);
+  }
+
+  async writeText(
+    projectId: string,
+    path: string,
+    bytes: Uint8Array,
+    expectedRevision: string | null,
+    options: { owner?: string; operationId?: string; message?: string } = {},
+  ) {
+    validateTextContent(bytes);
+    return this.save(projectId, path, bytes, expectedRevision, options, true);
+  }
+
+  private async save(
+    projectId: string,
+    path: string,
+    bytes: Uint8Array,
+    expectedRevision: string | null,
+    options: { owner?: string; operationId?: string; message?: string },
+    textOnly: boolean,
+  ) {
     path = safePath(path);
     if (path.toLowerCase() === 'project.json')
       throw new AppError('VALIDATION', '项目配置由宿主管理');
     if (bytes.length > MAX_FILE_BYTES) throw new AppError('LIMIT', '文件超过 20 MB 限制');
-    if (isImage(path)) validateImage(path, bytes);
-    else validateText(bytes);
     return this.mutations.serial(projectId, options.owner, async () => {
       const operationId = options.operationId ?? this.context.id();
       const existing = await this.context.journal.get(projectId, operationId);
@@ -165,12 +181,15 @@ export class FileCommands {
         ) {
           throw new AppError('CONFLICT', '操作 ID 与原始修改不匹配');
         }
+        if (textOnly && existing.changes[0].before !== null)
+          validateTextContent(this.context.codec.decodeBase64(existing.changes[0].before));
         return this.mutations.apply(existing);
       }
       const before = await this.reader.bytesOrNull(projectId, path);
       const revision = before ? await this.context.git.revision(before) : null;
       if (revision !== expectedRevision)
         throw new AppError('CONFLICT', 'VERSION_CONFLICT：文件已变化，请重新读取。');
+      if (textOnly && before) validateTextContent(before);
       if (
         before &&
         this.context.codec.encodeBase64(before) === this.context.codec.encodeBase64(bytes)
@@ -200,7 +219,7 @@ export class FileCommands {
     options: { owner?: string; operationId?: string } = {},
   ): Promise<TextEditOutcome> {
     path = safePath(path);
-    if (path.toLowerCase() === 'project.json' || isImage(path))
+    if (path.toLowerCase() === 'project.json')
       throw new AppError('VALIDATION', '精确替换只允许工作区内非受保护的文本文件。');
     if (typeof expectedRevision !== 'string' || !expectedRevision)
       throw new AppError('VALIDATION', '精确替换需要读取时的文件修订号，不能创建文件。');
@@ -229,13 +248,13 @@ export class FileCommands {
         : await this.reader.bytesOrNull(projectId, path);
       if (before === null)
         throw new AppError('VALIDATION', '文件不存在，请使用 write_text 新建文件。');
-      validateText(before);
+      validateTextContent(before);
       if ((await this.context.git.revision(before)) !== expectedRevision)
         throw new AppError('CONFLICT', 'VERSION_CONFLICT：文件已变化，请重新读取后重新规划替换。');
       const source = this.context.codec.decodeText(before);
       const plan = applyTextEdits(source, replacements);
       const after = this.context.codec.encodeText(plan.text);
-      validateText(after);
+      validateTextContent(after);
       if (previous && previous.changes[0].after !== this.context.codec.encodeBase64(after))
         throw new AppError('STORAGE', '精确替换回执与保存的结果不一致。');
       const operation =
@@ -294,26 +313,33 @@ export class FileCommands {
     to = safePath(to);
     if (from.toLowerCase() === 'project.json' || to.toLowerCase() === 'project.json')
       throw new AppError('VALIDATION', '项目配置由宿主管理');
-    if (!canMoveWithinFormat(from, to))
-      throw new AppError('VALIDATION', '移动不能转换图片格式或在图片与文本之间转换。');
     return this.mutations.serial(projectId, owner, async () => {
       const before = await this.reader.read(projectId, from);
       if (before.revision !== revision)
         throw new AppError('CONFLICT', 'VERSION_CONFLICT：文件已变化');
-      if (isImage(from)) validateImage(to, before.bytes);
-      else validateText(before.bytes);
       if (await this.reader.bytesOrNull(projectId, to))
         throw new AppError('CONFLICT', '目标文件已存在');
-      return this.mutations.prepare(
-        projectId,
-        [
-          { path: from, before: this.context.codec.encodeBase64(before.bytes), after: null },
-          { path: to, before: null, after: this.context.codec.encodeBase64(before.bytes) },
-        ],
-        '移动 ' + from + ' → ' + to,
-        this.context.id(),
-        owner,
+      const operation = await this.context.journal.prepare(
+        {
+          id: this.context.id(),
+          projectId,
+          kind: 'files',
+          ownerRootRunId: owner,
+          actorRunId: owner,
+          expectedHead: await this.context.git.head(projectId),
+          message: '移动 ' + from + ' → ' + to,
+          phase: 'prepared',
+          createdAt: new Date().toISOString(),
+        },
+        {
+          changes: [
+            { path: from, before: this.context.codec.encodeBase64(before.bytes), after: null },
+            { path: to, before: null, after: this.context.codec.encodeBase64(before.bytes) },
+          ],
+          fileMove: { from, to },
+        },
       );
+      return this.mutations.apply(operation);
     });
   }
 

@@ -1,9 +1,7 @@
-import { AppError } from '@/core/errors';
 import { Type } from 'typebox';
 import type { ControlledTool } from '@/core/agent/tools';
 import type { RunToolsContext } from './context';
 import { defineTool, assertRunning, result, textLimit, revision } from './common';
-import { isImage } from '@/core/workspace/path';
 import { fileReadTools, scopedFileReader } from './file-read';
 import { editTextDescription, editTextParameters, textEditResult } from './text-edit';
 
@@ -65,8 +63,7 @@ export function workspaceTools(context: RunToolsContext): ControlledTool[] {
       execute: async (callId, args, signal) => {
         assertRunning(signal);
         const path = String(args.path);
-        if (isImage(path)) throw new AppError('VALIDATION', '文字工具不能写入图片文件。');
-        await workspace.write(
+        await workspace.writeText(
           projectId,
           path,
           codec.encodeText(String(args.text)),

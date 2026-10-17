@@ -4,9 +4,8 @@ import type { ControlledTool } from '@/core/agent/tools';
 import type { ContentCodec } from '@/core/storage/codec';
 import type { ChangeProposal, ProposalWrite } from '@/core/runs/proposals';
 import type { RunState } from '@/core/runs/types';
-import { safePath, isImage, canMoveWithinFormat } from '@/core/workspace/path';
-import { validateText } from '@/core/workspace/text';
-import { validateImage } from '@/core/workspace/image';
+import { safePath } from '@/core/workspace/path';
+import { validateTextContent } from '@/core/workspace/content';
 import {
   applyTextEdits,
   validateTextEdits,
@@ -77,16 +76,14 @@ export class ProposalOverlay {
   private change(
     invocation: string,
     changes: { path: string; bytes: Uint8Array | null; expected: string | null }[],
+    textOnly = false,
   ): Promise<void> {
     return this.exclusive(async () => {
       this.assertWritable();
       const id = this.proposal.id + ':' + invocation;
       const parts = [];
       for (const change of changes) {
-        if (change.bytes) {
-          if (isImage(change.path)) validateImage(change.path, change.bytes);
-          else validateText(change.bytes);
-        }
+        if (textOnly && change.bytes) validateTextContent(change.bytes);
         parts.push({
           path: this.scope(change.path),
           expected: change.expected,
@@ -106,6 +103,7 @@ export class ProposalOverlay {
         this.proposal.candidateSnapshot,
       );
       for (const change of changes) {
+        if (textOnly && tree[change.path]) validateTextContent(tree[change.path]);
         const current = tree[change.path]
           ? await this.workspace.git.revision(tree[change.path])
           : null;
@@ -179,7 +177,6 @@ export class ProposalOverlay {
     expectedRevision: string,
   ): Promise<TextEditOutcome> {
     path = this.scope(path);
-    if (isImage(path)) throw new AppError('VALIDATION', '精确替换不能修改图片提案。');
     if (typeof expectedRevision !== 'string' || !expectedRevision)
       throw new AppError('VALIDATION', '精确替换需要候选文件的当前修订号，不能创建文件。');
     const replacements = validateTextEdits(edits);
@@ -201,7 +198,7 @@ export class ProposalOverlay {
       );
       const before = tree[path];
       if (!before) throw new AppError('VALIDATION', '候选文件不存在，请使用 write_text 新建文件。');
-      validateText(before);
+      validateTextContent(before);
       if ((await this.workspace.git.revision(before)) !== expectedRevision)
         throw new AppError(
           'CONFLICT',
@@ -210,7 +207,7 @@ export class ProposalOverlay {
       const source = this.codec.decodeText(before);
       const plan = applyTextEdits(source, replacements);
       const after = this.codec.encodeText(plan.text);
-      validateText(after);
+      validateTextContent(after);
       const revision = await this.workspace.git.revision(after);
       if (previous) {
         const saved = await this.workspace.git.entries(
@@ -305,10 +302,11 @@ export class ProposalOverlay {
         execute: async (callId, args, signal) => {
           assertRunning(signal);
           const path = this.scope(args.path);
-          if (isImage(path)) throw new AppError('VALIDATION', '文字工具不能写入图片提案。');
-          await this.change(round() + ':' + callId, [
-            { path, bytes: this.codec.encodeText(args.text), expected: args.expectedRevision },
-          ]);
+          await this.change(
+            round() + ':' + callId,
+            [{ path, bytes: this.codec.encodeText(args.text), expected: args.expectedRevision }],
+            true,
+          );
           return result({
             path,
             revision: (await this.read(path)).revision,
@@ -348,8 +346,6 @@ export class ProposalOverlay {
           const from = this.scope(args.from);
           const to = this.scope(args.to);
           const file = await this.read(from);
-          if (!canMoveWithinFormat(from, to))
-            throw new AppError('VALIDATION', '提案移动不能转换文件格式。');
           await this.change(round() + ':' + callId, [
             { path: from, bytes: null, expected: args.expectedRevision },
             { path: to, bytes: file.bytes, expected: null },

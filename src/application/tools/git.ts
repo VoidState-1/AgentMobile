@@ -2,7 +2,6 @@ import { Type } from 'typebox';
 import type { ControlledTool } from '@/core/agent/tools';
 import type { RunToolsContext } from './context';
 import { defineTool, assertRunning, result, textLimit, revision } from './common';
-import { isImage } from '@/core/workspace/path';
 
 export function gitTools(context: RunToolsContext): ControlledTool[] {
   const { workspace, projectId, runId, baseline } = context;
@@ -41,8 +40,16 @@ export function gitTools(context: RunToolsContext): ControlledTool[] {
           files: changes.slice(0, 200).map(file => {
             const limit = Math.max(0, Math.min(12000, Math.floor(remaining / 2)));
             remaining -= limit * 2;
-            return isImage(file.path)
-              ? { path: file.path, status: file.status, stagedOnly: file.stagedOnly, image: true }
+            return file.kind !== 'text' || file.unavailableReason
+              ? {
+                  path: file.path,
+                  status: file.status,
+                  stagedOnly: file.stagedOnly,
+                  kind: file.kind,
+                  beforeSize: file.beforeSize,
+                  afterSize: file.afterSize,
+                  unavailableReason: file.unavailableReason,
+                }
               : {
                   ...file,
                   before: file.before.slice(0, limit),

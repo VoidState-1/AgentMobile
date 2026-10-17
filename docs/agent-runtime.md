@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                          |
 | -------- | ------------------------- | ---------------------------------------- | --------------------------------------------------------------------------------- |
+| 1.3.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：文本工具策略、二进制移动删除、内容识别与搜索跳过规则。          |
 | 1.2.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：增加 edit_text，明确局部修改策略、授权效果和有界结果。          |
 | 1.1.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：主任务与 writer 支持通用 UTF-8 文本，明确内容校验和不执行代码。 |
 | 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 描述 Pi 边界、运行状态、调度预算、停止语义与隔离提案。                            |
@@ -109,7 +110,8 @@ deadline 在根开始执行预算时建立，排队时间不计入运行总时�
 | 项目                            | 上限/默认                                                             |
 | ------------------------------- | --------------------------------------------------------------------- |
 | 草稿/目标正文、可配置系统提示词 | 各 16,000 UTF-16 单位；内部目标拼接允许少量引用说明余量               |
-| 文本文件 / 一般文件             | 1 MiB / 20 MiB                                                        |
+| 文本预览与编辑策略              | 1 MiB；不限制原始字节存储类型                                         |
+| 缓冲式工作区文件操作            | 20 MiB；常量 workspaceLimits.fileOperationBytes，不是文件系统容量限制 |
 | 转发模型的单张图片              | 4 MiB                                                                 |
 | 工具文字输入/处理上限           | 240,000 UTF-16 单位，仍受文件 UTF-8 bytes 限制                        |
 | 序列化模型请求 / 模型流响应     | 8 MiB / 4 MiB                                                         |
@@ -130,7 +132,7 @@ ControlledTool 必须声明 effect：read、workspace-write、git-index、git-co
 | reviewer | snapshot 固定资料快照 | read                  | 不可 |
 | writer   | proposal 私有候选树   | read、workspace-write | 不可 |
 
-文件工具：list_files/read_text/search_text/inspect_image/edit_text/write_text/delete_file/move_file。edit_text 是已有文本局部修改的默认工具，要求同一修订的批量唯一/不重叠精确替换；write_text 用于新建或整体重写，仍要求当前修订号（创建为 null）。两者均为 workspace-write，writer 仅作用于授权候选；主工作区和隔离提案均在记录操作意图前拒绝含 NUL 或无效 UTF-8 内容，1 MiB 文件与 240,000 UTF-16 工具输入限制继续适用。默认系统提示词允许编写代码和配置，但不授予执行能力。Git：git_status/git_diff/git_stage/git_unstage/git_commit；Skills：load_skill/read_skill_resource；MCP：由冻结目录生成 `mcp_<serverIndex>_<toolIndex>`；委派工具见下文。模型图片工具只有允许图片输入时才提供或转发。
+文件工具：list_files/read_text/search_text/inspect_image/edit_text/write_text/delete_file/move_file。edit_text 是已有文本局部修改的默认工具，要求同一修订的批量唯一/不重叠精确替换；write_text 用于新建或整体重写，仍要求当前修订号（创建为 null）。两者均为 workspace-write，writer 仅作用于授权候选；主工作区与隔离候选的文本工具校验新旧内容为 UTF-8 文本，拒绝二进制覆盖、NUL 和无效编码，1 MiB 文本与 240,000 UTF-16 工具输入限制继续适用。原始文件导入与存储不受文本类型限制；move_file/delete_file 可管理授权二进制。search_text 跳过非文本和超文本预算文件，inspect_image 按字节识别真实图片格式。默认系统提示词允许编写代码和配置，但不授予执行能力。Git：git_status/git_diff/git_stage/git_unstage/git_commit；Skills：load_skill/read_skill_resource；MCP：由冻结目录生成 `mcp_<serverIndex>_<toolIndex>`；委派工具见下文。模型图片工具只有允许图片输入时才提供或转发。
 
 宿主规则要求局部修改使用 edit_text；工具错误后重新读取和规划，不自动改成全文覆盖。两种工作区共用 [替换算法](../src/core/workspace/edits.ts)、[schema 与结果摘要](../src/application/tools/text-edit.ts)，结果中的 replayed 表示原调用回执，后续修改须读取当前修订。完整参数、限制、错误与格式保留语义见 [工作区批量替换](workspace-and-git.md#21-agent-批量精确替换)。
 
@@ -144,7 +146,7 @@ ControlledTool 必须声明 effect：read、workspace-write、git-index、git-co
 
 spawn 选内置 role、目标（最多 8,000 字符）、paths（1–64 个）和预算。第一次委派固定本组 inputSnapshotRef，之后子任务共用这一时点的文件快照；不会因父任务后续改资料而悄悄改变已委派来源。
 
-reader/reviewer 的路径须在该快照存在；writer 可包含新的授权 UTF-8 文本路径，包括代码、配置、自定义扩展名和无扩展名文件，也可包含图片路径；只能写文本或移动/删除图片，不能生成图片 bytes 或执行代码。子任务的授权 paths 固定存于 launch，读取、搜索和修改必须在范围内。
+reader/reviewer 的路径须在该快照存在；writer 可包含新的授权 UTF-8 文本路径，包括代码、配置、自定义扩展名和无扩展名文件，也可包含图片或二进制路径；只能生成文本或移动/删除既有文件，不能通过文本工具生成二进制或执行代码。子任务的授权 paths 固定存于 launch，读取、搜索和修改必须在范围内。
 
 子任务使用独立 Pi session、RunRecord 和轨迹，不共享可变 messages。继承父模型/设置/Skills 冻结版本，当前不向子任务传递 MCP runtime、Git 提交工具或再次委派能力。
 

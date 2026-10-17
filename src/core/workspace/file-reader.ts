@@ -1,8 +1,11 @@
+import type { FileKind } from './types';
+
 export interface FileDescriptor {
   path: string;
   revision: string;
   size?: number;
   mimeType?: string;
+  kind?: FileKind;
 }
 export interface FileListQuery {
   cursor?: string;

@@ -1,5 +1,5 @@
 import type { Project } from '@/core/projects';
-import type { ProjectFile } from '@/core/workspace/types';
+import type { ProjectFile, ContentPreview, FileKind } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
 import type { RunListQuery, RunPage, RunDetail, RunView, RunChange } from '@/core/runs/queries';
 import type { TracePage, TextPage } from '@/core/runs/trace-storage';
@@ -30,9 +30,9 @@ import type { AgentSettings } from '@/core/agent/settings';
 import type { WorkbenchPreferences } from '@/core/preferences';
 import type { ProposalState } from '@/core/runs/proposals';
 
-export interface FilePreview {
+export interface FilePreview extends ContentPreview {
   revision: string;
-  content: string;
+  size: number;
 }
 export interface ReviewFile {
   path: string;
@@ -40,12 +40,16 @@ export interface ReviewFile {
   stagedOnly?: boolean;
   before: string;
   after: string;
+  kind: FileKind;
+  beforeSize: number | null;
+  afterSize: number | null;
+  unavailableReason?: string;
 }
 export interface FileChangeSummary {
   path: string;
   status: NonNullable<GitFileStatus['staged']>;
   stagedOnly: boolean;
-  image: boolean;
+  kind: FileKind;
   added?: number;
   removed?: number;
 }
@@ -82,6 +86,12 @@ export interface WorkspaceApi {
     bytes: Uint8Array,
     revision: string | null,
     options?: { message?: string },
+  ): Promise<string>;
+  writeText(
+    projectId: string,
+    path: string,
+    bytes: Uint8Array,
+    revision: string | null,
   ): Promise<string>;
   remove(projectId: string, path: string, revision: string): Promise<string>;
   move(projectId: string, from: string, to: string, revision: string): Promise<string>;

@@ -40,7 +40,7 @@ export function Artifacts({ task, controller }: { task: RunView; controller: Art
       {(expanded ? entries : entries.slice(0, 3)).map(path => {
         const detail = summary?.find(item => item.path === path);
         const file = controller.files.find(item => item.path === path);
-        const Icon = detail?.image ? Image : FileText;
+        const Icon = detail?.kind === 'image' ? Image : FileText;
         return (
           <View
             key={path}
@@ -97,7 +97,7 @@ export function Artifacts({ task, controller }: { task: RunView; controller: Art
                 <DiffStat added={detail.added} removed={detail.removed} />
               ) : (
                 <T tone="accent" variant="caption">
-                  {detail?.image ? '图片差异' : '差异'}
+                  {detail?.kind === 'image' ? '图片差异' : '差异'}
                 </T>
               )}
             </Pressable>

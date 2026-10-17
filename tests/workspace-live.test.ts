@@ -73,13 +73,13 @@ it('快照等到移动提交完成，文件、预览、Git 和操作记录对应
   const applying = new Promise<void>(resolve => {
     entered = resolve;
   });
-  const write = f.files.write;
-  f.files.write = async (path, bytes) => {
-    if (path.endsWith('/moved.md')) {
+  const move = f.files.moveFile;
+  f.files.moveFile = async (from, to) => {
+    await move(from, to);
+    if (to.endsWith('/moved.md')) {
       entered();
       await held;
     }
-    await write(path, bytes);
   };
   const moving = workspace.move(
     project.id,

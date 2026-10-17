@@ -1,4 +1,3 @@
-import { isImage } from '@/core/workspace/path';
 import { ModelPicker } from '@/features/model-config/picker';
 import { SkillPicker } from '@/features/skills/picker';
 import { fileName } from '@/shared/format';
@@ -152,7 +151,7 @@ export const WorkbenchSheets = memo(function WorkbenchSheets({
             }}
             selected={conversation.attachment === file.path}
             leading={
-              isImage(file.path) ? (
+              file.kind === 'image' ? (
                 <ImageIcon size={17} color={theme.accent} />
               ) : (
                 <FileText size={17} color={theme.secondary} />

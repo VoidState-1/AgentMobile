@@ -5,8 +5,9 @@ import { fileQueryLimits } from '@/core/workspace/file-reader';
 import type { ContentCodec } from '@/core/storage/codec';
 import { contentLimits } from '@/core/agent/settings';
 import { AppError } from '@/core/errors';
-import { validateText } from '@/core/workspace/text';
-import { safePath, isImage, mimeFor } from '@/core/workspace/path';
+import { validateTextContent, describeContent } from '@/core/workspace/content';
+import { validateImageContent } from '@/core/workspace/image';
+import { safePath } from '@/core/workspace/path';
 import { textEnd } from '@/core/runs/trace-storage';
 import { defineTool, assertRunning, result, textLimit } from './common';
 
@@ -67,8 +68,7 @@ export function fileReadTools(
 ): ControlledTool[] {
   const text = async (path: string, signal?: AbortSignal) => {
     const file = await reader.read(path, signal);
-    if (isImage(file.path)) throw new AppError('VALIDATION', '图片请通过图片工具读取。');
-    validateText(file.bytes);
+    validateTextContent(file.bytes);
     return {
       path: file.path,
       revision: file.revision,
@@ -142,8 +142,17 @@ export function fileReadTools(
           const page = await reader.list({ cursor }, signal);
           for (const file of page.files) {
             assertRunning(signal);
-            if (isImage(file.path)) continue;
-            const document = await text(file.path, signal);
+            const content = await reader.read(file.path, signal);
+            if (
+              describeContent(file.path, content.bytes).kind !== 'text' ||
+              content.bytes.length > contentLimits.textFileBytes
+            )
+              continue;
+            const document = {
+              revision: content.revision,
+              source: content.source,
+              text: codec.decodeText(content.bytes),
+            };
             for (const [index, line] of document.text.split('\n').entries()) {
               const position = line.toLocaleLowerCase().indexOf(query);
               if (position >= 0)
@@ -175,7 +184,7 @@ export function fileReadTools(
             ),
             execute: async (_, args, signal) => {
               const file = await reader.read(args.path, signal);
-              if (!isImage(file.path)) throw new AppError('VALIDATION', '文件不是支持的图片。');
+              const mimeType = validateImageContent(file.bytes);
               if (file.bytes.length > contentLimits.modelImageBytes)
                 throw new AppError('LIMIT', '模型图片输入暂限 4 MB。');
               return {
@@ -184,7 +193,7 @@ export function fileReadTools(
                   {
                     type: 'image' as const,
                     data: codec.encodeBase64(file.bytes),
-                    mimeType: mimeFor(file.path),
+                    mimeType,
                   },
                 ],
                 details: {},

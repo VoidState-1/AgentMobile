@@ -1,4 +1,32 @@
 import { AppError } from '@/core/errors';
+export type ImageMimeType = 'image/png' | 'image/jpeg' | 'image/webp';
+
+export function imageMimeType(bytes: Uint8Array): ImageMimeType | undefined {
+  if (
+    bytes.length >= 8 &&
+    [137, 80, 78, 71, 13, 10, 26, 10].every((byte, index) => bytes[index] === byte)
+  )
+    return 'image/png';
+  if (bytes.length >= 3 && bytes[0] === 255 && bytes[1] === 216 && bytes[2] === 255)
+    return 'image/jpeg';
+  if (
+    bytes.length >= 12 &&
+    String.fromCharCode(...bytes.slice(0, 4)) === 'RIFF' &&
+    String.fromCharCode(...bytes.slice(8, 12)) === 'WEBP'
+  )
+    return 'image/webp';
+  return undefined;
+}
+
+export function validateImageContent(bytes: Uint8Array): ImageMimeType {
+  const mimeType = imageMimeType(bytes);
+  if (!mimeType) throw new AppError('VALIDATION', '文件不是支持的 PNG / JPEG / WebP 图片。');
+  validateImage(
+    mimeType === 'image/png' ? 'image.png' : mimeType === 'image/jpeg' ? 'image.jpg' : 'image.webp',
+    bytes,
+  );
+  return mimeType;
+}
 /** Header checks avoid decoding unexpected formats and oversized images. */
 export function validateImage(path: string, bytes: Uint8Array): void {
   const view = new DataView(bytes.buffer, bytes.byteOffset, bytes.byteLength);

@@ -15,6 +15,7 @@ export interface OperationBody {
   changes: FileChange[];
   indexChanges?: IndexChange[];
   textEditFingerprint?: string;
+  fileMove?: { from: string; to: string };
 }
 export interface OperationHeader {
   schemaVersion: 2;

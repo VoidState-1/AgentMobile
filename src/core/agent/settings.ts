@@ -4,7 +4,6 @@ export const contentLimits = {
   promptCharacters: 16_000,
   systemPromptCharacters: 16_000,
   textFileBytes: 1024 * 1024,
-  fileBytes: 20 * 1024 * 1024,
   modelImageBytes: 4 * 1024 * 1024,
   toolTextCharacters: 240_000,
   requestBytes: 8 * 1024 * 1024,

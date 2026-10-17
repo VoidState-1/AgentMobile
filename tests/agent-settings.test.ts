@@ -276,7 +276,7 @@ describe('长任务真实 Pi 循环', () => {
       totalCharacters: 200000,
     });
     await expect(
-      f.workspace.write(
+      f.workspace.writeText(
         f.project.id,
         'documents/too-large.md',
         new Uint8Array(contentLimits.textFileBytes + 1),

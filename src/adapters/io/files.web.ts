@@ -1,6 +1,6 @@
 import { AppError } from '@/core/errors';
 import type { WorkspaceApplication } from '@/application/workspace/service';
-import { contentLimits } from '@/core/agent/settings';
+import { workspaceLimits } from '@/core/workspace/limits';
 
 export async function pickFile(
   kind?: 'image',
@@ -12,7 +12,7 @@ export async function pickFile(
     input.onchange = async () => {
       try {
         const file = input.files?.[0];
-        if (file && file.size > contentLimits.fileBytes) {
+        if (file && file.size > workspaceLimits.fileOperationBytes) {
           reject(new AppError('VALIDATION', '导入文件暂限 20 MB'));
           return;
         }

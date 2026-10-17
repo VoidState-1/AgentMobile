@@ -26,6 +26,8 @@ export interface HostFileSystem {
   write(path: string, bytes: Uint8Array): Promise<void>;
   mkdir(path: string): Promise<void>;
   remove(path: string): Promise<void>;
+  /** Move a regular file to a missing destination. Never silently overwrites. */
+  moveFile(from: string, to: string): Promise<void>;
   list(path: string): Promise<string[]>;
   stat(path: string): Promise<StorageStat>;
   /** Optional content fingerprint without transferring bytes to JavaScript. */

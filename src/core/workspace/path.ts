@@ -16,7 +16,6 @@ export function safePath(input: string, allowRoot = false): string {
           part === '.' ||
           part === '..' ||
           part.toLowerCase() === '.git' ||
-          part.toLowerCase().startsWith('.git') ||
           /[. ]$/.test(part) ||
           /^(con|prn|aux|nul|com[1-9]|lpt[1-9])(\.|$)/i.test(part),
       )
@@ -38,13 +37,10 @@ export function mimeFor(path: string): string {
         string,
         string
       >
-    )[ext ?? ''] ?? (isMarkdown(path) ? 'text/markdown' : 'text/plain')
+    )[ext ?? ''] ?? (isMarkdown(path) ? 'text/markdown' : 'application/octet-stream')
   );
 }
 
 export function isImage(path: string): boolean {
   return mimeFor(path).startsWith('image/');
-}
-export function canMoveWithinFormat(from: string, to: string): boolean {
-  return isImage(from) ? isImage(to) && mimeFor(from) === mimeFor(to) : !isImage(to);
 }

@@ -1,6 +1,7 @@
 import type { SetStateAction } from 'react';
 import type { AppServices, ReviewFile } from '@/application/services';
 import type { RunView } from '@/core/runs/queries';
+import type { FileKind } from '@/core/workspace/types';
 import type { useWorkbenchUi } from '@/shared/workbench-state';
 
 export interface EditorDocument {
@@ -13,7 +14,9 @@ export interface EditorDocument {
   savedText: string;
   name: string;
   savedName: string;
-  image: boolean;
+  kind: FileKind;
+  size: number;
+  unavailableReason?: string;
   reading: boolean;
   fresh: boolean;
   externalChanged?: boolean;

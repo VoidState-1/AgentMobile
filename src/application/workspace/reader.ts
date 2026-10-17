@@ -2,13 +2,15 @@ import { AppError } from '@/core/errors';
 import type { WorkspaceContext } from './context';
 import type { Project } from '@/core/projects';
 import type { ProjectFile } from '@/core/workspace/types';
-import { safePath, isImage, mimeFor } from '@/core/workspace/path';
-import { contentLimits } from '@/core/agent/settings';
-import { validateText } from '@/core/workspace/text';
+import { safePath } from '@/core/workspace/path';
+import { workspaceLimits } from '@/core/workspace/limits';
+import { validateTextContent, describeContent } from '@/core/workspace/content';
+import { previewContent } from './content';
+import type { FilePreview } from '@/application/services';
 import type { StorageStat } from '@/core/storage/contracts';
 import type { Operation } from '@/core/workspace/journal';
 
-const MAX_FILE_BYTES = contentLimits.fileBytes;
+const MAX_FILE_BYTES = workspaceLimits.fileOperationBytes;
 export class WorkspaceReader {
   private readonly descriptors = new Map<string, { file: ProjectFile; stamp: string }>();
   constructor(private readonly context: WorkspaceContext) {}
@@ -62,7 +64,7 @@ export class WorkspaceReader {
       for (const name of await this.context.fs.list(
         this.context.git.dir(projectId) + (path ? '/' + path : ''),
       )) {
-        if (name === '.git') continue;
+        if (name.toLowerCase() === '.git') continue;
         const relative = safePath(path ? path + '/' + name : name);
         const info = await this.context.fs.stat(this.internal(projectId, relative));
         if (info.kind === 'directory') await walk(relative);
@@ -74,7 +76,7 @@ export class WorkspaceReader {
   async view(projectId: string, openPath?: string) {
     const files: ProjectFile[] = [];
     const seen = new Set<string>();
-    let preview: { path: string; revision: string; content: string } | undefined;
+    let preview: (FilePreview & { path: string }) | undefined;
     await this.walk(projectId, async (path, info) => {
       const key = projectId + '/' + path;
       seen.add(key);
@@ -90,8 +92,14 @@ export class WorkspaceReader {
         return;
       }
       const { bytes, revision } = await this.read(projectId, path);
-      files.push({ path, revision, size: bytes.length, mimeType: mimeFor(path) });
-      if (path === openPath) preview = { path, revision, content: this.display(path, bytes) };
+      files.push({ path, revision, size: bytes.length, ...describeContent(path, bytes) });
+      if (path === openPath)
+        preview = {
+          path,
+          revision,
+          size: bytes.length,
+          ...previewContent(path, bytes, this.context.codec),
+        };
     });
     for (const key of this.descriptors.keys())
       if (key.startsWith(projectId + '/') && !seen.has(key)) this.descriptors.delete(key);
@@ -118,27 +126,20 @@ export class WorkspaceReader {
     if (after !== undefined)
       this.descriptors.set(key, {
         stamp: after,
-        file: { path, revision, size: bytes.length, mimeType: mimeFor(path) },
+        file: { path, revision, size: bytes.length, ...describeContent(path, bytes) },
       });
     return { bytes, revision };
   }
 
   async readText(projectId: string, path: string) {
-    if (isImage(path)) throw new AppError('VALIDATION', '图片请通过图片工具读取');
     const { bytes, revision } = await this.read(projectId, path);
-    validateText(bytes);
+    validateTextContent(bytes);
     return { text: this.context.codec.decodeText(bytes), revision };
   }
 
   async preview(projectId: string, path: string) {
     const { bytes, revision } = await this.read(projectId, path);
-    return { revision, content: this.display(path, bytes) };
-  }
-  private display(path: string, bytes: Uint8Array): string {
-    if (isImage(path))
-      return 'data:' + mimeFor(path) + ';base64,' + this.context.codec.encodeBase64(bytes);
-    validateText(bytes);
-    return this.context.codec.decodeText(bytes);
+    return { revision, size: bytes.length, ...previewContent(path, bytes, this.context.codec) };
   }
 
   async workingTree(projectId: string) {

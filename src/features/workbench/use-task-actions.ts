@@ -1,6 +1,5 @@
 import type { WorkspaceOperationSummary } from '@/application/services';
 import type { RunView } from '@/core/runs/queries';
-import { isImage } from '@/core/workspace/path';
 import type { useConversationDraft } from '@/features/conversations/use-draft';
 import type { ActionContext, Review } from './types';
 
@@ -46,10 +45,13 @@ export function useTaskActions(context: TaskContext) {
     const projectId = ui.projectId;
     const text =
       submitted.text.trim() + (submitted.attachment ? '\n\n参考文件：' + submitted.attachment : '');
+    const attachment = submitted.attachment
+      ? (await runtime.workspace.files(projectId)).find(file => file.path === submitted.attachment)
+      : undefined;
     await runtime.agent.start(
       projectId,
       text,
-      !!submitted.attachment && isImage(submitted.attachment),
+      attachment?.kind === 'image',
       ui.conversationId,
       saved?.revision,
     );

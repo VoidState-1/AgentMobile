@@ -49,6 +49,7 @@ export class WorkspaceApplication {
     this.mutations.recover(...args);
   create = (...args: Parameters<FileCommands['create']>) => this.commands.create(...args);
   write = (...args: Parameters<FileCommands['write']>) => this.commands.write(...args);
+  writeText = (...args: Parameters<FileCommands['writeText']>) => this.commands.writeText(...args);
   editText = (...args: Parameters<FileCommands['editText']>) => this.commands.editText(...args);
   remove = (...args: Parameters<FileCommands['remove']>) => this.commands.remove(...args);
   move = (...args: Parameters<FileCommands['move']>) => this.commands.move(...args);

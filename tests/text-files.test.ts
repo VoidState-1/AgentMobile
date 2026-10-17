@@ -120,7 +120,11 @@ it('主 Agent 可创建代码、配置与无扩展名文本，版本检查和单
   expect(
     (await write.execute('image', { path: 'fake.png', text: 'text', expectedRevision: null }))
       .isError,
-  ).toBe(true);
+  ).not.toBe(true);
+  expect(await f.workspace.preview(f.project.id, 'fake.png')).toMatchObject({
+    kind: 'text',
+    content: 'text',
+  });
   expect(
     (await write.execute('protected', { path: 'project.json', text: '{}', expectedRevision: null }))
       .isError,
@@ -134,19 +138,27 @@ it('主 Agent 可创建代码、配置与无扩展名文本，版本检查和单
   );
 });
 
-it('导入内容在日志写入前拒绝二进制，读取与预览也不能静默损坏无效编码', async () => {
+it('原始字节写入支持二进制，文本入口拒绝无效编码，预览明确不可用', async () => {
   const f = await fixture();
-  for (const bytes of [new Uint8Array([0, 1, 2]), new Uint8Array([0xff, 0xfe])]) {
-    await expect(f.workspace.write(f.project.id, 'file.bin', bytes, null)).rejects.toMatchObject({
+  for (const [index, bytes] of [
+    new Uint8Array([0, 1, 2]),
+    new Uint8Array([0xff, 0xfe]),
+  ].entries()) {
+    await expect(
+      f.workspace.writeText(f.project.id, 'rejected.txt', bytes, null),
+    ).rejects.toMatchObject({
       code: 'VALIDATION',
     });
-    expect(await readOperations(f.metadata, f.project.id)).toHaveLength(0);
-    await f.files.write(f.workspace.git.dir(f.project.id) + '/injected.txt', bytes);
-    await expect(f.workspace.readText(f.project.id, 'injected.txt')).rejects.toMatchObject({
+    const path = 'file-' + index + '.txt';
+    await f.workspace.write(f.project.id, path, bytes, null);
+    expect((await f.workspace.read(f.project.id, path)).bytes).toEqual(bytes);
+    await expect(f.workspace.readText(f.project.id, path)).rejects.toMatchObject({
       code: 'VALIDATION',
     });
-    await expect(f.workspace.preview(f.project.id, 'injected.txt')).rejects.toMatchObject({
-      code: 'VALIDATION',
+    expect(await f.workspace.preview(f.project.id, path)).toMatchObject({
+      kind: 'binary',
+      content: '',
+      unavailableReason: expect.any(String),
     });
   }
 });
@@ -171,10 +183,12 @@ it('任意扩展名文本的中断写入可恢复，随后重命名、暂存、�
   expect(reopened.recoveryIssues).toEqual([]);
   const file = await reopened.readText(f.project.id, 'src/main.ts');
   expect(file.text).toBe(text);
-  await expect(
-    reopened.move(f.project.id, 'src/main.ts', 'src/main.png', file.revision),
-  ).rejects.toThrow('不能转换');
-  await reopened.move(f.project.id, 'src/main.ts', 'src/entry', file.revision);
+  await reopened.move(f.project.id, 'src/main.ts', 'src/main.png', file.revision);
+  expect(await reopened.preview(f.project.id, 'src/main.png')).toMatchObject({
+    kind: 'text',
+    content: text,
+  });
+  await reopened.move(f.project.id, 'src/main.png', 'src/entry', file.revision);
   const status = await reopened.status(f.project.id);
   await reopened.stage(f.project.id, ['src/entry'], {
     ...status,

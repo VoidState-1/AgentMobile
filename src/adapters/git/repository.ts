@@ -13,7 +13,11 @@ import { gitFileSystem } from './filesystem';
 
 export function createGitRepository(host: HostFileSystem): GitPort {
   const fs = gitFileSystem(host);
-  const dir = (projectId: string) => '/workspaces/' + projectId + '/repository';
+  const dir = (projectId: string) => {
+    if (!/^[a-zA-Z0-9-]{1,80}$/.test(projectId))
+      throw new AppError('VALIDATION', '工作区标识无效。');
+    return '/workspaces/' + projectId + '/repository';
+  };
   const options = (projectId: string) => ({ fs, dir: dir(projectId) });
   const checkpointBlob = async (projectId: string, bytes: Uint8Array): Promise<string> => {
     const { oid } = await git.hashBlob({ object: bytes });

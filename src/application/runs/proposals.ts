@@ -2,7 +2,7 @@ import { SerialQueue } from '@/core/serial-queue';
 import type { ChangeProposal } from '@/core/runs/proposals';
 import type { RunRecord } from '@/core/runs/records';
 import { terminalRun } from '@/core/runs/records';
-import { safePath, isImage } from '@/core/workspace/path';
+import { safePath } from '@/core/workspace/path';
 import type { ContentCodec } from '@/core/storage/codec';
 import { AppError } from '@/core/errors';
 import type { WorkspaceApplication } from '@/application/workspace/service';
@@ -131,8 +131,8 @@ export class ProposalService {
         .map(change => {
           const limit = Math.max(0, Math.min(6000, Math.floor(remaining / 2)));
           remaining -= limit * 2;
-          return isImage(change.path)
-            ? { path: change.path, status: change.status, image: true, before: '', after: '' }
+          return change.kind !== 'text' || change.unavailableReason
+            ? { ...change, before: '', after: '' }
             : {
                 ...change,
                 before: change.before.slice(0, limit),

@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                   |
 | -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| 3.0.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：writeText、原始字节 write、内容类型与不可预览差异契约。  |
 | 2.2.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：区分 Agent editText 内部用例和界面全文保存接口。         |
 | 2.1.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：补充通用文本写入、预览、移动和任意类型选择器的校验契约。 |
 | 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：删除 setMode，增加带配置修订校验的供应商排序接口。       |
@@ -32,23 +33,25 @@
 
 ### 3.1 `workspace`
 
-| 方法组                            | 含义与调用要求                                                                 |
-| --------------------------------- | ------------------------------------------------------------------------------ |
-| `projects / create`               | 列项目、创建项目；创建含宿主管理的 `project.json`、初始 notes 和初始公开提交   |
-| `files / read / preview / head`   | 文件描述、原始 bytes + revision、文本或图片 data URI 预览、公开 HEAD           |
-| `snapshot`                        | 一次项目队列中的文件、Git 状态、首批历史、操作摘要与可选打开文件预览           |
-| `write / remove / move`           | 使用当前文件 revision；新建 write 用 null；移动要求目标不存在                  |
-| `status / diff`                   | HEAD/index/worktree 三方状态；staged 为 HEAD→index，unstaged 为 index→worktree |
-| `stage`                           | 传 HEAD、indexRevision 以及每个所选路径的内容 revision/null                    |
-| `unstage / commitStaged`          | 传当前 HEAD 和 indexRevision；commit 只提交已暂存内容                          |
-| `discard`                         | 传完整 GitStatus，回到 index 内容；不会丢弃暂存内容                            |
-| `historyPage / restore / changes` | 历史分页、将历史树写回工作区、两个快照之间的差异                               |
-| `taskChanges / undoTask`          | 通过 runId 查看/撤销根任务实际归属变化；有后续修改则拒绝撤销                   |
-| `subscribe / recoveryIssues`      | 已记录修改通知、启动恢复问题                                                   |
+| 方法组                              | 含义与调用要求                                                                 |
+| ----------------------------------- | ------------------------------------------------------------------------------ |
+| `projects / create`                 | 列项目、创建项目；创建含宿主管理的 `project.json`、初始 notes 和初始公开提交   |
+| `files / read / preview / head`     | 文件描述、原始 bytes + revision、文本或图片 data URI 预览、公开 HEAD           |
+| `snapshot`                          | 一次项目队列中的文件、Git 状态、首批历史、操作摘要与可选打开文件预览           |
+| `write / writeText / remove / move` | 使用当前文件 revision；新建写入用 null；移动要求目标不存在                     |
+| `status / diff`                     | HEAD/index/worktree 三方状态；staged 为 HEAD→index，unstaged 为 index→worktree |
+| `stage`                             | 传 HEAD、indexRevision 以及每个所选路径的内容 revision/null                    |
+| `unstage / commitStaged`            | 传当前 HEAD 和 indexRevision；commit 只提交已暂存内容                          |
+| `discard`                           | 传完整 GitStatus，回到 index 内容；不会丢弃暂存内容                            |
+| `historyPage / restore / changes`   | 历史分页、将历史树写回工作区、两个快照之间的差异                               |
+| `taskChanges / undoTask`            | 通过 runId 查看/撤销根任务实际归属变化；有后续修改则拒绝撤销                   |
+| `subscribe / recoveryIssues`        | 已记录修改通知、启动恢复问题                                                   |
 
-`workspace.write` 的非图片内容必须是有效 UTF-8 且不含 NUL，最多 1 MiB，不限扩展名；代码、配置及无扩展名文件与普通文本使用相同修订和日志语义。`preview` 在解码非图片前执行同样校验。无效内容返回 VALIDATION，超限返回 LIMIT。移动可改变文本扩展名，但图片只能保持同一格式，文本与图片不能互相转换。
+`workspace.write` 接受原始字节，当前单文件操作预算 20 MiB，不按扩展名或预览能力拒绝存储。`writeText` 用于编辑器和文本工具，要求新旧内容均为有效 UTF-8、无 NUL、最多 1 MiB，防止误覆盖二进制；其他文本编码仍可通过 write 保存及导出。写入共享相同修订、占用、操作日志与恢复语义。move 不解码或转码，改变后缀不会改变字节或实际内容类型。
 
-Agent 的 edit_text 通过内部 WorkspaceApplication.editText 调用批量替换；它不加入 AppServices.workspace 的 UI API。界面仍通过 workspace.write 保存完整输入。editText 的请求指纹属于操作正文，公开操作摘要不暴露替换输入或完整 before/after；模型工具结果只返回新修订及有界变化预览。
+`ProjectFile` 含 path/revision/size/mimeType 与 `kind: text | image | binary`。类型按字节识别，扩展名仅决定文本是否用 Markdown 排版。`FilePreview` 返回这些内容字段中的 kind/mimeType/size/revision，以及 content 和可选 unavailableReason；可预览文本为原文，图片为 data URI。二进制、超预算文本或无法安全展示的图片返回空 content 和明确原因，不以替换字符解码二进制，也不妨碍 read/export/Git 操作。
+
+Agent 的 edit_text 通过内部 WorkspaceApplication.editText 调用批量替换；它不加入 AppServices.workspace 的 UI API。界面通过 workspace.writeText 保存完整输入，通过 write 导入原始文件。editText 的请求指纹属于操作正文，公开操作摘要不暴露替换输入或完整 before/after；模型工具结果只返回新修订及有界变化预览。
 
 `WorkspaceSnapshot.operations` 只含 ID、归属、阶段和路径摘要，不含 Base64 before/after 正文。`write/remove/move` 返回的字符串可能为内部 checkpoint，无变化时也可能为 HEAD，不能拿它直接渲染“已提交”。公开版本来自 `head/historyPage/commitStaged`。
 
@@ -98,17 +101,17 @@ RunSummary、RunDetail、RunView 与 RunRecord 分离；UI 不依赖冻结配置
 - `io.pickFile/pickSkillPackage` 返回用户选定内容或 undefined；`exportFile/exportSkill` 处理平台分享/下载。取消选择不是失败。
 - `proposals?.preview(rootRunId,id)` 只供 UI 查看公开差异。合入由根 Agent 的受控 `apply_proposal` 工具进行，当前没有 UI 通用提案写入 API。
 
-`GitStatus.branch` 为实际当前分支名称，分离 HEAD 时为 `null`。`ReviewFile` 使用 `status: added | modified | deleted` 和可选 `stagedOnly`，不再用中文 `kind` 混合类型与范围；Git 工具及提案检查的差异结果同步使用这些字段。
+`GitStatus.branch` 为实际当前分支名称，分离 HEAD 时为 `null`。`ReviewFile` 使用 `status: added | modified | deleted`、可选 stagedOnly、内容 `kind: text | image | binary` 及 beforeSize/afterSize（该侧不存在为 null）。before/after 是预览字符串；无法预览或两侧类型不同则为空，并附 unavailableReason。Git 工具及提案检查的差异结果同步使用这些字段。
 
-`workspace.taskChangeSummary(runId)` 返回该任务冻结前后快照的文件摘要：`path/status/stagedOnly/image` 与可选 `added/removed`。它不使用当前工作区推算历史，也不返回全文。图片、超出统计预算的文本不提供行数，UI 保留差异入口。该查询经 facade 解析 runId，统计库在 adapter 中使用，界面不直接读取 Git。
+`workspace.taskChangeSummary(runId)` 返回该任务冻结前后快照的文件摘要：`path/status/stagedOnly/kind` 与可选 `added/removed`。它不使用当前工作区推算历史，也不返回全文。图片、二进制、无法预览或超出统计预算的文本不提供行数，UI 保留差异入口。该查询经 facade 解析 runId，统计库在 adapter 中使用，界面不直接读取 Git。
 
-图片上传复用 `io.pickFile('image')`，仅向系统/浏览器选择器提供 PNG/JPEG/WebP 类型；取消返回 undefined，结果仍是 `{name, bytes}`。普通文件导入继续调用无参数 pickFile，选择器不限制扩展名或 MIME；返回 bytes 不代表内容已通过验证，保存必须调用 workspace.write 执行文本/图片校验。界面不直接访问平台文件或凭证存储。
+图片上传复用 `io.pickFile('image')`，仅向系统/浏览器选择器提供 PNG/JPEG/WebP 类型；取消返回 undefined，结果仍是 `{name, bytes}`。普通文件导入调用无参数 pickFile，选择器不限制扩展名或 MIME；调用 workspace.write 保存字节并执行路径、版本和资源预算检查。供应商图标与技能包仍执行各自领域校验。界面不直接访问平台文件或凭证存储。
 
 ## 4. 乐观并发与命令示例
 
 ```ts
 const file = await services.workspace.read(projectId, 'documents/notes.md');
-await services.workspace.write(
+await services.workspace.writeText(
   projectId,
   'documents/notes.md',
   new TextEncoder().encode('更新后的文字'),
