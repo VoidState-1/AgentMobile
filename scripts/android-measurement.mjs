@@ -1,3 +1,4 @@
+import { tapDocument } from './android-document-ui.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import os from 'node:os';
@@ -329,12 +330,12 @@ for (const spec of samples.filter(sample => !selectedSample || sample.name === s
     await tap('搜索文件');
     await adb('shell', 'input', 'text', 'item-10');
     await tap('打开 documents/item-10.md');
-    await tap('编辑');
-    await tap('正文');
+    await tapDocument('全文');
+    await tapDocument('正文');
     await adb('shell', 'input', 'keyevent', '123');
     await adb('shell', 'input', 'text', 'edit-' + repeat);
     const save = await measure(async () => {
-      await tap('保存');
+      await tap('保存文件');
       await waitFor('所有修改已保存', 300000);
     });
     rounds.push({ cold, refresh, save });

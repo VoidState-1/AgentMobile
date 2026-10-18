@@ -1,3 +1,4 @@
+import { editorFrame } from './editor-helpers';
 import { openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { protocols, toolEvents, answerEvents, sse } from '../protocol-fixtures';
@@ -88,7 +89,9 @@ for (const protocol of protocols)
     await expect(page.getByText('已完成', { exact: true })).toBeVisible();
     await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/native-e2e.md', exact: true }).click();
-    await expect(page.getByText('三协议浏览器工具闭环', { exact: true })).toBeVisible();
+    await expect(
+      editorFrame(page).getByText('三协议浏览器工具闭环', { exact: true }),
+    ).toBeVisible();
     expect(calls).toBe(6);
   });
 

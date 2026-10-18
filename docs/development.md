@@ -2,9 +2,10 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                               |
-| -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------ |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理安装、各平台启动、Metro 适配、构建和原生维护流程。 |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                             |
+| -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------- |
+| 1.1.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：记录离线编辑器构建、WebView 原生依赖和许可证生成。 |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理安装、各平台启动、Metro 适配、构建和原生维护流程。               |
 
 ## 1. 环境要求
 
@@ -31,6 +32,12 @@ npm run preview
 ```
 
 `build:web` 导出到 `work/prototype-export`，preview 固定监听 `http://127.0.0.1:4180`。它提供单页路由回退和 `no-store` 响应。每次源码变化后需要重新 export，刷新旧导出目录不会加载新的 TypeScript。
+
+## 2.1 离线文档资源
+
+`npm run build:editor` 使用 esbuild 将 CodeMirror、Markdown-it、样式及完整第三方许可打入离线 HTML，生成被 Git 忽略的 `src/features/document/generated.ts`。源码位于 `src/features/document/browser` 和共享 render/markdown.css；许可清单为 `licenses/document-editor.txt`。安装与 start/android/ios/web/build:web/typecheck/test 的 npm 入口会构建资源，不依赖 CDN 或原型 work 目录。直接调用 Expo CLI 前先执行 build:editor。
+
+新增的 react-native-webview 必须重新构建 Development Build；不能只用 Metro 热更新旧安装包。不要把生成的 android/ios 目录加入 Git。
 
 ## 3. Android Development Build
 

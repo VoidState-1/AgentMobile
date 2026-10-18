@@ -60,6 +60,7 @@ async function waitFor(label, timeout = 30000) {
           (item.clickable === 'true' || item.class === 'android.widget.EditText'),
       ) ??
       list.find(item => item['content-desc'] === label) ??
+      list.find(item => item.class === 'android.widget.EditText' && item.hint === label) ??
       list.find(item => item.text === label);
     if (node) return node;
     await sleep(500);
@@ -108,6 +109,8 @@ async function scrollTo(label, inputOnly = false) {
       ),
     );
     const maximumY = footer ? Number([...footer.bounds.matchAll(/\d+/g)][1][0]) - 20 : 2350;
+    const headerBack = list.find(node => node['content-desc'] === '返回');
+    const minimumY = headerBack ? Number([...headerBack.bounds.matchAll(/\d+/g)][3][0]) : 180;
     const interactive = list.filter(
       node =>
         node['content-desc'] === label &&
@@ -121,10 +124,10 @@ async function scrollTo(label, inputOnly = false) {
           ? node.class === 'android.widget.EditText' &&
               node['content-desc'] === label &&
               bounds[3] - bounds[1] > 60 &&
-              bounds[1] > 240 &&
+              bounds[1] > minimumY &&
               bounds[3] < maximumY
           : (node['content-desc'] === label || node.text === label) &&
-              bounds[1] > 240 &&
+              bounds[1] > minimumY &&
               bounds[3] < maximumY &&
               bounds[3] - bounds[1] > 40;
       })

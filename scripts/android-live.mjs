@@ -1,3 +1,4 @@
+import { tapDocument } from './android-document-ui.mjs';
 import {
   adb,
   dump,
@@ -56,13 +57,13 @@ try {
   await tap('创建工作区');
   await tap('文件');
   await tap('打开 documents/notes.md');
-  await tap('编辑');
-  await tap('正文');
+  await tapDocument('全文');
+  await tapDocument('正文');
   await adb('shell', 'input', 'keyevent', '123');
   // Repeated R hardware events in a native Modal can trigger React Native's
   // debug "RR" reload shortcut; use a fixture without that shortcut sequence.
   await adb('shell', 'input', 'text', '%sItem%sid%sZK-742.');
-  await tap('保存');
+  await tap('保存文件');
   await waitFor('所有修改已保存');
   await tap('关闭文件');
   await tap('对话');

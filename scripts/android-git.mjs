@@ -1,3 +1,4 @@
+import { tapDocument } from './android-document-ui.mjs';
 import {
   adb,
   dump,
@@ -49,9 +50,9 @@ async function fill(label, text) {
 async function edit(text) {
   await tap('文件');
   await tap('打开 documents/notes.md');
-  await tap('编辑');
+  await tapDocument('全文');
   await fill('正文', text);
-  await tap('保存');
+  await tap('保存文件');
   await waitFor('所有修改已保存');
   await tap('关闭文件');
   await tap('Git');

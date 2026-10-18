@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                   |
 | -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------------- |
+| 2.5.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：增加文件草稿查询/CAS 保存与 writeText 稳定操作 ID。      |
 | 3.0.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：writeText、原始字节 write、内容类型与不可预览差异契约。  |
 | 2.2.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：区分 Agent editText 内部用例和界面全文保存接口。         |
 | 2.1.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：补充通用文本写入、预览、移动和任意类型选择器的校验契约。 |
@@ -54,6 +55,10 @@
 Agent 的 edit_text 通过内部 WorkspaceApplication.editText 调用批量替换；它不加入 AppServices.workspace 的 UI API。界面通过 workspace.writeText 保存完整输入，通过 write 导入原始文件。editText 的请求指纹属于操作正文，公开操作摘要不暴露替换输入或完整 before/after；模型工具结果只返回新修订及有界变化预览。
 
 `WorkspaceSnapshot.operations` 只含 ID、归属、阶段和路径摘要，不含 Base64 before/after 正文。`write/remove/move` 返回的字符串可能为内部 checkpoint，无变化时也可能为 HEAD，不能拿它直接渲染“已提交”。公开版本来自 `head/historyPage/commitStaged`。
+
+`workspace.editorDraft(projectId, path)` 返回 revision/draft；`saveEditorDraft(projectId, path, draft|null, expectedRevision)` 在当前服务队列内校验修订，写业务元数据而不写文件。null 清理仍保留修订墓碑，旧异步请求无法复活草稿。EditorDraft format=1 校验完整文本投影、区域、选区、保存意图及路径；不读取历史格式。
+
+`writeText` 的第五个参数允许传入 `{ operationId }`，用于同一文件修改意图的可恢复幂等重试；相同 ID/不同参数仍拒绝。返回字符串依旧是工作区回执/检查点，文件 revision 通过 preview 获取。文件草稿和工作区操作不构成跨存储事务。
 
 ### 3.2 `conversations`
 

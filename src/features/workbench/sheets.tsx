@@ -177,7 +177,7 @@ export const WorkbenchSheets = memo(function WorkbenchSheets({
         extraAction={
           controller.confirmation?.saveFirst && (
             <Button
-              label="保存后离开"
+              label={controller.confirmation?.saveLabel ?? '保存后离开'}
               busy={controller.busy}
               onPress={() => {
                 void controller.saveAndLeave();

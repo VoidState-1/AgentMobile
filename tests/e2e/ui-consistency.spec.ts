@@ -1,3 +1,4 @@
+import { editorInput, editorFrame, editFullDocument } from './editor-helpers';
 import { expect, test } from '@playwright/test';
 import { openProjectTree } from './workbench-helpers';
 import { configureModel } from './model-helpers';
@@ -49,16 +50,19 @@ test('阅读编辑由顶栏切换，文件与 Git 共享状态，窄屏切换保
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await expect(page.getByRole('tablist', { name: '文件类型', exact: true })).toBeVisible();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByRole('button', { name: '保存', exact: true })).toHaveCount(0);
+  await expect(page.getByRole('button', { name: '保存文件', exact: true })).toBeDisabled();
   await expect(page.getByRole('button', { name: '阅读', exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'work/mobile-ui/unified-reader.png' });
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await expect(page.getByRole('button', { name: '完成编辑', exact: true })).toBeVisible();
-  await page.getByLabel('正文', { exact: true }).fill('一致的文件状态');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '编辑', exact: true })).toBeVisible();
-  await expect(page.getByLabel('正文', { exact: true })).toHaveCount(0);
-  await expect(page.getByText('一致的文件状态', { exact: true })).toBeVisible();
+  await editFullDocument(page);
+  await expect(editorInput(page)).toHaveAttribute('contenteditable', 'true');
+  await editorInput(page).fill('一致的文件状态');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
+  await expect(editorFrame(page).getByRole('tab', { name: '分块', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
+  await expect(editorInput(page)).toHaveAttribute('contenteditable', 'false');
+  await expect(editorFrame(page).getByText('一致的文件状态', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   const fileBadge = page
     .getByRole('button', { name: '打开 documents/notes.md', exact: true })
@@ -163,10 +167,13 @@ test('多产物显示真实行数并直达所选差异，后续编辑不改变�
   await page.getByRole('button', { name: '关闭', exact: true }).click();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/beta.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.getByLabel('正文', { exact: true }).fill('丙\n丁\n戊\n');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
-  await expect(page.getByRole('button', { name: '编辑', exact: true })).toBeVisible();
+  await editFullDocument(page);
+  await editorInput(page).fill('丙\n丁\n戊\n');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
+  await expect(editorFrame(page).getByRole('tab', { name: '分块', exact: true })).toHaveAttribute(
+    'aria-selected',
+    'true',
+  );
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(beta).toContainText('+1');

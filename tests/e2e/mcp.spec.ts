@@ -1,3 +1,4 @@
+import { editorFrame } from './editor-helpers';
 import { openProjectTree, expandToolGroups } from './workbench-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { mcpFixture, fixtureTools } from '../mcp-fixtures';
@@ -110,7 +111,9 @@ for (const modern of [false, true])
     expect(JSON.stringify(modelRequests)).not.toContain('fixture-mcp-token');
     await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/mcp.md', exact: true }).click();
-    await expect(page.getByText('远程资料：MCP 查询成功。', { exact: true }).last()).toBeVisible();
+    await expect(
+      editorFrame(page).getByText('远程资料：MCP 查询成功。', { exact: true }).last(),
+    ).toBeVisible();
     await page.reload();
     await openMcp(page);
     await page.getByRole('button', { name: '配置 MCP 资料搜索', exact: true }).click();

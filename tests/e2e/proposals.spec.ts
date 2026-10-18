@@ -1,3 +1,4 @@
+import { editorFrame, editorInput, editFullDocument } from './editor-helpers';
 import { openProjectTree } from './workbench-helpers';
 import { test, expect } from '@playwright/test';
 import { configureModel } from './model-helpers';
@@ -15,9 +16,9 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.getByLabel('正文', { exact: true }).fill('用户原有未提交资料');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await editFullDocument(page);
+  await editorInput(page).fill('用户原有未提交资料');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await page.getByRole('tab', { name: '对话', exact: true }).click();
@@ -88,7 +89,7 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
     page.getByRole('button', { name: '打开 documents/proposal.md', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByText('用户原有未提交资料', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('用户原有未提交资料', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   release();
   await expect(
@@ -110,5 +111,5 @@ test('写作子 Agent 保留隔离候选，主 Agent 查看并合入，真实 in
     page.getByRole('button', { name: '打开 documents/proposal.md', exact: true }),
   ).toHaveCount(0);
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByText('用户原有未提交资料', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('用户原有未提交资料', { exact: true })).toBeVisible();
 });

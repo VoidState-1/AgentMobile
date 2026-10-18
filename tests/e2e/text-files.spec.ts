@@ -1,3 +1,4 @@
+import { editorInput, editorFrame, editFullDocument } from './editor-helpers';
 import { expect, test, type Page } from '@playwright/test';
 import { openProjectTree } from './workbench-helpers';
 
@@ -23,29 +24,33 @@ for (const width of [390, 1280]) {
     const text = '# 原样保留\n**这不是粗体**\n{"name":"中文😀"}\n';
     await importFile(page, 'config.json', Buffer.from(text));
     await page.getByRole('button', { name: '打开 documents/config.json', exact: true }).click();
-    await expect(page.getByTestId('file-plain-preview')).toHaveText(text);
+    await expect(editorFrame(page).getByTestId('file-plain-preview')).toHaveText(text);
     await page.getByRole('button', { name: '重命名文件', exact: true }).click();
     await page.getByLabel('文件名称', { exact: true }).fill('Dockerfile');
     await page.getByRole('button', { name: '保存名称', exact: true }).click();
-    await expect(page.getByTestId('file-plain-preview')).toHaveText(text);
-    await page.getByRole('button', { name: '编辑', exact: true }).click();
-    await page.getByLabel('正文', { exact: true }).fill('FROM scratch\n# 中文😀\n');
-    await page.getByRole('button', { name: '保存', exact: true }).click();
-    await expect(page.getByTestId('file-plain-preview')).toHaveText('FROM scratch\n# 中文😀\n');
+    await expect(editorFrame(page).getByTestId('file-plain-preview')).toHaveText(text);
+    await editFullDocument(page);
+    await editorInput(page).fill('FROM scratch\n# 中文😀\n');
+    await page.getByRole('button', { name: '保存文件', exact: true }).click();
+    await expect(editorFrame(page).getByTestId('file-plain-preview')).toHaveText(
+      'FROM scratch\n# 中文😀\n',
+    );
     await page.getByRole('button', { name: '关闭文件', exact: true }).click();
 
     await page.getByRole('button', { name: '新建文件', exact: true }).click();
     await page.getByLabel('文件名称', { exact: true }).fill('main.ts');
-    await page.getByLabel('正文', { exact: true }).fill('export const text = "中文😀";\n');
-    await page.getByRole('button', { name: '保存', exact: true }).click();
-    await expect(page.getByTestId('file-plain-preview')).toHaveText(
+    await editorInput(page).fill('export const text = "中文😀";\n');
+    await page.getByRole('button', { name: '保存文件', exact: true }).click();
+    await expect(editorFrame(page).getByTestId('file-plain-preview')).toHaveText(
       'export const text = "中文😀";\n',
     );
     await page.getByRole('button', { name: '关闭文件', exact: true }).click();
     await page.reload();
     await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page.getByRole('button', { name: '打开 documents/Dockerfile', exact: true }).click();
-    await expect(page.getByTestId('file-plain-preview')).toHaveText('FROM scratch\n# 中文😀\n');
+    await expect(editorFrame(page).getByTestId('file-plain-preview')).toHaveText(
+      'FROM scratch\n# 中文😀\n',
+    );
     await page.getByRole('button', { name: '关闭文件', exact: true }).click();
     await importFile(page, 'binary.dat', Buffer.from([0, 1, 2]));
     await page.getByRole('button', { name: '打开 assets/binary.dat', exact: true }).click();

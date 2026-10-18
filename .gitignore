@@ -46,3 +46,6 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Offline document editor bundle (rebuilt by npm scripts)
+/src/features/document/generated.ts

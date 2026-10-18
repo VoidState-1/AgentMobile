@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                                                                  |
 | -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 3.0.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：接入 CodeMirror 分块编辑、统一 Markdown-it 阅读、受控 WebView 通信与持久草稿。                          |
 | 2.10.0   | 2026-10-17T19:44:00+08:00 | 076e0ceb551f0ec46e0f20a17d30d18bacbc88a2 | 同步尚未提交源码：模型编辑器改为对象式行内布局，去掉逐行分割与能力来源标签，检测/默认选择压缩，更多操作复用页内浮层菜单。 |
 | 2.9.0    | 2026-10-17T18:58:00+08:00 | 9d738c260a4851403d6cc0059a8cb239ffc27094 | 同步尚未提交源码：目录检测移入模型栏刷新图标，结果改用非模态 Toast；更多操作改为页内浮层菜单。                            |
 | 2.6.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：二进制文件管理、内容类型筛选与不可预览界面。                                                            |
@@ -141,18 +142,15 @@ commitDrafts 是按项目分开的界面说明草稿，当前没有写入 Prefer
 
 ## 5. 编辑会话身份与保存
 
-[EditorDocument](../src/features/workbench/types.ts) 保存 identity Symbol、projectId/path/revision、当前与已保存 text/name、kind/size/unavailableReason，以及 reading/fresh/externalChanged。每次重新打开文件生成新 identity，即使 path 相同也属于新的编辑会话。
+[EditorDocument](../src/features/workbench/types.ts) 保存唯一字符串 identity、项目/路径/基础 revision、当前与已保存 text/name、文件类型、换行约定、editState 和草稿修订。editState 保存区域、模式和选区，正文只有 text/savedText 两个职责明确的版本。每次重开或外部干净刷新都会生成新 identity，旧通信和回执不能覆盖新会话。
 
-[useEditorSession](../src/features/workbench/use-editor-session.ts) 提供唯一 setEditor，同步更新 ref 和 state。不要其他代码直接写 editorRef，否则下一次异步命令读取的内容与已显示 UI 会分叉。
+[useEditorSession](../src/features/workbench/use-editor-session.ts) 提供唯一 setEditor，同步更新 ref/state，并串行通过 AppServices 保存元数据草稿。关闭、导航、全局保存和切后台先向浏览器内核请求 flush，再等待草稿落库。新建草稿使用项目内的 .new-document 元数据键，不创建同名工作区文件。
 
-保存捕获当前 EditorDocument，写完后只更新相同 identity 的会话：
+[DocumentHost](../src/features/document/document-host.tsx) 校验带会话 channel 的消息和完整源码投影，Web 使用仅 allow-scripts 的 iframe；手机使用禁止文件访问、外部导航和网络资源的离线 WebView。浏览器只能提交当前文档候选内容、请求项目图片及显式点击的链接，不能指定保存的项目或路径，不能访问 AppServices、数据库、凭证或任意原生能力。主题由宿主传入，不保留独立原型的本地存储、示例数据、导入服务或全局主题状态。
 
-1. 若期间无新输入，更新 revision/savedText/savedName；可关闭。
-2. 若期间继续输入，保留最新 text/name，只更新已保存基线和修订，仍显示未保存。
-3. 若旧会话已关闭后重新打开，即使路径一致，旧回执也不覆盖新会话。
-4. 保存并离开期间若新增输入，提示冲突并留在编辑器，不静默丢弃。
+右滑保存或顶栏保存经过宿主实际 writeText 成功后才关闭相应区域。只保存目标及其关联区域，其他草稿继续保留。保存与全局宿主操作期间暂停源码输入，避免回执覆盖；文件名输入也在保存期间暂停。源码输入撤销仍使用 CodeMirror，文件历史仍由 Git 管理。切换分块/全文模式时若有未保存内容，复用宿主确认弹层明确保存、放弃或继续编辑，不自动写入；未保存时禁止导出旧文件版本。
 
-文件写与重命名是多个独立用例，并非一个整体 UI 事务；其中一步失败时保持可辨认状态，重新读取并确认，不盲目重放。根任务占用项目时宿主拒绝手工保存。
+写文件前，草稿持久化 pendingSave、saveOperationId 和 savePath。workspace.writeText 使用稳定 operationId 重试已记录的工作区事务；读回实际内容与候选字节一致后才更新 revision 和剩余区域；换行字节发生外部变化也保留旧基础版本并报告冲突。若结果未知，保留保存意图并暂停编辑，提供重试保存；读取到已落盘的目标内容则确认成功，不再次覆盖。草稿元数据与文件/Git 依然没有跨存储事务。
 
 ## 6. 外部变化与未保存保护
 
@@ -160,7 +158,7 @@ commitDrafts 是按项目分开的界面说明草稿，当前没有写入 Prefer
 
 dirty 为 fresh 或 text/name 与 savedText/savedName 不一致。切项目、关闭编辑器等受 guard 保护，用户可保存后继续或放弃；确认结构中的 afterPerform 保存原导航动作，不能确认后忘记执行原选择。
 
-Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。原生仅已有界面内离开保护，没有保证进程被杀前把编辑器未保存文本自动恢复；目标草稿经业务库保存，行为不同。
+Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。文件草稿通过业务库保存，重开相同文件恢复区域和选区；文件与已记录保存意图一致时对齐新基线并保留其他区域，外部内容不匹配则保留旧基线和冲突提示。用户可显式放弃草稿后重新载入。强杀前尚未送达宿主或尚未落库的最后输入不具备持久性保证。
 
 ## 7. 运行与轨迹视图
 
@@ -180,15 +178,17 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。原生�
 
 预览使用 kind/mimeType/size/unavailableReason。无法展示的文件显示大小与原因，提供导出、重命名和删除，不提供文本编辑按钮；大文本也可保存而不进入全文编辑。文本编辑器通过 writeText 保存完整输入，执行 1 MiB、严格 UTF-8、无 NUL 及已有内容类型检查。图片按实际内容识别，改为其他后缀仍按原图展示；任务附件也使用内容类型，而非路径后缀判断。
 
-阅读模式仅对 `.md`、`.markdown` 使用 Markdown 排版；其他文本用可选择、等宽的原文预览，保留空白和 Markdown 标记，HTML/SVG/脚本均不执行。编辑模式继续使用原文输入，保存、并发保护、导出与 Git 流程共用原有 AppServices 用例。
+阅读模式仅对 `.md`、`.markdown` 使用 Markdown 排版；其他文本用可选择、等宽的原文预览，保留空白和 Markdown 标记，HTML/SVG/脚本均不执行。所有文本使用同一 CodeMirror 内核；非 Markdown 文本提供原文/编辑模式，Markdown 提供分块/全文模式。文本内部统一 LF，写回时还原文件原有的 CRLF/CR/LF 约定；二进制和图片不进入源码编辑器。保存、并发保护、导出与 Git 继续通过 AppServices。
 
 差异视图遇到二进制、超预算或两侧类型变化时展示前后字节数与原因，不显示乱码或虚构行数；可预览文本/图片仍展示内容差异。
 
-[Markdown](../src/features/workbench/markdown.tsx) 使用原生组件实现常见子集：标题 1–3、粗体、行内代码、代码围栏、无序列表、引用、分隔线及独立行图片。不是完整 CommonMark/HTML renderer，不承诺表格、全部嵌套结构或可执行 HTML。
+[文档内核](../src/features/document/browser/editor.js) 使用单个 CodeMirror 文档保存原始 Markdown，Markdown-it 渲染关闭范围，支持 CommonMark、表格、删除线、任务列表与嵌套结构。旧自制解析器和原文 TextInput 已移除。对话正文/公开推理通过共享 [render](../src/features/document/render.ts) 和 MarkdownReader 渲染；Web 使用安全 DOM，原生使用按内容高度布局的只读 WebView。
 
-图片相对 Markdown 文件目录解析，允许在项目内消解 `.`/`..`，最终经 safePath 校验；拒绝 scheme、绝对地址、反斜杠和越出工作区根的路径，不自动加载外部图片。UI load 回调通过业务 preview 取得 data URI。
+阅读块左滑进入；编辑块右滑保存、左滑放弃。允许多个区域同时开放。相邻区域之间光标、选区、退格连续；跨块修改建立关联并一起保存/放弃。灰底横向铺满，零外边距、零圆角，文字对齐正文，上下保留 8px 内边距。没有块内标签、画笔或保存/取消图标。
 
-图片异步加载以 source 与 load 函数身份过滤，资料删除/变化后不得复用旧 URI。文件缺失显示不可用；原始图片保留，当前没有图片编辑器或生成能力。
+保存权限范围与可见源码范围分开：连接换行只在相邻区域同时开放时暴露；关闭中间块后隐藏继承的连接换行，原文不变。最终派发入口检查所有写入并限制光标端点，包括关闭常规过滤器的历史事务。边界光标朝向源码，atomicRanges 只包含只读替换组件；分隔符、文档首尾和预览区域不成为编辑落点。手势按实际 DOM 行/片段归属，不回退到旧选区；共享一行时只移动目标文字。切换阅读与编辑后以块的屏幕位置锚定滚动。
+
+HTML 渲染关闭，不执行脚本。图片从 Markdown 文件目录解析，经 safePath 和 AppServices.preview 读取，拒绝 scheme、绝对路径、反斜杠、控制字符和越界；只接受 PNG/JPEG/WebP 的 data URI。图片版本变化会失效缓存并重新读取，旧请求不覆盖新内容。外部图片不自动联网，外部链接只在用户点击后交给宿主验证 HTTP/HTTPS 并打开。
 
 ## 9. 主题与交互约定
 
@@ -204,6 +204,6 @@ useAction 的 pending ref 防止同一个界面 action 重复执行；这只是�
 
 新增交互先查上面的复用表并检查现有调用者，确认不能组合已有组件后再增加新抽象。UI 入口约束由 [测试](../tests/ui-boundaries.test.ts) 验证。新增交互先判断是业务事实还是 UI 瞬时状态；业务能力先增加 AppServices 及用例，UI 再提供操作。新页面复用 shared 主题与服务入口，不接入底层 adapter。
 
-影响保存/切换/订阅需覆盖：等待期间继续输入、同路径重开、旧查询迟到、跨项目通知、草稿切换、深浅主题、360px/短视口、键盘与未保存保护。避免只测试渲染了某个按钮。
+影响保存/切换/订阅需覆盖：保存期间输入保护、同路径重开、旧查询迟到、跨项目通知、草稿切换、深浅主题、360px/短视口、键盘与未保存保护。避免只测试渲染了某个按钮。
 
 验证：[轨迹分组单元测试](../tests/trace-groups.test.ts)、[workbench E2E](../tests/e2e/workbench.spec.ts)、[workspace-live E2E](../tests/e2e/workspace-live.spec.ts)、[trace E2E](../tests/e2e/trace.spec.ts)、[conversations E2E](../tests/e2e/conversations.spec.ts)。

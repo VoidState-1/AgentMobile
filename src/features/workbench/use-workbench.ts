@@ -22,7 +22,7 @@ export function useWorkbench() {
   const { busy, error, setError, action } = useAction();
   const [notice, setNotice] = useState('');
 
-  const editorSession = useEditorSession();
+  const editorSession = useEditorSession(runtimeRef, setError);
   const { editor, editorRef, setEditor, dirty } = editorSession;
   const [sheet, setSheet] = useState<WorkbenchSheet>();
   const [review, setReview] = useState<Review>();
@@ -114,6 +114,10 @@ export function useWorkbench() {
     importFile,
     deleteEditor,
     renameEditor,
+    commitEditor,
+    reloadEditor,
+    retryEditorSave,
+    requestEditorMode,
   } = editorActions;
   const {
     reviewTask,
@@ -267,6 +271,12 @@ export function useWorkbench() {
       tasks,
     },
     editor: {
+      editorPort: editorSession.editorPort,
+      commitEditor,
+      reloadEditor,
+      retryEditorSave,
+      requestEditorMode,
+      openFile,
       busy,
       closeEditor,
       confirmation,

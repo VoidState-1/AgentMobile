@@ -22,7 +22,7 @@ import {
 import { Button, T } from '@/shared/ui/primitives';
 import { useEffect, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
-import { Markdown } from './markdown';
+import { MarkdownReader } from '@/features/document/reader';
 import { groupTrace, toolCategory, toolCategoryNames, type ToolCategory } from './trace-groups';
 import { traceView } from './trace-view';
 
@@ -43,7 +43,7 @@ function FinalResponse({ text }: { text: string }) {
   return (
     <View testID="trace-text" style={{ gap: 8, marginTop: 14 }}>
       <View testID="run-response">
-        <Markdown content={text.slice(0, end)} />
+        <MarkdownReader content={text.slice(0, end)} />
       </View>
       {end < text.length && (
         <Button
@@ -96,7 +96,7 @@ function TraceText({
   };
   return (
     <View style={{ gap: 7 }}>
-      <Markdown content={loaded?.text ?? item.text} tone="secondary" />
+      <MarkdownReader content={loaded?.text ?? item.text} tone="secondary" />
       {loaded?.next !== undefined && (
         <Button
           label="展开更多正文"

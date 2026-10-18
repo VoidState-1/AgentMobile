@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1" />
+    <meta
+      http-equiv="Content-Security-Policy"
+      content="default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'"
+    />
+    <style>
+      /* EDITOR_STYLES */
+    </style>
+  </head>
+  <body>
+    <header id="header" class="app-header">
+      <nav class="view-tabs" role="tablist" aria-label="编辑方式">
+        <button id="mode-blocks" role="tab" aria-selected="true">分块</button
+        ><button id="mode-full" role="tab" aria-selected="false">全文</button>
+      </nav>
+    </header>
+    <main id="editor-panel">
+      <div id="editor-host"></div>
+      <div id="empty-state" class="empty-state" hidden>左滑正文块开始编辑，或添加一段文字。</div>
+      <div class="document-bottom">
+        <button id="add-block" class="add-block">＋ 添加段落</button>
+      </div>
+    </main>
+    <article id="reader" class="markdown"></article>
+    <aside id="edit-dock" class="edit-dock" hidden>
+      <div class="format-bar">
+        <button id="undo" class="history-action" aria-label="撤销">↶</button>
+        <button id="redo" class="history-action" aria-label="重做">↷</button>
+        <button data-format="bold" aria-label="加粗"><b>B</b></button
+        ><button data-format="code" aria-label="行内代码">&lt;/&gt;</button
+        ><button data-format="link" aria-label="插入链接">链接</button
+        ><button data-format="list" aria-label="无序列表">列表</button
+        ><button data-format="quote" aria-label="引用">引用</button>
+      </div>
+      <div id="full-actions" class="full-actions" hidden>
+        <span>全文编辑</span><button id="cancel-edit" class="button secondary">放弃</button
+        ><button id="save-edit" class="button primary">保存</button>
+      </div>
+    </aside>
+    <div id="toast" class="toast" role="status" hidden></div>
+    <script>
+      /* EDITOR_SCRIPT */
+    </script>
+  </body>
+</html>

@@ -4,6 +4,7 @@ import { MutationCoordinator } from './mutations';
 import { FileCommands } from './files';
 import { GitService } from './git';
 import { RunSnapshots } from './run-snapshots';
+import { EditorDrafts } from './editor-drafts';
 
 /** Host facade composed from one shared project mutation coordinator. */
 export class WorkspaceApplication {
@@ -12,13 +13,17 @@ export class WorkspaceApplication {
   private readonly commands: FileCommands;
   private readonly versions: GitService;
   private readonly runs: RunSnapshots;
+  private readonly drafts: EditorDrafts;
   constructor(private readonly context: WorkspaceContext) {
+    this.drafts = new EditorDrafts(context.metadata, context.projectBucket);
     this.reader = new WorkspaceReader(context);
     this.mutations = new MutationCoordinator(context, this.reader);
     this.commands = new FileCommands(context, this.reader, this.mutations);
     this.versions = new GitService(context, this.reader, this.mutations);
     this.runs = new RunSnapshots(context, this.reader, this.mutations, this.versions);
   }
+  editorDraft = (...args: Parameters<EditorDrafts['get']>) => this.drafts.get(...args);
+  saveEditorDraft = (...args: Parameters<EditorDrafts['save']>) => this.drafts.save(...args);
   get git() {
     return this.context.git;
   }

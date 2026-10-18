@@ -1,3 +1,4 @@
+import { editorFrame, editorInput, editFullDocument, expectEditorText } from './editor-helpers';
 import { openProjectTree, selectProject } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 import { configureModel } from './model-helpers';
@@ -35,11 +36,9 @@ test('批量替换失败不落部分结果，重读修正后实时刷新且重�
   await project(page, '精确替换纠错');
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page
-    .getByLabel('正文', { exact: true })
-    .fill('# 标题\n第一处旧内容。\n保留行。\n第二处旧内容。\n');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await editFullDocument(page);
+  await editorInput(page).fill('# 标题\n第一处旧内容。\n保留行。\n第二处旧内容。\n');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await configureModel(page);
@@ -70,21 +69,21 @@ test('批量替换失败不落部分结果，重读修正后实时刷新且重�
   await expect.poll(() => requests).toBe(3);
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByText('第一处旧内容。', { exact: true })).toBeVisible();
-  await expect(page.getByText('第二处旧内容。', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('第一处旧内容。', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('第二处旧内容。', { exact: false })).toBeVisible();
   repair.release();
-  await expect(page.getByText('第一处新内容。', { exact: true })).toBeVisible();
-  await expect(page.getByText('第二处新内容。', { exact: true })).toBeVisible();
-  await expect(page.getByText('保留行。', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('第一处新内容。', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('第二处新内容。', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('保留行。', { exact: false })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await page.getByRole('tab', { name: '对话', exact: true }).click();
   await expect(page.getByText('已完成两处精确修改。', { exact: true })).toBeVisible();
   await page.reload();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByText('第一处新内容。', { exact: true })).toBeVisible();
-  await expect(page.getByText('第二处新内容。', { exact: true })).toBeVisible();
-  await expect(page.getByText('保留行。', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('第一处新内容。', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('第二处新内容。', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('保留行。', { exact: false })).toBeVisible();
 });
 
 test('发送后立即切到资料，启动完成不会把导航切回会话', async ({ page }) => {
@@ -169,14 +168,14 @@ test('Agent 等待下一轮时，资料新增、正在阅读的内容、移动�
     page.getByRole('button', { name: '打开 documents/live.md', exact: true }),
   ).toBeVisible();
   await page.getByRole('button', { name: '打开 documents/live.md', exact: true }).click();
-  await expect(page.getByText('实时内容第一版。', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('实时内容第一版。', { exact: true })).toBeVisible();
   await expect(
     page.getByText('Agent 正在修改项目。你可以阅读，完成后再编辑。', { exact: true }),
   ).toBeVisible();
   holds[0].release();
   await expect.poll(() => requests).toBe(3);
-  await expect(page.getByText('实时内容第二版！', { exact: true })).toBeVisible();
-  await expect(page.getByText('实时内容第一版。', { exact: true })).toHaveCount(0);
+  await expect(editorFrame(page).getByText('实时内容第二版！', { exact: false })).toBeVisible();
+  await expect(editorFrame(page).getByText('实时内容第一版。', { exact: true })).toHaveCount(0);
   await page.screenshot({ path: 'work/workspace-live-reading.png' });
   await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await expect(
@@ -243,12 +242,12 @@ test('手机切到其他项目时，后台 Agent 的资料变更不覆盖当前�
   await selectProject(page, '当前项目');
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.getByLabel('正文', { exact: true }).fill('必须保留的未保存草稿。');
+  await editFullDocument(page);
+  await editorInput(page).fill('必须保留的未保存草稿。');
   held.release();
   await expect.poll(() => requests).toBe(2);
-  await expect(page.getByLabel('正文', { exact: true })).toHaveValue('必须保留的未保存草稿。');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await expectEditorText(page, '必须保留的未保存草稿。');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await expect(
     page.getByRole('button', { name: '打开 documents/background.md', exact: true }),
@@ -281,11 +280,9 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
     ),
   });
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page
-    .getByLabel('正文', { exact: true })
-    .fill('# 图片资料\n\n![项目引用图](../assets/sample.png)');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await editFullDocument(page);
+  await editorInput(page).fill('# 图片资料\n\n![项目引用图](../assets/sample.png)');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await configureModel(page);
   await page.getByRole('tab', { name: '对话', exact: true }).click();
@@ -322,11 +319,11 @@ test('正在阅读的 Markdown 引用图片被删除后即时显示不可用，�
   await expect.poll(() => requests).toBe(2);
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByRole('img', { name: '项目引用图', exact: true })).toBeVisible();
+  await expect(editorFrame(page).locator('img[alt="项目引用图"]')).toBeVisible();
   deleting.release();
   await expect.poll(() => requests).toBe(3);
-  await expect(page.getByRole('img', { name: '项目引用图', exact: true })).toHaveCount(0);
-  await expect(page.getByText('图片不可用', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).locator('img[alt="项目引用图"]')).toHaveCount(0);
+  await expect(editorFrame(page).getByText('图片不可用', { exact: false })).toBeVisible();
   await expect(
     page.getByText('Agent 正在修改项目。你可以阅读，完成后再编辑。', { exact: true }),
   ).toBeVisible();

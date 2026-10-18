@@ -71,6 +71,8 @@ export function createAppServices(value: AppDependencies): AppServices {
       'discard',
       'subscribe',
       'historyPage',
+      'editorDraft',
+      'saveEditorDraft',
     ]),
     ...expose(
       {
@@ -91,8 +93,16 @@ export function createAppServices(value: AppDependencies): AppServices {
           revision: string | null,
           options?: { message?: string },
         ) => value.workspace.write(id, path, bytes, revision, { message: options?.message }),
-        writeText: (id: string, path: string, bytes: Uint8Array, revision: string | null) =>
-          value.workspace.writeText(id, path, bytes, revision),
+        writeText: (
+          id: string,
+          path: string,
+          bytes: Uint8Array,
+          revision: string | null,
+          options?: { operationId?: string },
+        ) =>
+          value.workspace.writeText(id, path, bytes, revision, {
+            operationId: options?.operationId,
+          }),
         remove: (id: string, path: string, revision: string) =>
           value.workspace.remove(id, path, revision),
         move: (id: string, from: string, to: string, revision: string) =>

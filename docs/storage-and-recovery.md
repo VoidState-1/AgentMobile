@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                     |
 | -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------- |
+| 2.3.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：增加文件编辑草稿、修订墓碑及保存意图的跨存储对账。         |
 | 2.2.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：真实原生移动、内部路径校验、fileMove 正文与部分效果恢复。  |
 | 2.1.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：记录精确替换请求指纹、回执重建与候选检查点恢复。           |
 | 2.0.0    | 2026-10-16T23:27:39+08:00 | 798aea13020fdad314b8a34bc78d7eadb2ac0bf0 | 同步尚未提交源码：记录 f5、物理版本 6、Run schema 4 与移除执行模式索引字段。 |
@@ -68,21 +69,24 @@ HostFileSystem 提供字节读写、目录与 stat，以及不覆盖已有目标
 
 ## 5. `records` 的业务 bucket
 
-| bucket                                            | 内容/键的范围                                       |
-| ------------------------------------------------- | --------------------------------------------------- |
-| `projects` / `skill-projects`                     | 用户项目 / 技能库内部项目，按项目 id                |
-| `conversations`                                   | `state`：对话目录、选中项与草稿                     |
-| `model-config` / `model-key-ops`                  | 模型图配置 / 凭证新建与退役意图                     |
-| `mcp-config` / `mcp-key-intents` / `mcp-attempts` | 服务器与授权 / 凭证意图 / 远程调用回执              |
-| `skills`                                          | `configuration`：库版本、摘要与项目 grants          |
-| `settings`                                        | `agent`：系统提示词与 limits                        |
-| `preferences`                                     | `workbench`：工作台偏好                             |
-| `run-launches`                                    | 按 launchSnapshotRef 的冻结配置                     |
-| `accepted-drafts`                                 | `conversationId/revision`：已接纳目标的运行回执     |
-| `run-groups` / `run-delegations`                  | 共享预算 / 委派幂等回执                             |
-| `change-proposals` / `proposal-writes`            | 按提案 ID 保存候选状态 / 按调用 ID 保存候选写入意图 |
+| bucket                                            | 内容/键的范围                                                                        |
+| ------------------------------------------------- | ------------------------------------------------------------------------------------ |
+| `projects` / `skill-projects`                     | 用户项目 / 技能库内部项目，按项目 id                                                 |
+| `conversations`                                   | `state`：对话目录、选中项与草稿                                                      |
+| `model-config` / `model-key-ops`                  | 模型图配置 / 凭证新建与退役意图                                                      |
+| `mcp-config` / `mcp-key-intents` / `mcp-attempts` | 服务器与授权 / 凭证意图 / 远程调用回执                                               |
+| `skills`                                          | `configuration`：库版本、摘要与项目 grants                                           |
+| `settings`                                        | `agent`：系统提示词与 limits                                                         |
+| `editor-drafts`                                   | projectId/相对文件路径：format=1 草稿及修订墓碑；新建文件使用 .new-document 元数据键 |
+| `preferences`                                     | `workbench`：工作台偏好                                                              |
+| `run-launches`                                    | 按 launchSnapshotRef 的冻结配置                                                      |
+| `accepted-drafts`                                 | `conversationId/revision`：已接纳目标的运行回执                                      |
+| `run-groups` / `run-delegations`                  | 共享预算 / 委派幂等回执                                                              |
+| `change-proposals` / `proposal-writes`            | 按提案 ID 保存候选状态 / 按调用 ID 保存候选写入意图                                  |
 
 这是逻辑布局说明，新增业务不要直接将领域事实写到未归属的随意 bucket。持久化调用集中在相应 service/repository。
+
+文件编辑草稿记录基础文件 revision、base/text、开放范围、模式、选区与原始换行约定。写文件前先保存 pendingSave、稳定 saveOperationId 和 savePath，再通过原有文件操作日志写入；草稿与文件分别提交。重开时若实际文件内容匹配 pendingSave.base，则采用该基线和剩余草稿；若匹配原基线则恢复原草稿；均不匹配时保留草稿并显示外部冲突，禁止盲目覆盖。丢弃使用带修订的 null 墓碑，阻止晚到写入复活；草稿服务不提供跨浏览器进程的全局锁。
 
 ## 6. 同数据库原子边界
 

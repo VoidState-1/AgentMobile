@@ -4,10 +4,13 @@ import { useWorkbenchTheme } from '@/shared/theme';
 import { ArrowLeft, Download, FileText, Image as ImageIcon, Trash2, X } from '@/shared/ui/icons';
 import { IconButton, Input, T, Toolbar, ToolbarAction } from '@/shared/ui/primitives';
 import { Image } from 'expo-image';
-import { memo, useCallback, useEffect, useState } from 'react';
-import { KeyboardAvoidingView, Modal, Platform, Pressable, ScrollView, View } from 'react-native';
+import { memo, useCallback, useState } from 'react';
+import { KeyboardAvoidingView, Modal, Platform, Pressable, Linking, View } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Markdown, resolveImagePath } from './markdown';
+import { DocumentHost } from '@/features/document/document-host';
+import { resolveProjectPath } from '@/features/document/image-path';
+import { externalLink } from '@/features/document/resources';
+import { stateOfEditor, withEditorState } from './editor-model';
 import type { EditorCapability } from './use-workbench';
 
 export const Editor = memo(function Editor({
@@ -21,14 +24,14 @@ export const Editor = memo(function Editor({
   const [nameFocused, setNameFocused] = useState(false);
   const document = controller.editor!;
   const { preview } = controller;
-  const readonly = controller.projectActive;
+  const readonly = controller.projectActive || !!document.saveUncertain;
   const imageVersions = controller.files
     .filter(file => file.kind === 'image')
     .map(file => file.path + ':' + file.revision)
     .join('|');
   const loadImage = useCallback(
     async (target: string) => {
-      const path = resolveImagePath(document.path, target);
+      const path = resolveProjectPath(document.path, target);
       if (!imageVersions || !preview) throw new Error('图片不可用');
       const value = await preview(document.projectId, path);
       if (value.kind !== 'image' || value.unavailableReason) throw new Error('图片不可用');
@@ -38,21 +41,11 @@ export const Editor = memo(function Editor({
   );
   const update = (patch: Partial<typeof document>) =>
     controller.setEditor(value => (value ? { ...value, ...patch } : value));
-  useEffect(() => {
-    if (Platform.OS !== 'web') return;
-    const handle = (event: KeyboardEvent) => {
-      if (controller.sheet || controller.review || controller.confirmation) return;
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 's') {
-        event.preventDefault();
-        if (controller.dirty && !controller.busy && !readonly) void controller.saveEditor();
-      }
-    };
-    window.addEventListener('keydown', handle, true);
-    return () => window.removeEventListener('keydown', handle, true);
-  }, [controller, readonly]);
   const body = (
     <KeyboardAvoidingView
-      behavior={Platform.OS === 'web' ? undefined : 'padding'}
+      behavior={
+        Platform.OS === 'ios' ? 'padding' : Platform.OS === 'android' ? 'height' : undefined
+      }
       style={{ flex: 1, backgroundColor: theme.surface }}
     >
       <Toolbar
@@ -67,25 +60,13 @@ export const Editor = memo(function Editor({
         trailing={
           document.kind === 'text' && !document.unavailableReason ? (
             <ToolbarAction
-              label={document.reading ? '编辑' : controller.dirty ? '保存' : '完成编辑'}
-              text={document.reading ? '编辑' : controller.dirty ? '保存' : '完成'}
+              label="保存文件"
+              text="保存"
               primary
-              disabled={readonly}
+              disabled={readonly || (!controller.dirty && !document.editState.regions.length)}
               busy={controller.busy}
               onPress={() => {
-                if (document.reading) update({ reading: false });
-                else if (!controller.dirty) update({ reading: true });
-                else
-                  void controller.saveEditor().then(saved => {
-                    if (saved)
-                      controller.setEditor(current =>
-                        current?.identity === document.identity &&
-                        current.text === current.savedText &&
-                        current.name === current.savedName
-                          ? { ...current, reading: true }
-                          : current,
-                      );
-                  });
+                void controller.saveEditor();
               }}
             />
           ) : undefined
@@ -123,18 +104,36 @@ export const Editor = memo(function Editor({
           </T>
         </View>
       )}
-      {readonly && (
+      {controller.projectActive && (
         <View style={{ padding: 12, backgroundColor: theme.warningSoft }}>
           <T tone="secondary" variant="caption">
             Agent 正在修改项目。你可以阅读，完成后再编辑。
           </T>
         </View>
       )}
+      {document.saveUncertain && (
+        <View style={{ padding: 12, backgroundColor: theme.warningSoft }}>
+          <T tone="warning">保存结果暂时无法核对，草稿与操作凭据已保留。</T>
+          <ToolbarAction
+            label="重试保存"
+            text="重试保存"
+            busy={controller.busy}
+            onPress={() => {
+              void controller.retryEditorSave();
+            }}
+          />
+        </View>
+      )}
       {document.externalChanged && (
         <View style={{ padding: 12, backgroundColor: theme.warningSoft }}>
           <T tone="secondary" variant="caption">
-            文件已有新的版本。当前编辑已保留，保存前请核对变化。
+            {document.fresh
+              ? '目标文件已有其他内容，请更名后保存。'
+              : '文件已有新的版本。当前编辑已保留，保存前请核对变化。'}
           </T>
+          {!document.fresh && (
+            <ToolbarAction label="重新载入文件" text="重新载入" onPress={controller.reloadEditor} />
+          )}
         </View>
       )}
       {document.fresh && (
@@ -145,6 +144,7 @@ export const Editor = memo(function Editor({
           <Input
             accessibilityLabel="文件名称"
             value={document.name}
+            editable={!readonly && !controller.busy && !document.pendingSave}
             onChangeText={name => update({ name })}
             autoCapitalize="none"
             autoCorrect={false}
@@ -192,50 +192,40 @@ export const Editor = memo(function Editor({
             style={{ width: '100%', height: '100%' }}
           />
         </View>
-      ) : document.reading ? (
-        <ScrollView style={{ flex: 1 }} contentContainerStyle={{ padding: 14 }}>
-          {isMarkdown(document.path) ? (
-            <Markdown content={document.text} loadImage={loadImage} />
-          ) : (
-            <T
-              selectable
-              testID="file-plain-preview"
-              style={{
-                fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
-                fontSize: 14,
-                lineHeight: 24,
-              }}
-            >
-              {document.text}
-            </T>
-          )}
-        </ScrollView>
       ) : (
-        <Input
-          accessibilityLabel="正文"
-          testID="file-content"
-          multiline
-          value={document.text}
-          onChangeText={text => update({ text })}
-          editable={!readonly}
-          autoCorrect={false}
-          autoCapitalize="none"
-          scrollEnabled
-          textAlignVertical="top"
-          placeholder="从第一行开始…"
-          placeholderTextColor={theme.muted}
-          style={{
-            flex: 1,
-            paddingHorizontal: 14,
-            paddingTop: 12,
-            paddingBottom: 30,
-            color: theme.text,
-            fontSize: 14,
-            lineHeight: 24,
-            fontFamily: Platform.OS === 'ios' ? 'Menlo' : 'monospace',
+        <DocumentHost
+          key={document.identity}
+          ref={controller.editorPort}
+          state={stateOfEditor(document)}
+          language={isMarkdown(document.name) ? 'markdown' : 'plain'}
+          readonly={readonly}
+          inputLocked={controller.busy}
+          imageVersion={imageVersions}
+          loadImage={loadImage}
+          onChange={state =>
+            controller.setEditor(current =>
+              current?.identity === document.identity && current.savedText === state.base
+                ? withEditorState(current, state)
+                : current,
+            )
+          }
+          onSave={(text, state, next) =>
+            controller.commitEditor(document.identity, text, state, next)
+          }
+          onModeRequest={controller.requestEditorMode}
+          onLink={url => {
+            if (externalLink(url)) void Linking.openURL(url);
+            else {
+              try {
+                const path = resolveProjectPath(document.path, url.split('#')[0]);
+                const file = controller.files.find(file => file.path === path);
+                if (file) void controller.openFile(file);
+              } catch {}
+            }
           }}
         />
       )}
+
       <View
         style={{
           flexDirection: 'row',
@@ -260,7 +250,7 @@ export const Editor = memo(function Editor({
             <IconButton
               icon={Download}
               label="导出文件"
-              disabled={controller.busy}
+              disabled={controller.busy || controller.dirty}
               onPress={() => {
                 void controller.exportEditor();
               }}

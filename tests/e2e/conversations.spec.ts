@@ -1,3 +1,4 @@
+import { editorInput, editFullDocument } from './editor-helpers';
 import {
   addReference,
   openProjectTree,
@@ -153,8 +154,8 @@ test('树形侧栏跨项目恢复归档对话时保护当前文件编辑', async
   await page.getByRole('button', { name: '创建工作区', exact: true }).click();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.getByLabel('正文', { exact: true }).fill('跨项目恢复之前必须保存。');
+  await editFullDocument(page);
+  await editorInput(page).fill('跨项目恢复之前必须保存。');
   await page.getByRole('button', { name: '已归档', exact: true }).click();
   await page.getByRole('button', { name: '恢复对话 待恢复', exact: true }).click();
   await expect(page.getByText('有尚未保存的修改', { exact: true })).toBeVisible();

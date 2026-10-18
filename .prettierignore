@@ -10,3 +10,5 @@ ios/
 package-lock.json
 expo-env.d.ts
 
+
+src/features/document/generated.ts

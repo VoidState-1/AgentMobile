@@ -1,4 +1,5 @@
 import type { Project } from '@/core/projects';
+import type { EditorDraft, EditorDraftRecord } from '@/core/documents/state';
 import type { ProjectFile, ContentPreview, FileKind } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
 import type { RunListQuery, RunPage, RunDetail, RunView, RunChange } from '@/core/runs/queries';
@@ -71,6 +72,13 @@ export interface WorkspaceSnapshot {
   historyCursor?: string;
 }
 export interface WorkspaceApi {
+  editorDraft(projectId: string, path: string): Promise<EditorDraftRecord>;
+  saveEditorDraft(
+    projectId: string,
+    path: string,
+    draft: EditorDraft | null,
+    expectedRevision: number,
+  ): Promise<EditorDraftRecord>;
   readonly recoveryIssues: readonly string[];
   projects(): Promise<Project[]>;
   create(name: string): Promise<Project>;
@@ -92,6 +100,7 @@ export interface WorkspaceApi {
     path: string,
     bytes: Uint8Array,
     revision: string | null,
+    options?: { operationId?: string },
   ): Promise<string>;
   remove(projectId: string, path: string, revision: string): Promise<string>;
   move(projectId: string, from: string, to: string, revision: string): Promise<string>;

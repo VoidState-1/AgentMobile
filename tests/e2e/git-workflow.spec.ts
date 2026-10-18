@@ -1,3 +1,4 @@
+import { editorFrame, editorInput, editFullDocument } from './editor-helpers';
 import { openProjectTree } from './workbench-helpers';
 import { test, expect, type Page } from '@playwright/test';
 
@@ -12,9 +13,9 @@ async function create(page: Page) {
 async function edit(page: Page, text: string) {
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await page.getByRole('button', { name: '编辑', exact: true }).click();
-  await page.getByLabel('正文', { exact: true }).fill(text);
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await editFullDocument(page);
+  await editorInput(page).fill(text);
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await expect(page.getByText('所有修改已保存', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await page.getByRole('tab', { name: 'Git', exact: true }).click();
@@ -68,7 +69,7 @@ test('保存、暂存后再编辑、刷新、提交与逐行差异遵循真实 G
   await expect(page.getByRole('tab', { name: '更改', exact: true })).toBeVisible();
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '打开 documents/notes.md', exact: true }).click();
-  await expect(page.getByText('已暂存的内容。', { exact: true })).toBeVisible();
+  await expect(editorFrame(page).getByText('已暂存的内容。', { exact: true })).toBeVisible();
   expect(errors).toEqual([]);
 });
 
@@ -121,8 +122,8 @@ test('手机 Git 面板支持深浅主题、短视口、提交输入与未跟踪
   await page.getByRole('tab', { name: '文件', exact: true }).click();
   await page.getByRole('button', { name: '新建文件', exact: true }).click();
   await page.getByLabel('文件名称', { exact: true }).fill('draft.md');
-  await page.getByLabel('正文', { exact: true }).fill('手机资料。');
-  await page.getByRole('button', { name: '保存', exact: true }).click();
+  await editorInput(page).fill('手机资料。');
+  await page.getByRole('button', { name: '保存文件', exact: true }).click();
   await page.getByRole('button', { name: '关闭文件', exact: true }).click();
   await page.getByRole('tab', { name: 'Git', exact: true }).click();
   await page.getByRole('button', { name: '暂存 documents/draft.md', exact: true }).click();

@@ -12,6 +12,8 @@ import { getAppServices, rebuildDevelopmentData } from '@/bootstrap';
 import { publicError } from '@/core/errors';
 import { useWorkbenchUi } from '@/shared/workbench-state';
 import type { EditorSession, WorkbenchUi } from './types';
+import { editorIdentity, editorStateFields } from './editor-model';
+import { initialEditorState, normalizeText, textLineEnding } from '@/core/documents/state';
 
 interface DataContext {
   ui: WorkbenchUi;
@@ -215,8 +217,13 @@ export function useWorkbenchData(context: DataContext) {
             const latest = snapshot.preview;
             const next = {
               ...document,
-              text: latest.content,
-              savedText: latest.content,
+              identity: editorIdentity(),
+              ...editorStateFields(
+                initialEditorState(
+                  latest.kind === 'text' ? normalizeText(latest.content) : latest.content,
+                ),
+              ),
+              lineEnding: textLineEnding(latest.content),
               revision: latest.revision,
               kind: latest.kind,
               size: latest.size,
