@@ -4,6 +4,11 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                            |
 | -------- | ------------------------- | ---------------------------------------- | ----------------------------------------------------------------------------------- |
+| 3.3.0    | 2026-10-19T17:56:09+08:00 | 414863fdcd788534b2232fea740024864a8726a4 | 对应已提交源码：收敛 Git 实现范围，保留本地、HTTPS、合并与线性变基。                |
+| 3.2.0    | 2026-10-19T15:27:13+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：线性变基、作者/说明保留、跳过/中止及与合并共用恢复日志。          |
+| 3.1.0    | 2026-10-19T14:43:24+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：合并与冲突解决、双父提交、中止、完成证据与恢复。                  |
+| 3.0.0    | 2026-10-19T12:10:29+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：原生对象/模式、分支日志恢复、HTTPS 协作和当前能力边界。           |
+| 2.1.0    | 2026-10-18T20:30:20+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 补充尚未提交的原生验证模块边界；产品 Git adapter 保持现状。                         |
 | 2.0.0    | 2026-10-17T10:27:05+08:00 | ba5117e2ea7908376dec70267b60d3b5d95f5156 | 同步尚未提交源码：分离字节存储和文本策略，按内容预览、移动意图恢复与路径边界。      |
 | 1.3.0    | 2026-10-17T00:09:49+08:00 | fd29c75e38d245b3a8e5cfb6a93c0b2156029d22 | 同步尚未提交源码：补充批量精确替换契约、差异摘要、请求指纹及中断重试。              |
 | 1.2.0    | 2026-10-16T23:47:05+08:00 | c6cde1a9724a790e02cbe4488d7e00542d5e1d76 | 同步尚未提交源码：取消文本扩展名白名单，统一 UTF-8/NUL 校验、重命名与隔离提案边界。 |
@@ -14,13 +19,13 @@
 
 用户项目有独立 Git repository 和共享工作树。UI 通过 WorkspaceApi 操作，Agent 通过明确工具操作。内部 HostFileSystem 和 GitPort 可以读写私有仓库，但不直接暴露给 Agent、技能正文或未来动态 UI。
 
-[safePath](../src/core/workspace/path.ts) 将输入规范化为 NFC，要求工作区相对路径。长度最多 220 个 UTF-16 单位，拒绝前后空格、反斜杠、冒号、控制字符、绝对路径、空组件、`.`、`..`、任意大小写的 `.git` 路径组件、末尾点/空格和 Windows 保留设备名。允许 `.gitignore`、`.gitattributes`、`.github` 等普通项目路径。项目 ID 独立校验，原生/浏览器存储适配器也校验内部逻辑路径，拒绝 URI、越界组件和非规范路径。
+[safePath](../src/core/workspace/path.ts) 保留输入 Unicode 表示，要求工作区相对路径，不再设置 220 字符的应用长度上限；拒绝前后空格、反斜杠、冒号、控制字符、绝对路径、空组件、`.`、`..`、任意大小写的 `.git` 路径组件、末尾点/空格和 Windows 保留设备名。允许 `.gitignore`、`.gitattributes`、`.github` 等普通项目路径。项目 ID 独立校验，原生/浏览器存储适配器也校验内部逻辑路径，拒绝 URI、越界组件和非规范路径。
 
-`project.json` 是宿主管理文件，不允许普通写入、移动、删除、提案合入或手工暂存选取。Agent 可生成任意合法相对路径下的 UTF-8 文本，包括代码、配置、自定义扩展名和无扩展名文件；支持移动/删除授权文件，包括二进制附件，不能通过文本工具覆盖非文本内容，也不执行代码。文件类型放开不改变受保护路径和项目占用规则。
+`project.json` 是普通仓库文件；项目元数据只保存在业务库，不占用外部仓库文件名。Agent 可生成任意合法相对路径下的 UTF-8 文本，包括代码、配置、自定义扩展名和无扩展名文件；支持移动/删除授权文件，包括二进制附件，不能通过文本工具覆盖非文本内容，也不执行代码。文件类型放开不改变受保护路径和项目占用规则。
 
 ## 2. 支持的内容与修订
 
-工作区按原始字节存储，不设文件扩展名或 MIME 白名单。`write` 用于导入及原始字节写入，二进制、其他编码和大文本也可保存、移动、删除、导出及进入 Git；不会为了预览转换原文件。当前用例采用完整文件缓冲和 before/after 日志，单文件操作预算为 20 MiB，常量见 [workspaceLimits](../src/core/workspace/limits.ts)；这是当前用例的资源预算，不是原生文件系统容量限制。
+工作区按原始字节存储，不设文件扩展名或 MIME 白名单。`write` 用于导入及原始字节写入，二进制、其他编码和大文本也可保存、移动、删除、导出及进入 Git；不会为了预览转换原文件。界面字节导入用例采用完整文件缓冲，单文件写入预算为 20 MiB，常量见 [workspaceLimits](../src/core/workspace/limits.ts)。Git 快照与恢复保存对象引用，原生可流式处理更大文件；写入预算不是原生文件系统容量限制。
 
 文本读取/编辑使用 `readText/writeText/editText`：有效 UTF-8、无 NUL、最多 1 MiB，不限扩展名。`writeText` 同时校验已有内容与新内容，防止把二进制误当文本覆盖；writer 文本工具也执行该策略。UTF-8 BOM、中文、emoji、CRLF/LF 的未修改字节保持原样。移动与提案合入不执行文本/图片解码校验，改名不转码。
 
@@ -53,7 +58,7 @@
 - 返回 saved、revision、changed、replayed、editCount 与 changes。changes 按原文位置排列，含原请求项号、原文起始行、before/after 预览；最多 20 项、预览正文合计最多 6,000 UTF-16 单位，每侧最多 200，截断由 truncated 标明，不影响实际编辑。
 - 相同运行/轮次/callId 重试必须与原请求指纹一致；回执会返回当时的结果及 `replayed=true`，不重新匹配当前文件、不覆盖后续修改。此时 revision 是原调用结果，继续编辑须重新读取当前修订。无变化替换也保存回执，changed 为 false。
 
-`write_text` 继续用于新建和整体重写，整体重写需要完整原文及当前修订。界面编辑器通过 writeText 保存完整输入。局部编辑的底层完整 before/after 日志与恢复机制沿用，减少的是模型传输内容，不承诺跨 Git/业务数据库事务或多文件原子编辑。
+`write_text` 继续用于新建和整体重写，整体重写需要完整原文及当前修订。界面编辑器通过 writeText 保存完整输入。局部编辑的底层 Git 对象 before/after 日志与恢复机制沿用，减少的是模型传输内容，不承诺跨 Git/业务数据库事务或多文件原子编辑。
 
 ## 3. 项目队列与占用
 
@@ -61,22 +66,27 @@ MutationCoordinator 持有每项目 SerialQueue、运行 owner 和恢复 blocked
 
 根 Run claim 后，只有同 owner 的受控写入能修改项目；UI 即使保留了旧 revision，也会被占用检查拒绝。根任务最终回执收束后才释放占用。writer 子任务不 claim 真实工作树，只产生隔离 Git candidate；合入由 root owner 执行。
 
-队列/锁属于当前进程实例，没有 Web 多标签页协作写锁或跨进程工作区服务。不要把同 origin 两个应用页面的同时编辑当成已支持协作场景。
+业务队列与 Agent 占用属于当前服务实例；原生单次 Git/文件 RPC 另持进程共享 mutex 与跨进程 flock。仍没有 Web 多标签页协作写锁或跨进程应用用例服务。不要把同 origin 两个应用页面的同时编辑当成已支持协作场景。
 
 ## 4. 文件修改日志
 
-[Operation](../src/core/workspace/journal.ts) 分为摘要 header 和正文 body。header 包含 scope、sequence、revision、expectedHead、bodyFingerprint、owner/actor/proposal 归属和 checkpoint/commit。body 保存文件 before/after 的 Base64 或 null、indexChanges，以及移动命令的 fileMove `{from,to}` 意图；fileMove 纳入正文指纹，不进入 header。
+[Operation](../src/core/workspace/journal.ts) 分为摘要 header 和正文 body。header 包含 scope、sequence、revision、expectedHead、expectedBranch、bodyFingerprint、owner/actor/proposal 归属和 checkpoint/commit。body 保存文件 before/after 的 GitEntry `{revision,mode}` 或 null、indexChanges、headChange，以及移动命令的 fileMove `{from,to}` 意图；fileMove 纳入正文指纹，不进入 header。
 
-| kind           | 用途                                                    | 正常阶段                                                 |
-| -------------- | ------------------------------------------------------- | -------------------------------------------------------- |
-| `files`        | 保存、删除、移动、丢弃、恢复、任务撤销/合入中的文件变化 | prepared → applied → checkpointed → recorded             |
-| `index`        | 暂存/取消暂存，仅更新 index                             | prepared → applied → checkpointed → recorded             |
-| `commit`       | 将固定目标树变成公开提交                                | prepared → committed → recorded                          |
-| `files_commit` | 技能库整包变更并固定为库版本                            | prepared → applied → checkpointed → committed → recorded |
+合并正文另包含 conflictsChange、gitStateChange、completionReceipt 与 commitDependencies，全部纳入相同指纹。冲突 stages 不进入普通树快照；恢复从完整三方 before/after 校验，不能被 stage 0 摊平。
+
+| kind           | 用途                                                    | 正常阶段                                                        |
+| -------------- | ------------------------------------------------------- | --------------------------------------------------------------- |
+| `files`        | 保存、删除、移动、丢弃、恢复、任务撤销/合入中的文件变化 | prepared → applied → checkpointed → recorded                    |
+| `index`        | 暂存/取消暂存，仅更新 index                             | prepared → applied → checkpointed → recorded                    |
+| `commit`       | 将固定目标树变成公开提交                                | prepared → committed → recorded                                 |
+| `checkout`     | 日志化切换文件、index 与分支引用                        | prepared → applied → checkpointed → committed → recorded        |
+| `merge`        | 合并建立/解决/继续/中止，含 stages 与受限状态           | prepared → applied → checkpointed →（可选 committed）→ recorded |
+| `rebase`       | 逐步重放、冲突解决、跳过、中止和原分支 CAS              | prepared → applied → checkpointed →（可选 committed）→ recorded |
+| `files_commit` | 技能库整包变更并固定为库版本                            | prepared → applied → checkpointed → committed → recorded        |
 
 阶段允许跳过不适用项，但不能倒退；recorded 不能再次更新。prepare 在业务库原子分配 sequence 并保存正文，后续先完成文件/index/Git 再写回执。文件系统不具备整批数据库事务，进程可能停在多个路径之间；日志恢复将其收束。
 
-恢复先检查整批文件实际内容：等于 after 则跳过重复效果，等于 before 则继续，第三种内容则在写入前阻断。移动两端都待执行时调用 HostFileSystem.moveFile；原生调用 Expo File.move，Web 在一次 files 事务中改名且不覆盖目标。移动完成但回执未保存时跳过移动；仅一端完成时用记录的 before/after 收束。移动效果不再用 JS 读写正文实现，但预检、日志和 Git 快照仍读取完整字节。operation ID 不能用不同参数重试。commit 意图将 `AgentMobile-Operation: <id>` 放进提交说明，恢复可查到已生成提交并避免重复公开提交。
+恢复先检查整批文件实际内容：等于 after 则跳过重复效果，等于 before 则继续，第三种内容则在写入前阻断。移动两端都待执行时调用 HostFileSystem.moveFile；原生调用不覆盖目标的原子 rename，Web 在一次 files 事务中改名且不覆盖目标。移动完成但回执未保存时跳过移动；仅一端完成时用记录的 before/after 收束。移动效果不再用 JS 读写正文实现，但预检与 Git 快照在原生访问对象和文件，不把整仓正文传到 JS。operation ID 不能用不同参数重试。commit 意图将 `AgentMobile-Operation: <id>` 放进提交说明，恢复可查到已生成提交并避免重复公开提交。
 
 幂等范围是已经保存的 operation 意图及对应恢复。write_text 与 edit_text 使用 run/round/callId 形成稳定操作 ID；edit_text 另将路径、基础修订和整批替换的请求指纹写入操作正文，以原始 before/after 校验回执，重试不重新编辑当前内容；当前普通 remove/move 用例内部生成新 ID，公共 WorkspaceApi 也不提供调用者通用幂等键。因此不能对所有新发起的文件命令承诺重复调用无效果；错误后先读当前状态，不能无条件自动重试。
 
@@ -92,10 +102,10 @@ flowchart LR
     I -->|恢复快照| C
 ```
 
-- **HEAD**：用户可浏览的公开历史；项目初始化创建一次初始提交。
+- **HEAD**：用户可浏览的公开历史；Git init 和空克隆保留 null HEAD，普通笔记模板 create 显式提交初始 notes。
 - **index**：标准 Git 暂存区，保存将提交的内容版本；不是仅记录文件名。
 - **worktree**：当前保存内容，可以与 index 不同。
-- **checkpoint**：`refs/agent-mobile/checkpoints/<key>` 下的内部提交对象，通过 `noUpdateBranch` 创建，不移动 main/HEAD，也不显示在公开 HEAD 历史链。
+- **checkpoint**：`refs/agent-mobile/checkpoints/<key>` 下的内部提交对象，直接写入私有 ref，不移动 main/HEAD，也不显示在公开 HEAD 历史链。
 
 因此底层每次持久化可能创建内部 Git commit object，但用户提交体验仍为显式暂存和 commit。此前“每次保存就提交”的公开工作流已不适用于当前实现。
 
@@ -112,7 +122,7 @@ flowchart LR
 | 丢弃未暂存     | 完整 GitStatus 的 head/indexRevision/workingRevision | 所选 worktree 退回 index             |
 | 恢复历史版本   | expectedHead，且无 staged/unstaged 改动              | 历史树写回 worktree，等待显式提交    |
 
-indexRevision/workingRevision 是规范排序路径与 blob revision 映射的指纹。stage 读取真实 working bytes 再验证每个路径，避免提交按钮操作旧预览。提交说明 1–4,000 字符，禁止包含内部 operation marker。
+indexRevision/workingRevision 是规范排序路径与对象 revision/mode 映射的指纹。stage 读取真实 working bytes 再验证每个路径，避免提交按钮操作旧预览。提交说明 1–4,000 字符，禁止包含内部 operation marker。
 
 示例：保存 A → 暂存 A → 再保存 B → 提交。公开提交包含 A，B 仍为未暂存更改。取消暂存后不会丢掉 B；discard 后恢复的是 index，不一定是 HEAD。
 
@@ -138,21 +148,31 @@ AppServices 的 commitStaged 提交当前所有已暂存变化；Agent 的 git_c
 
 ## 9. Git adapter 实现要点
 
-[repository.ts](../src/adapters/git/repository.ts) 通过 [filesystem adapter](../src/adapters/git/filesystem.ts) 运行 isomorphic-git，初始化 main 分支。它使用真实 Git blob/tree/commit/ref/index 格式，不依赖手机存在 git 命令行。
+[移动端 adapter](../src/adapters/git/platform.native.ts) 使用正式 libgit2 模块；Web/Node 由独立 isomorphic-git adapter 实现。GitEntry 为 revision/mode，支持普通文件、执行位、符号链接与 gitlink 对象描述。递归子模块操作尚未实现，涉及 gitlink 变化的分支切换明确拒绝。
 
-checkpoint 根据 bytes 计算 blob SHA。已有同 OID blob 时读取并逐字节校验，只有缺失对象才新建；损坏或不一致对象返回 STORAGE。不能仅用缓存里的 OID 跳过实际内容检查。
+原生对象读取启用严格哈希校验。原始工作快照使用 ODB 写流，保留 CRLF/BOM；暂存遵循 Git clean 属性；冻结任务未提交状态从冻结快照属性计算。恢复前固定私有引用，不能把 raw 工作快照 OID 直接当规范化 index OID。Web 属性/模式能力有限，不能据此推断移动端行为。
 
-历史默认 30、最大 100 条，游标固定 projectId、head 和 next，沿第一父链读取。当前没有分支切换、merge/rebase、远程同步和 GC 产品能力；符号链接和 chmod 权限位明确返回不支持，不静默成功。私有 refs、操作日志与大文件快照仍可能积累。原生大内容场景的性能需要独立测量，不能因 Git 格式正确就宣称移动端体验达标。
+历史默认 30、最大 100 条，游标固定 projectId/head；返回多父 parents、作者及提交者，并对 DAG 去重。私有 refs 不进入公开 HEAD 历史。
+
+分支切换由 switchPlan 准备 raw 文件目标与 index，应用日志保存 headChange；预检整批文件/index 后先写文件，再写 index，最后以引用基线校验切换 HEAD。文件与目录互换按先删后建排序，只删除已经清空的目录，未跟踪/ignored 内容会阻止覆盖。完成引用切换后的回执恢复不重放工作树。
+
+原生 Git 页提供分支、标签、身份、HTTPS 远程地址、clone/fetch/push、上游、进度与取消。凭证绑定具体仓库地址并存入 SecureStore；推送固定源 OID、检查远程版本且不强推，未知结果必须显式核对。clone 使用独立暂存目录和发布回执。完整契约、构建与限制见 [原生 Git](native-git.md)。
+
+原生分支合并支持无变化、快进、干净三方提交与真实冲突 stages。冲突列表可预览基础/当前/传入/结果，选择版本、删除或编辑保存后标记解决；目录冲突按相关路径处理。继续生成双父提交，中止恢复本次触及范围并保留无关更改。所有步骤复用统一 journal、完整 GitStatus 和持久草稿检查；固定 Git 状态 before/after 与私有 applied ref 共同支持中断恢复。合并期间不允许新根任务和普通暂存/提交。具体契约见 [原生 Git](native-git.md) 和 [应用接口](application-api.md)。
+
+原生变基支持无变化、快进与逐个提交重放，保留作者/时间/说明，以当前提交者写入新提交。开始后分离 HEAD，原分支最后通过带原 OID 的 CAS 更新；冲突复用同一三方服务，继续/跳过/中止均经统一日志和进度回执。中断恢复先补既有步骤，再等待用户继续。当前侧表示基底及已重放结果，传入侧表示原提交。默认不保留 merge 拓扑，不提供交互式 squash/reword；细节与预算见原生 Git 文档。
+
+SSH、stash、cherry-pick/revert、reset/reflog 不在本次实现范围；未提供占位接口或操作入口。内部 refs、操作日志及对象保留/GC、大仓库性能仍需专项维护。
 
 ## 10. 验证入口
 
-[字节存储与移动恢复](../tests/workspace-bytes.test.ts) 覆盖二进制保留、内容分类、路径边界与移动故障；[原生 SDK 契约模拟](../tests/native-storage.test.ts) 核对 File.move 调用，但不替代原生设备运行验收。
+[字节存储与移动恢复](../tests/workspace-bytes.test.ts) 覆盖二进制保留、内容分类、路径边界与移动故障；[原生 SDK 契约模拟](../tests/native-storage.test.ts) 核对受控原生文件 RPC，但不替代原生设备运行验收。
 
 [text-edits.test](../tests/text-edits.test.ts)、[text-edit-tools.test](../tests/text-edit-tools.test.ts)、[text-files.test](../tests/text-files.test.ts)、[file-read.test](../tests/file-read.test.ts)、[workspace.test](../tests/workspace.test.ts)、[journal.test](../tests/journal.test.ts)、[git-workflow.test](../tests/git-workflow.test.ts)、[workspace-live.test](../tests/workspace-live.test.ts)、[proposals.test](../tests/proposals.test.ts)，以及 [Git E2E](../tests/e2e/git-workflow.spec.ts) 与 [通用文本 E2E](../tests/e2e/text-files.spec.ts)。
 
 ## 分支与任务差异摘要
 
-状态查询通过 `GitPort.branch` 读取实际 symbolic HEAD，分离 HEAD 返回 null。UI 不硬编码 main，也未因此新增分支管理或远程 Git 操作。
+状态查询通过 `GitPort.branch` 读取实际 symbolic HEAD，分离 HEAD 返回 null。UI 不硬编码 main；分支与远程管理由 RepositoryService 单独编排。
 
 差异文件用 `status` 枚举表达新增/修改/删除，`stagedOnly` 区分仅发生在 index 的任务变化。两者由应用层投影，中文徽标在 UI 统一渲染，不作为跨层契约。
 

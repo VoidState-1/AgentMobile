@@ -2,10 +2,12 @@
 
 ## 文档更新历史
 
-| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                             |
-| -------- | ------------------------- | ---------------------------------------- | -------------------------------------------------------------------- |
-| 1.1.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：记录离线编辑器构建、WebView 原生依赖和许可证生成。 |
-| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理安装、各平台启动、Metro 适配、构建和原生维护流程。               |
+| 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                           |
+| -------- | ------------------------- | ---------------------------------------- | ---------------------------------------------------------------------------------- |
+| 2.0.0    | 2026-10-19T17:56:09+08:00 | 414863fdcd788534b2232fea740024864a8726a4 | 对应已提交源码：产品原生模块、HTTPS 互操作、合并/变基 UI 验证和实例重建要求。      |
+| 1.2.0    | 2026-10-18T20:30:20+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：增加 libgit2 源码准备、Android 测试与 iOS XCFramework 构建入口。 |
+| 1.1.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：记录离线编辑器构建、WebView 原生依赖和许可证生成。               |
+| 1.0.0    | 2026-10-15T17:24:30+08:00 | 9ad009be8a41df28a02060c5620ee12a29c3d901 | 整理安装、各平台启动、Metro 适配、构建和原生维护流程。                             |
 
 ## 1. 环境要求
 
@@ -94,13 +96,17 @@ Web、Android 或 iOS 的 bundle 导出，只证明当前打包链能处理源�
 
 业务层禁止引用 Pi/MCP SDK 类型。增加上游导出时核对公共入口与目标平台的可打包性，不通过复制第三方源码或全局 Node polyfill 解决全部问题。Vitest 与 Metro 的解析环境不同，单元测试通过后仍需导出/原生验证。
 
+原生 Git 正式桥接需要重新构建 Development Build；仅更新 Metro 不会更新 C++/Kotlin/Objective-C++。`node scripts/android-native-git-remote.mjs <serial>` 使用本机标准 Git、临时 TLS 证书与独立测试 APK 验证认证/推送/克隆及响应丢失。证书只注入测试进程信任库，不改变产品证书策略，fixture 和测试私钥仅位于忽略的 work 目录并在结束时清理。`node scripts/android-native-git-ui.mjs <serial>` 通过实际界面验证分支、身份和标签；使用已有的 AGENT_MOBILE_METRO_PORT 配置，要求安装当前 Development Build。
+
+合并与变基 UI 验证复用开发专用 fixture 入口，先运行真实应用的两进程验证，再驱动真实路由与界面；端口配置、运行顺序和 fixture 重建要求见 [原生 Git 验证入口](native-git.md#4-构建与验证入口)。验证期间避免编辑入口源码，以免 Metro 的热更新改变正在运行的路由上下文。
+
 ## 6. Expo 配置与原生源码
 
 [app.json](../app.json) 使用 `expo-router/entry`，应用 scheme 为 `agentmobile`，Android package 和 iOS bundle identifier 当前均为 `com.agentmobile.app`，Web `output` 为 `single`，系统深浅色自动适配。
 
 配置插件包括 Router、dev-client、SQLite、SecureStore、Splash、Sharing 与 [with-dev-menu](../plugins/with-dev-menu.js)。SQLite 配置启用 FTS 构建选项，但当前 `search_text` 是受控逐文件搜索，没有 SQLite FTS 索引查询实现。
 
-`android/`、`ios/` 为 Expo Prebuild 生成目录，已经忽略，不作为源码归档。永久原生配置写入 app config/plugin；自定义原生能力实现于 `modules/` 的 Expo Module，再通过 plugin 集成。当前尚无自定义原生 Module，libgit2 桥接也尚未实现。
+`android/`、`ios/` 为 Expo Prebuild 生成目录，已经忽略，不作为源码归档。永久原生配置写入 app config/plugin；自定义原生能力实现于 `modules/` 的 Expo Module，通过自动链接或 plugin 集成。当前有已接入产品的 [libgit2 原生模块](native-git.md)，移动端使用原生 GitPort。`npm run android` 会准备经过校验的 Git 源码；直接调用 Gradle 前运行 `npm run prepare:git`。iOS 构建入口会先构建 XCFramework，需在 macOS 安装 CMake；不把下载源码和编译产物加入 Git。
 
 不要把手工修改仅留在生成工程，下一次 prebuild 会使其丢失。依赖或 Expo 配置变更后运行 `npx expo-doctor` 并重新构建受影响 Development Build。
 
