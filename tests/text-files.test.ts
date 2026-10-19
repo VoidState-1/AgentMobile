@@ -25,6 +25,35 @@ it('文本校验保留 UTF-8 BOM、中文、emoji、换行和控制台转义，�
   expect(() => validateText(new Uint8Array(contentLimits.textFileBytes + 1))).toThrow('1 MB');
 });
 
+it('仓库自己的 project.json 可正常编辑和版本管理，项目元数据保存在业务库', async () => {
+  const f = await fixture();
+  expect((await f.workspace.files(f.project.id)).some(file => file.path === 'project.json')).toBe(
+    false,
+  );
+  await f.workspace.writeText(
+    f.project.id,
+    'project.json',
+    contentCodec.encodeText('{"tool":"custom"}\n'),
+    null,
+  );
+  const status = await f.workspace.status(f.project.id);
+  const file = status.files.find(value => value.path === 'project.json')!;
+  expect(file.unstaged).toBe('added');
+  await f.workspace.stage(f.project.id, ['project.json'], {
+    ...status,
+    revisions: { 'project.json': file.workingRevision },
+  });
+  const staged = await f.workspace.status(f.project.id);
+  await f.workspace.commitStaged(f.project.id, '添加仓库配置', staged);
+  expect((await f.workspace.status(f.project.id)).files).toEqual([]);
+  const current = await f.workspace.readText(f.project.id, 'project.json');
+  await f.workspace.remove(f.project.id, 'project.json', current.revision);
+  expect((await f.workspace.projects())[0].name).toBe('通用文本');
+  await expect(f.workspace.readText(f.project.id, '.git/config')).rejects.toMatchObject({
+    code: 'VALIDATION',
+  });
+});
+
 it.each([
   [0],
   [0xff, 0xfe, 0x41, 0],
@@ -126,7 +155,7 @@ it('主 Agent 可创建代码、配置与无扩展名文本，版本检查和单
     content: 'text',
   });
   expect(
-    (await write.execute('protected', { path: 'project.json', text: '{}', expectedRevision: null }))
+    (await write.execute('protected', { path: '.git/config', text: '{}', expectedRevision: null }))
       .isError,
   ).toBe(true);
   expect(

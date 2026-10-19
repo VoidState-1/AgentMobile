@@ -29,7 +29,9 @@ export async function pickFile(
 }
 
 export async function exportFile(workspace: WorkspaceApplication, projectId: string, path: string) {
-  const { bytes } = await workspace.read(projectId, path);
+  const entry = (await workspace.git.workingTree(projectId, [path]))[path];
+  if (!entry) throw new AppError('VALIDATION', '文件不存在。');
+  const bytes = await workspace.git.blob(projectId, entry.revision);
   const buffer = new Uint8Array(bytes).buffer;
   const url = URL.createObjectURL(new Blob([buffer]));
   const link = document.createElement('a');

@@ -178,7 +178,7 @@ it('入队冻结配置、消费精确草稿；真实开始时捕获基线，历�
   expect(task.agentSettingsSnapshot!.systemPrompt).toBe(initial.systemPrompt);
   expect(
     contentCodec.decodeText(
-      (await f.workspace.git.tree(f.project.id, task.baseSnapshot!))['documents/new.md'],
+      await f.workspace.git.readAt(f.project.id, task.baseSnapshot!, 'documents/new.md'),
     ),
   ).toBe('最新基线');
   expect(await f.metadata.all('tasks')).toEqual([]);

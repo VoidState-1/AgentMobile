@@ -2,6 +2,7 @@ import type { AppServices } from '@/application/services';
 import { selectedModelId } from '@/core/models/rules';
 import { useConversationDraft } from '@/features/conversations/use-draft';
 import { useGitActions } from '@/features/workbench/git-actions';
+import { useGitIntegrationActions } from './git-integration-actions';
 import { useAction } from '@/shared/use-action';
 import { useWorkbenchUi } from '@/shared/workbench-state';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -40,6 +41,7 @@ export function useWorkbench() {
     versionsBusy,
     loadOlderVersions,
     gitStatus,
+    repository,
     tasks,
     taskCursor,
     historyBusy,
@@ -127,6 +129,11 @@ export function useWorkbench() {
     changeStage,
     commitGit,
     discardGit,
+    repositoryCommand,
+    confirmRepositoryCommand,
+    transfer,
+    cancelTransfer,
+    saveCredential,
   } = useGitActions({
     runtime,
     ui,
@@ -144,6 +151,15 @@ export function useWorkbench() {
   });
 
   const shared = { runtime, ui, action, refresh, setError, setNotice, setConfirmation };
+  const integrationActions = useGitIntegrationActions({
+    ...shared,
+    gitStatus,
+    dirty,
+    openFile: async path => {
+      const file = files.find(file => file.path === path);
+      if (file) await openFile(file);
+    },
+  });
   const navigation = useProjectNavigation({ ...shared, draft, setEditor, guard, setSheet, active });
   const taskActions = useTaskActions({
     ...shared,
@@ -236,6 +252,9 @@ export function useWorkbench() {
       projectName: navigation.projectName,
       setProjectName: navigation.setProjectName,
       createProject: navigation.createProject,
+      cloneProject: navigation.cloneProject,
+      cloneTransfer: navigation.cloneTransfer,
+      cancelClone: navigation.cancelClone,
       conversationName: navigation.conversationName,
       setConversationName: navigation.setConversationName,
       renameConversation: navigation.renameConversation,
@@ -309,6 +328,10 @@ export function useWorkbench() {
       projectLoading,
     },
     git: {
+      ...integrationActions,
+      transfer,
+      cancelTransfer,
+      saveCredential,
       busy,
       changeStage,
       commitDrafts: ui.commitDrafts,
@@ -318,6 +341,9 @@ export function useWorkbench() {
       discardGit,
       error,
       gitStatus,
+      repository,
+      repositoryCommand,
+      confirmRepositoryCommand,
       loadOlderVersions,
       projectActive: !!projectActive,
       projectId: ui.projectId,

@@ -70,7 +70,7 @@ export function gitTools(context: RunToolsContext): ControlledTool[] {
       parameters: Type.Object(
         {
           paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }),
-          expectedHead: Type.String({ maxLength: 80 }),
+          expectedHead: revision,
           indexRevision: Type.String({ maxLength: 80 }),
           revisions: Type.Record(Type.String(), revision),
         },
@@ -97,7 +97,7 @@ export function gitTools(context: RunToolsContext): ControlledTool[] {
       parameters: Type.Object(
         {
           paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }),
-          expectedHead: Type.String({ maxLength: 80 }),
+          expectedHead: revision,
           indexRevision: Type.String({ maxLength: 80 }),
         },
         { additionalProperties: false },
@@ -125,7 +125,7 @@ export function gitTools(context: RunToolsContext): ControlledTool[] {
         {
           message: Type.String({ minLength: 1, maxLength: 4000 }),
           paths: Type.Array(Type.String({ maxLength: 220 }), { minItems: 1, maxItems: 2000 }),
-          expectedHead: Type.String({ maxLength: 80 }),
+          expectedHead: revision,
           indexRevision: Type.String({ maxLength: 80 }),
         },
         { additionalProperties: false },

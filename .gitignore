@@ -42,10 +42,17 @@ yarn-error.*
 /work/
 /outputs/
 /coverage/
+/test-results/
 
 # generated native folders
 /ios
 /android
+
+# Reproducible native Git dependencies and build products
+/modules/agent-mobile-git/vendor/
+/modules/agent-mobile-git/android/build/
+/modules/agent-mobile-git/android/.cxx/
+/modules/agent-mobile-git/ios/Frameworks/
 
 # Offline document editor bundle (rebuilt by npm scripts)
 /src/features/document/generated.ts

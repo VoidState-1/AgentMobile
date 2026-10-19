@@ -57,6 +57,12 @@ async function waitFor(label, timeout = 30000) {
       list.find(
         item =>
           item['content-desc'] === label &&
+          item.enabled !== 'false' &&
+          (item.clickable === 'true' || item.class === 'android.widget.EditText'),
+      ) ??
+      list.find(
+        item =>
+          item['content-desc'] === label &&
           (item.clickable === 'true' || item.class === 'android.widget.EditText'),
       ) ??
       list.find(item => item['content-desc'] === label) ??
@@ -142,6 +148,18 @@ async function tapScrolled(label) {
   await scrollTo(label);
   await tap(label);
 }
+async function tapReady(label) {
+  const deadline = Date.now() + 20000;
+  for (;;) {
+    if (Date.now() > deadline) throw new Error('界面操作尚未就绪：' + label);
+    const before = await waitFor(label);
+    await sleep(250);
+    const after = await waitFor(label);
+    if (before.enabled !== 'false' && after.enabled !== 'false' && before.bounds === after.bounds)
+      break;
+  }
+  await tap(label);
+}
 async function screenshot(name) {
   const file = '/sdcard/agent-mobile-smoke.png';
   try {
@@ -152,6 +170,7 @@ async function screenshot(name) {
   }
 }
 export {
+  tapReady,
   adb,
   sleep,
   dump,

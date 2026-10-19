@@ -14,9 +14,7 @@ export async function snapshotTools(
   allowImages: boolean,
 ): Promise<ControlledTool[]> {
   const grant = new Set(paths.map(path => safePath(path)));
-  const files = (await git.entries(projectId, snapshot)).filter(
-    file => grant.has(file.path) && file.path.toLowerCase() !== 'project.json',
-  );
+  const files = (await git.entries(projectId, snapshot)).filter(file => grant.has(file.path));
   if (files.length !== grant.size)
     throw new AppError('VALIDATION', '子任务资料范围包含不存在或受保护的路径。');
   const reader = scopedFileReader(

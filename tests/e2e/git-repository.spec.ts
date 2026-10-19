@@ -1,0 +1,38 @@
+import { test, expect } from '@playwright/test';
+import { openProjectTree } from './workbench-helpers';
+
+test('仓库界面可切换真实分支，管理身份与标签，刷新后状态保持', async ({ page }) => {
+  const errors: string[] = [];
+  page.on('pageerror', error => errors.push(error.message));
+  await page.goto('/');
+  await openProjectTree(page);
+  await page.getByRole('button', { name: '新建项目', exact: true }).first().click();
+  await page.getByLabel('项目名称', { exact: true }).fill('仓库管理');
+  await page.getByRole('button', { name: '创建工作区', exact: true }).click();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
+  await page.getByRole('tab', { name: '仓库', exact: true }).click();
+  await page.getByLabel('新分支名称', { exact: true }).fill('feature');
+  await page.getByRole('button', { name: '创建分支', exact: true }).click();
+  await page.getByRole('button', { name: '切换到 feature', exact: true }).click();
+  await expect(page.getByText('feature · 当前', { exact: true })).toBeVisible();
+  await page.getByLabel('Git 姓名', { exact: true }).fill('仓库用户😀');
+  await page.getByLabel('Git 邮箱', { exact: true }).fill('mobile@example.invalid');
+  await page.getByRole('button', { name: '保存提交身份', exact: true }).click();
+  await page.getByLabel('标签名称', { exact: true }).fill('v1-mobile');
+  await page.getByRole('button', { name: '创建标签', exact: true }).click();
+  await expect(page.getByRole('button', { name: '删除标签 v1-mobile', exact: true })).toBeVisible();
+  await page.reload();
+  await page.getByRole('tab', { name: 'Git', exact: true }).click();
+  await page.getByRole('tab', { name: '仓库', exact: true }).click();
+  await expect(page.getByText('feature · 当前', { exact: true })).toBeVisible();
+  await expect(page.getByLabel('Git 姓名', { exact: true })).toHaveValue('仓库用户😀');
+  await expect(page.getByLabel('Git 邮箱', { exact: true })).toHaveValue('mobile@example.invalid');
+  await expect(page.getByRole('button', { name: '删除标签 v1-mobile', exact: true })).toBeVisible();
+  await expect(page.getByText('远程 Git 传输请使用原生应用。', { exact: true })).toBeVisible();
+  await expect(page.getByRole('button', { name: /^推送到 / })).toHaveCount(0);
+  await page.getByRole('button', { name: '切换到 main', exact: true }).click();
+  await page.getByRole('button', { name: '删除分支 feature', exact: true }).click();
+  await page.getByRole('button', { name: '确认删除', exact: true }).click();
+  await expect(page.getByRole('button', { name: '切换到 feature', exact: true })).toHaveCount(0);
+  expect(errors).toEqual([]);
+});

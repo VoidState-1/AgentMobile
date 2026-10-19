@@ -89,7 +89,12 @@ export async function executeChild(
       task,
       codec: binding.resources.codec,
       skillRun: binding.resources.skills,
-      baseline: { head: record.baseCommit ?? '', working: record.inputSnapshotRef!, index: '' },
+      baseline: {
+        head: record.baseCommit ?? null,
+        working: record.inputSnapshotRef!,
+        index: record.inputSnapshotRef!,
+        dirtyPaths: [],
+      },
       settings: { imageInput: !!launch.model?.parameters.allowImages },
       round,
     }),

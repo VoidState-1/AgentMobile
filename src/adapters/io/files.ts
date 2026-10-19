@@ -1,9 +1,11 @@
 import { AppError } from '@/core/errors';
 import * as DocumentPicker from 'expo-document-picker';
-import { File, Paths } from 'expo-file-system';
+import { File } from 'expo-file-system';
 import * as Sharing from 'expo-sharing';
 import type { WorkspaceApplication } from '@/application/workspace/service';
 import { workspaceLimits } from '@/core/workspace/limits';
+import { nativeGit } from '@/adapters/git/native-client';
+import { safePath } from '@/core/workspace/path';
 
 export async function pickFile(kind?: 'image') {
   const result = await DocumentPicker.getDocumentAsync({
@@ -21,8 +23,8 @@ export async function pickFile(kind?: 'image') {
 export async function exportFile(workspace: WorkspaceApplication, projectId: string, path: string) {
   if (!(await Sharing.isAvailableAsync()))
     throw new AppError('VALIDATION', '当前设备不支持系统分享');
-  const { bytes } = await workspace.read(projectId, path);
-  const file = new File(Paths.cache, path.split('/').pop()!);
-  file.write(bytes);
-  await Sharing.shareAsync(file.uri);
+  if (!(await workspace.projects()).some(project => project.id === projectId))
+    throw new AppError('VALIDATION', '项目不存在。');
+  const uri = await nativeGit<string>(projectId, 'fileExport', { path: safePath(path) });
+  await Sharing.shareAsync(uri);
 }

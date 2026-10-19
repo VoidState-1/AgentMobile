@@ -1,7 +1,8 @@
 import type { Conversation } from '@/core/conversations/types';
 import type { RunView } from '@/core/runs/queries';
 import type { useConversationDraft } from '@/features/conversations/use-draft';
-import { useState } from 'react';
+import { useCallback, useState, useSyncExternalStore } from 'react';
+import type { GitCloneInput, GitCredentialInput } from '@/core/git/repository';
 import type { ActionContext, EditorSession, WorkbenchSheet } from './types';
 
 interface NavigationContext extends ActionContext {
@@ -33,6 +34,35 @@ export function useProjectNavigation(context: NavigationContext) {
   const [projectName, setProjectName] = useState('');
   const [conversationName, setConversationName] = useState('');
   const [conversationToRename, setConversationToRename] = useState<string>();
+  const transfer = useSyncExternalStore(
+    useCallback(
+      (notify: () => void) =>
+        runtime ? runtime.workspace.subscribeGitTransfer(() => notify()) : () => {},
+      [runtime],
+    ),
+    useCallback(() => runtime?.workspace.gitTransfer(), [runtime]),
+    () => undefined,
+  );
+  const cloneTransfer = transfer?.method === 'clone' ? transfer : undefined;
+  const cancelClone = () => {
+    if (cloneTransfer?.state === 'running')
+      runtime?.workspace.cancelGitTransfer(cloneTransfer.projectId);
+  };
+  async function cloneProject(input: GitCloneInput, credential?: GitCredentialInput) {
+    if (!runtime) return;
+    await action(async () => {
+      await flushDraft();
+      const created = await runtime.workspace.cloneProject(input, credential);
+      const conversation = await runtime.conversations.ensureProject(created.id);
+      installConversation(conversation);
+      setEditor(undefined);
+      setSheet(undefined);
+      setProjectName('');
+      ui.selectProject(created.id, conversation.id);
+      await refresh(created.id);
+      setNotice('仓库已克隆。');
+    });
+  }
   async function selectConversation(
     id: string,
     projectId = ui.projectId,
@@ -202,6 +232,9 @@ export function useProjectNavigation(context: NavigationContext) {
     restoreConversation,
     returnToActiveConversation,
     createProject,
+    cloneProject,
+    cloneTransfer,
+    cancelClone,
     newProject,
   };
 }

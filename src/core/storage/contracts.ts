@@ -13,7 +13,8 @@ export interface MetadataEntry {
 }
 
 export interface StorageStat {
-  kind: 'file' | 'directory';
+  kind: 'file' | 'directory' | 'symlink';
+  mode?: number;
   size: number;
   mtime: number;
   /** Opaque identity changed atomically with content; never inferred from mtime. */

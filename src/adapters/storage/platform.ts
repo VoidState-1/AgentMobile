@@ -7,8 +7,8 @@ import * as SQLite from 'expo-sqlite';
 import * as SecureStore from 'expo-secure-store';
 
 import type { CredentialStore, HostFileSystem } from '@/core/storage/contracts';
-import { missing } from './errors';
-import { storagePath } from './path';
+import { nativeGit } from '@/adapters/git/native-client';
+import { createNativeFileSystem } from './native-files';
 
 /** Called only while bootstrap is blocked on a format mismatch, with no kernel. */
 export async function rebuildDevelopmentStorage(): Promise<void> {
@@ -52,8 +52,6 @@ export async function createStorage(): Promise<{
     throw new AppError('DATA_FORMAT', '开发数据重建曾中断，请完成重建后再打开应用。');
   const root = new Directory(Paths.document, 'agent-mobile');
   root.create({ intermediates: true, idempotent: true });
-  const uri = (path: string) =>
-    root.uri.replace(/\/+$/, '') + '/' + storagePath(path).map(encodeURIComponent).join('/');
   const db = await SQLite.openDatabaseAsync('agent-mobile.sqlite');
   let metadata: BusinessStore;
   try {
@@ -62,68 +60,7 @@ export async function createStorage(): Promise<{
     await db.closeAsync();
     throw error;
   }
-  const fs: HostFileSystem = {
-    async read(path) {
-      const file = new File(uri(path));
-      if (!file.exists) throw missing(path);
-      return file.bytes();
-    },
-    async write(path, bytes) {
-      const file = new File(uri(path));
-      new Directory(uri(path.slice(0, path.lastIndexOf('/')) || '/')).create({
-        intermediates: true,
-        idempotent: true,
-      });
-      file.write(bytes);
-    },
-    async mkdir(path) {
-      new Directory(uri(path)).create({ intermediates: true, idempotent: true });
-    },
-    async remove(path) {
-      const file = new File(uri(path));
-      if (file.exists) {
-        file.delete();
-        return;
-      }
-      const directory = new Directory(uri(path));
-      if (directory.exists) {
-        directory.delete();
-        return;
-      }
-      throw missing(path);
-    },
-    async moveFile(from, to) {
-      const source = new File(uri(from));
-      const target = new File(uri(to));
-      if (!source.exists) throw missing(from);
-      new Directory(uri(to.slice(0, to.lastIndexOf('/')) || '/')).create({
-        intermediates: true,
-        idempotent: true,
-      });
-      if (target.exists || new Directory(uri(to)).exists)
-        throw new AppError('CONFLICT', '移动目标已存在。');
-      await source.move(target, { overwrite: false });
-    },
-    async list(path) {
-      const directory = new Directory(uri(path));
-      if (!directory.exists) throw missing(path);
-      return directory.list().map(entry => entry.name);
-    },
-    async stat(path) {
-      const directory = new Directory(uri(path));
-      if (directory.exists) return { kind: 'directory', size: 0, mtime: 0 };
-      const file = new File(uri(path));
-      if (file.exists) return { kind: 'file', size: file.size, mtime: file.modificationTime ?? 0 };
-      throw missing(path);
-    },
-    async contentStamp(path) {
-      // Native hashing still reads the file. It avoids a JS byte/base64 copy,
-      // and provides content evidence even for equal mtime/size edits.
-      const file = new File(uri(path));
-      if (!file.exists) throw missing(path);
-      return file.md5 ?? undefined;
-    },
-  };
+  const fs = createNativeFileSystem(nativeGit);
   return {
     fs,
     metadata,

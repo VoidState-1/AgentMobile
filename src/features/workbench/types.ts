@@ -34,7 +34,7 @@ export interface Review {
   title: string;
   files: ReviewFile[];
   restoreRef?: string;
-  expectedHead?: string;
+  expectedHead?: string | null;
   task?: RunView;
   area?: 'staged' | 'unstaged';
   description?: string;

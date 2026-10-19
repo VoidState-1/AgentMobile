@@ -37,7 +37,7 @@ async function fixture(text = source) {
     state: 'running' as const,
     response: '',
     createdAt: new Date().toISOString(),
-    baseCommit: baseline.head,
+    baseCommit: baseline.head ?? undefined,
     baseSnapshot: baseline.working,
     baseIndexSnapshot: baseline.index,
   };
@@ -130,7 +130,6 @@ it('缺少匹配、重叠、过期版本、越权路径和非法文本均不落�
       ],
     },
     { ...f.args, expectedRevision: 'stale' },
-    { ...f.args, path: 'project.json' },
     { ...f.args, path: '.git/config' },
     { ...f.args, path: '../escape.ts' },
     { ...f.args, path: 'fake.png' },

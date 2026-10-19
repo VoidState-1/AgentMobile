@@ -1,0 +1,7 @@
+{
+  "name": "agent-mobile-git",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Agent Mobile libgit2 native feasibility probe",
+  "main": "index.ts"
+}

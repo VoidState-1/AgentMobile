@@ -17,6 +17,7 @@ import { canonical } from '@/core/mcp/rules';
 import type { WorkspaceApplication } from '@/application/workspace/service';
 import { assertRunning, defineTool, result, revision, textLimit } from '@/application/tools/common';
 import type { ProposalRepository } from './proposal-repository';
+import { gitModes, type GitTree } from '@/core/git/objects';
 import {
   editTextDescription,
   editTextParameters,
@@ -42,7 +43,7 @@ export class ProposalOverlay {
   }
   private scope(input: string) {
     const path = safePath(input);
-    if (!this.proposal.allowedPaths.includes(path) || path.toLowerCase() === 'project.json')
+    if (!this.proposal.allowedPaths.includes(path))
       throw new AppError('VALIDATION', '提案路径未授权。');
     return path;
   }
@@ -103,13 +104,21 @@ export class ProposalOverlay {
         this.proposal.candidateSnapshot,
       );
       for (const change of changes) {
-        if (textOnly && tree[change.path]) validateTextContent(tree[change.path]);
-        const current = tree[change.path]
-          ? await this.workspace.git.revision(tree[change.path])
-          : null;
+        const entry = tree[change.path];
+        if (entry?.mode === gitModes.gitlink || (change.bytes && entry?.mode === gitModes.symlink))
+          throw new AppError('VALIDATION', '正文提案不能修改符号链接或子模块。');
+        if (textOnly && entry)
+          validateTextContent(
+            await this.workspace.git.blob(this.proposal.projectId, entry.revision),
+          );
+        const current = entry?.revision ?? null;
         if (current !== change.expected)
           throw new AppError('CONFLICT', '提案文件修订已变化，请重新读取。');
-        if (change.bytes) tree[change.path] = change.bytes;
+        if (change.bytes)
+          tree[change.path] = {
+            revision: await this.workspace.git.writeBlob(this.proposal.projectId, change.bytes),
+            mode: entry?.mode ?? gitModes.file,
+          };
         else delete tree[change.path];
       }
       await this.persistChange(
@@ -123,7 +132,7 @@ export class ProposalOverlay {
 
   private async persistChange(
     invocation: string,
-    tree: Record<string, Uint8Array>,
+    tree: GitTree,
     paths: string[],
     fingerprint: string,
   ) {
@@ -196,8 +205,12 @@ export class ProposalOverlay {
         this.proposal.projectId,
         previous?.previousSnapshot ?? this.proposal.candidateSnapshot,
       );
-      const before = tree[path];
-      if (!before) throw new AppError('VALIDATION', '候选文件不存在，请使用 write_text 新建文件。');
+      const original = tree[path];
+      if (!original)
+        throw new AppError('VALIDATION', '候选文件不存在，请使用 write_text 新建文件。');
+      if (original.mode !== gitModes.file && original.mode !== gitModes.executable)
+        throw new AppError('VALIDATION', '精确替换只允许普通文本文件。');
+      const before = await this.workspace.git.blob(this.proposal.projectId, original.revision);
       validateTextContent(before);
       if ((await this.workspace.git.revision(before)) !== expectedRevision)
         throw new AppError(
@@ -208,7 +221,7 @@ export class ProposalOverlay {
       const plan = applyTextEdits(source, replacements);
       const after = this.codec.encodeText(plan.text);
       validateTextContent(after);
-      const revision = await this.workspace.git.revision(after);
+      const revision = await this.workspace.git.writeBlob(this.proposal.projectId, after);
       if (previous) {
         const saved = await this.workspace.git.entries(
           this.proposal.projectId,
@@ -217,7 +230,7 @@ export class ProposalOverlay {
         if (saved.find(file => file.path === path)?.revision !== revision)
           throw new AppError('STORAGE', '精确替换提案回执与候选结果不一致。');
       } else {
-        tree[path] = after;
+        tree[path] = { revision, mode: original.mode };
         await this.persistChange(invocation, tree, [path], fingerprint);
       }
       return {

@@ -1,3 +1,4 @@
+import type { GitEntry } from '../git/objects';
 export type FileKind = 'text' | 'image' | 'binary';
 
 export interface ContentPreview {
@@ -13,16 +14,17 @@ export interface ProjectFile {
   size: number;
   mimeType: string;
   kind: FileKind;
+  mode?: number;
 }
 
 export interface FileChange {
   path: string;
-  before: string | null;
-  after: string | null;
+  before: GitEntry | null;
+  after: GitEntry | null;
 }
 
 export interface WorkspaceChange {
   projectId: string;
   paths: readonly string[];
-  commit: string;
+  commit: string | null;
 }

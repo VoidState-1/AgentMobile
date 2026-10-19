@@ -4,6 +4,7 @@ import type { Project } from '@/core/projects';
 import type { ProjectFile } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
 import type { GitStatus } from '@/core/git/contracts';
+import type { GitRepositoryInfo } from '@/core/git/repository';
 import type { RunView, RunSummary } from '@/core/runs/queries';
 import type { Conversation } from '@/core/conversations/types';
 import { emptyConversationState } from '@/core/conversations/types';
@@ -38,6 +39,7 @@ export function useWorkbenchData(context: DataContext) {
     paging: boolean;
   }>({ rows: [], paging: false });
   const [gitStatus, setGitStatus] = useState<GitStatus>();
+  const [repository, setRepository] = useState<GitRepositoryInfo>();
   const [snapshotProjectId, setSnapshotProjectId] = useState<string>();
   const [tasks, setTasks] = useState<RunSummary[]>([]);
   const [taskCursor, setTaskCursor] = useState<string>();
@@ -178,7 +180,7 @@ export function useWorkbenchData(context: DataContext) {
       if (request !== refreshId.current || useWorkbenchUi.getState().projectId !== projectId)
         return;
       setProjects(nextProjects);
-      setFiles(snapshot.files.filter(file => file.path !== 'project.json'));
+      setFiles(snapshot.files);
       const previous = versionHistory.current;
       const paging = previous.projectId === projectId && previous.paging;
       const rows = paging
@@ -194,6 +196,7 @@ export function useWorkbenchData(context: DataContext) {
       setVersions(rows);
       setVersionCursor(cursor);
       setGitStatus(snapshot.gitStatus);
+      setRepository(snapshot.repository);
       setOperations(snapshot.operations);
       setSnapshotProjectId(projectId);
       const document = editorRef.current;
@@ -395,15 +398,25 @@ export function useWorkbenchData(context: DataContext) {
   const selectedProjectView = useMemo(
     () =>
       snapshotProjectId === ui.projectId
-        ? { files, versions, versionCursor, gitStatus, operations }
+        ? { files, versions, versionCursor, gitStatus, operations, repository }
         : {
             files: [],
             versions: [],
             versionCursor: undefined,
             gitStatus: undefined,
+            repository: undefined,
             operations: [],
           },
-    [snapshotProjectId, ui.projectId, files, versions, versionCursor, gitStatus, operations],
+    [
+      snapshotProjectId,
+      ui.projectId,
+      files,
+      versions,
+      versionCursor,
+      gitStatus,
+      operations,
+      repository,
+    ],
   );
   const selectedTasks = useMemo(
     () => (taskScope === ui.projectId + '/' + ui.conversationId ? tasks : []),

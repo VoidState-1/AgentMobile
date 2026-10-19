@@ -37,6 +37,10 @@ describe('受控路径', () => {
   });
   it('保留合法的 Unicode 相对路径', () =>
     expect(safePath('documents/旅行笔记.md')).toBe('documents/旅行笔记.md'));
+  it('不把完整仓库的深层目录限制在 220 字符内', () => {
+    const path = Array(30).fill('directory').join('/') + '/readme.md';
+    expect(safePath(path)).toBe(path);
+  });
   it('拒绝伪装图片和过大像素尺寸', () => {
     expect(() => validateImage('bad.png', Buffer.from('<html>'))).toThrow('图片不是');
     const png = Buffer.from(
@@ -90,7 +94,7 @@ describe('真实 Git 和工作区一致性', () => {
 
   it('移动、删除和恢复保留原来的历史，并拒绝任务期间的其他写入', async () => {
     const { service, project } = await fixture();
-    const original = await service.git.head(project.id);
+    const original = (await service.git.head(project.id))!;
     const file = await service.readText(project.id, 'documents/notes.md');
     await service.move(project.id, 'documents/notes.md', 'documents/moved.md', file.revision);
     await expect(service.readText(project.id, 'documents/notes.md')).rejects.toThrow();

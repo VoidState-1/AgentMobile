@@ -41,7 +41,7 @@ export function scopedFileReader(
           throw new AppError('CONFLICT', '文件清单已变化，请重新读取。');
         offset = position.offset;
       }
-      const files = value.files.filter(file => file.path.toLowerCase() !== 'project.json');
+      const files = value.files;
       const page = files.slice(offset, offset + limit);
       const next = offset + page.length;
       return {

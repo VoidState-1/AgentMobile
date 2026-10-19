@@ -1,24 +1,37 @@
 import type { FileChange } from './types';
 import { AppError } from '../errors';
+import type { GitEntry } from '../git/objects';
+import type { GitRefState, GitConflict } from '../git/repository';
+import type { GitStateFiles } from '../git/merge';
 
 export interface JournalScope {
   namespace: 'projects' | 'skills';
   projectId: string;
 }
-export type OperationKind = 'files' | 'index' | 'commit' | 'files_commit';
+export type OperationKind =
+  'files' | 'index' | 'commit' | 'files_commit' | 'checkout' | 'merge' | 'rebase';
 export interface IndexChange {
   path: string;
-  before: string | null;
-  after: string | null;
+  before: GitEntry | null;
+  after: GitEntry | null;
 }
 export interface OperationBody {
   changes: FileChange[];
   indexChanges?: IndexChange[];
   textEditFingerprint?: string;
   fileMove?: { from: string; to: string };
+  headChange?: {
+    before: GitRefState;
+    after: GitRefState;
+    branchGuard?: import('../git/rebase').GitBranchGuard;
+  };
+  conflictsChange?: { before: GitConflict[]; after: GitConflict[] };
+  gitStateChange?: { before: GitStateFiles; after: GitStateFiles };
+  completionReceipt?: boolean;
+  commitDependencies?: string[];
 }
 export interface OperationHeader {
-  schemaVersion: 2;
+  schemaVersion: 3;
   id: string;
   scope: JournalScope;
   sequence: number;
@@ -29,7 +42,8 @@ export interface OperationHeader {
   actorRunId?: string;
   proposalId?: string;
   mergedByRunId?: string;
-  expectedHead: string;
+  expectedHead: string | null;
+  expectedBranch: string | null;
   changedPaths: string[];
   bodyFingerprint: string;
   checkpoint?: string;
@@ -56,6 +70,7 @@ export function sameOperation(previous: OperationHeader, draft: OperationDraft):
     previous.bodyFingerprint === draft.bodyFingerprint &&
     previous.kind === draft.kind &&
     previous.expectedHead === draft.expectedHead &&
+    previous.expectedBranch === draft.expectedBranch &&
     previous.message === draft.message &&
     previous.ownerRootRunId === draft.ownerRootRunId &&
     previous.actorRunId === draft.actorRunId &&

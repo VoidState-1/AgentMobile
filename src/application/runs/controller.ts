@@ -100,7 +100,7 @@ export async function startRun(
       agentSettingsSnapshot: agentSettings,
       mcpSnapshot: mcpRun?.snapshots,
       state: 'running',
-      baseCommit: baseline.head,
+      baseCommit: baseline.head ?? undefined,
       baseSnapshot: baseline.working,
       baseIndexSnapshot: baseline.index,
       response: '',

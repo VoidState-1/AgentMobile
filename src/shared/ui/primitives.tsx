@@ -166,8 +166,8 @@ export function ToolbarAction({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={label}
-      accessibilityState={{ disabled: disabled || busy, busy }}
-      disabled={disabled || busy}
+      accessibilityState={{ disabled: !!(disabled || busy), busy: !!busy }}
+      disabled={!!(disabled || busy)}
       onPress={onPress}
       style={({ pressed }) => ({
         minWidth: workbenchMetrics.touch,
@@ -226,7 +226,7 @@ export function Button({
     <Pressable
       accessibilityRole="button"
       accessibilityLabel={accessibilityLabel ?? label}
-      disabled={disabled || busy}
+      disabled={!!(disabled || busy)}
       testID={testID}
       onPress={onPress}
       style={({ pressed }) => [

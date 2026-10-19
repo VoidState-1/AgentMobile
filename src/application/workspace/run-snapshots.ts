@@ -2,7 +2,7 @@ import type { WorkspaceContext } from './context';
 import type { Operation } from '@/core/workspace/journal';
 import type { ExecutionView } from '@/core/runs/types';
 import type { GitBaseline } from '@/core/git/contracts';
-import type { WorkspaceReader } from './reader';
+import { sameEntry, type GitTree } from '@/core/git/objects';
 import type { MutationCoordinator } from './mutations';
 import type { GitService } from './git';
 import { AppError } from '@/core/errors';
@@ -10,7 +10,6 @@ import { AppError } from '@/core/errors';
 export class RunSnapshots {
   constructor(
     private readonly context: WorkspaceContext,
-    private readonly reader: WorkspaceReader,
     private readonly mutations: MutationCoordinator,
     private readonly versions: GitService,
   ) {}
@@ -18,7 +17,7 @@ export class RunSnapshots {
     return this.mutations.serial(projectId, owner, async () =>
       this.context.git.checkpoint(
         projectId,
-        await this.reader.workingTree(projectId),
+        await this.context.git.workingTree(projectId),
         'delegations/' + key,
         await this.context.git.head(projectId),
       ),
@@ -27,7 +26,7 @@ export class RunSnapshots {
   candidateSnapshot(
     projectId: string,
     owner: string,
-    files: Record<string, Uint8Array>,
+    files: GitTree,
     key: string,
     parent: string,
   ): Promise<string> {
@@ -38,17 +37,21 @@ export class RunSnapshots {
   taskBaseline(projectId: string, taskId: string): Promise<GitBaseline> {
     return this.mutations.serial(projectId, taskId, async () => {
       const head = await this.context.git.head(projectId);
+      const status = await this.context.git.status(projectId);
+      if (status.state !== 'none')
+        throw new AppError('CONFLICT', '请先完成正在进行的 Git 操作，再启动 Agent。');
       return {
         head,
+        dirtyPaths: status.files.map(file => file.path),
         working: await this.context.git.checkpoint(
           projectId,
-          await this.reader.workingTree(projectId),
+          await this.context.git.workingTree(projectId),
           'tasks/' + taskId + '/base',
           head,
         ),
         index: await this.context.git.checkpoint(
           projectId,
-          await this.mutations.indexTree(projectId),
+          await this.context.git.index(projectId),
           'tasks/' + taskId + '/base-index',
           head,
         ),
@@ -58,7 +61,7 @@ export class RunSnapshots {
 
   async taskFinal(task: ExecutionView, recovering = false): Promise<ExecutionView> {
     if (!task.baseSnapshot || !task.baseIndexSnapshot)
-      return { ...task, finalCommit: await this.context.git.head(task.projectId) };
+      return { ...task, finalCommit: (await this.context.git.head(task.projectId)) ?? undefined };
     const own = (await this.context.journal.owned(task.projectId, task.id)).reverse();
     const head = recovering
       ? ([...own].reverse().find(op => op.kind === 'commit')?.commit ??
@@ -69,10 +72,10 @@ export class RunSnapshots {
     const lastIndex = [...own].reverse().find(op => op.indexAfter);
     const working = recovering
       ? await this.context.git.tree(task.projectId, lastFiles?.checkpoint ?? task.baseSnapshot)
-      : await this.reader.workingTree(task.projectId);
+      : await this.context.git.workingTree(task.projectId);
     const index = recovering
       ? await this.context.git.tree(task.projectId, lastIndex?.indexAfter ?? task.baseIndexSnapshot)
-      : await this.mutations.indexTree(task.projectId);
+      : await this.context.git.index(task.projectId);
     const finalSnapshot = await this.context.git.checkpoint(
       task.projectId,
       working,
@@ -99,21 +102,20 @@ export class RunSnapshots {
           .map(change => change.path),
       ),
     ];
-    const uncommitted = await this.versions.changes(task.projectId, head, finalSnapshot);
-    const staged = await this.versions.changes(task.projectId, head, finalIndexSnapshot);
+    const uncommittedPaths = await this.context.git.uncommittedPaths(
+      task.projectId,
+      head,
+      finalIndexSnapshot,
+      finalSnapshot,
+      changedPaths,
+    );
     return {
       ...task,
-      finalCommit: head,
+      finalCommit: head ?? undefined,
       finalSnapshot,
       finalIndexSnapshot,
       changedPaths,
-      uncommittedPaths: [
-        ...new Set(
-          [...uncommitted, ...staged]
-            .filter(change => changedPaths.includes(change.path))
-            .map(change => change.path),
-        ),
-      ],
+      uncommittedPaths,
     };
   }
 
@@ -150,8 +152,8 @@ export class RunSnapshots {
       const [before, after, working, index] = await Promise.all([
         this.context.git.tree(task.projectId, beforeRef),
         this.context.git.tree(task.projectId, afterRef),
-        this.reader.workingTree(task.projectId),
-        this.mutations.indexTree(task.projectId),
+        this.context.git.workingTree(task.projectId),
+        this.context.git.index(task.projectId),
       ]);
       const baseIndex = task.baseIndexSnapshot
         ? await this.context.git.tree(task.projectId, task.baseIndexSnapshot)
@@ -160,24 +162,23 @@ export class RunSnapshots {
         ? await this.context.git.tree(task.projectId, task.finalIndexSnapshot)
         : after;
       const paths =
-        task.changedPaths ?? this.versions.treeChanges(before, after).map(change => change.path);
+        task.changedPaths ??
+        (await this.versions.treeChanges(task.projectId, before, after)).map(change => change.path);
       const files: Operation['changes'] = [];
       const entries: NonNullable<Operation['indexChanges']> = [];
       for (const path of paths) {
-        const value = (tree: Record<string, Uint8Array>) =>
-          tree[path] ? this.context.codec.encodeBase64(tree[path]) : null;
-        if (value(working) !== value(after) || value(index) !== value(finalIndex))
+        if (!sameEntry(working[path], after[path]) || !sameEntry(index[path], finalIndex[path]))
           throw new AppError(
             'CONFLICT',
             'VERSION_CONFLICT：任务文件或暂存区已有后续修改，不能撤销：' + path,
           );
-        if (value(before) !== value(working))
-          files.push({ path, before: value(working), after: value(before) });
-        if (value(baseIndex) !== value(index))
+        if (!sameEntry(before[path], working[path]))
+          files.push({ path, before: working[path] ?? null, after: before[path] ?? null });
+        if (!sameEntry(baseIndex[path], index[path]))
           entries.push({
             path,
-            before: index[path] ? await this.context.git.revision(index[path]) : null,
-            after: baseIndex[path] ? await this.context.git.revision(baseIndex[path]) : null,
+            before: index[path] ?? null,
+            after: baseIndex[path] ?? null,
           });
       }
       if (files.length || entries.length)

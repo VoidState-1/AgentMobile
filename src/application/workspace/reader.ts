@@ -9,6 +9,7 @@ import { previewContent } from './content';
 import type { FilePreview } from '@/application/services';
 import type { StorageStat } from '@/core/storage/contracts';
 import type { Operation } from '@/core/workspace/journal';
+import { storageMode } from '@/core/git/objects';
 
 const MAX_FILE_BYTES = workspaceLimits.fileOperationBytes;
 export class WorkspaceReader {
@@ -24,10 +25,8 @@ export class WorkspaceReader {
       const key = projectId + '/' + change.path;
       this.descriptors.delete(key);
       if (change.after !== null) {
-        const bytes = this.context.codec.decodeBase64(change.after);
-        const expected = await this.context.git.revision(bytes);
         const actual = await this.read(projectId, change.path);
-        if (actual.revision !== expected) this.descriptors.delete(key);
+        if (actual.revision !== change.after.revision) this.descriptors.delete(key);
       }
     }
   }
@@ -86,19 +85,57 @@ export class WorkspaceReader {
         path !== openPath &&
         stamp !== undefined &&
         cached?.stamp === stamp &&
-        cached.file.size === info.size
+        cached.file.size === info.size &&
+        cached.file.mode === storageMode(info)
       ) {
         files.push({ ...cached.file });
         return;
       }
+      if (info.size > MAX_FILE_BYTES) {
+        const entry = (await this.context.git.workingTree(projectId, [path]))[path];
+        if (!entry) throw new AppError('CONFLICT', '文件扫描期间已变化，请刷新。');
+        const file: ProjectFile = {
+          path,
+          revision: entry.revision,
+          mode: entry.mode,
+          size: info.size,
+          kind: 'binary',
+          mimeType: 'application/octet-stream',
+        };
+        files.push(file);
+        if (stamp !== undefined) this.descriptors.set(key, { stamp, file });
+        if (path === openPath)
+          preview = {
+            ...file,
+            content: '',
+            unavailableReason: '文件较大，保留 Git 管理与导出，暂不载入编辑器。',
+          };
+        return;
+      }
       const { bytes, revision } = await this.read(projectId, path);
-      files.push({ path, revision, size: bytes.length, ...describeContent(path, bytes) });
+      files.push({
+        path,
+        revision,
+        size: bytes.length,
+        mode: storageMode(info),
+        ...(info.kind === 'symlink'
+          ? { kind: 'binary' as const, mimeType: 'application/x-symlink' }
+          : describeContent(path, bytes)),
+      });
       if (path === openPath)
         preview = {
           path,
           revision,
           size: bytes.length,
-          ...previewContent(path, bytes, this.context.codec),
+          mode: storageMode(info),
+          ...(info.kind === 'symlink'
+            ? {
+                kind: 'binary' as const,
+                mimeType: 'application/x-symlink',
+                content: '',
+                unavailableReason: '这是符号链接，请在 Git 中处理。',
+              }
+            : previewContent(path, bytes, this.context.codec)),
         };
     });
     for (const key of this.descriptors.keys())
@@ -113,6 +150,7 @@ export class WorkspaceReader {
     path = safePath(path);
     const key = projectId + '/' + path;
     const info = await this.context.fs.stat(this.internal(projectId, path));
+    if (info.size > MAX_FILE_BYTES) throw new AppError('LIMIT', '文件超过 20 MB 编辑读取限制');
     const before = await this.stamp(projectId, path, info);
     const bytes = await this.context.fs.read(this.internal(projectId, path));
     if (bytes.length > MAX_FILE_BYTES) throw new AppError('LIMIT', '文件超过 20 MB 限制');
@@ -126,9 +164,26 @@ export class WorkspaceReader {
     if (after !== undefined)
       this.descriptors.set(key, {
         stamp: after,
-        file: { path, revision, size: bytes.length, ...describeContent(path, bytes) },
+        file: {
+          path,
+          revision,
+          size: bytes.length,
+          mode: storageMode(info),
+          ...(info.kind === 'symlink'
+            ? { kind: 'binary' as const, mimeType: 'application/x-symlink' }
+            : describeContent(path, bytes)),
+        },
       });
     return { bytes, revision };
+  }
+  async assertWritableFile(projectId: string, path: string) {
+    try {
+      const info = await this.context.fs.stat(this.internal(projectId, path));
+      if (info.kind !== 'file')
+        throw new AppError('VALIDATION', '正文工具不能修改目录或符号链接。');
+    } catch (error) {
+      if ((error as { code?: string }).code !== 'ENOENT') throw error;
+    }
   }
 
   async readText(projectId: string, path: string) {
@@ -138,15 +193,24 @@ export class WorkspaceReader {
   }
 
   async preview(projectId: string, path: string) {
+    const info = await this.context.fs.stat(this.internal(projectId, path));
+    if (info.size > MAX_FILE_BYTES || info.kind === 'symlink') {
+      const entry = (await this.context.git.workingTree(projectId, [path]))[path];
+      if (!entry) throw new AppError('CONFLICT', '文件已变化，请重新读取。');
+      return {
+        revision: entry.revision,
+        mode: entry.mode,
+        size: info.size,
+        kind: 'binary' as const,
+        mimeType: info.kind === 'symlink' ? 'application/x-symlink' : 'application/octet-stream',
+        content: '',
+        unavailableReason:
+          info.kind === 'symlink'
+            ? '这是符号链接，请在 Git 中处理。'
+            : '文件较大，保留 Git 管理，暂不载入编辑器。',
+      };
+    }
     const { bytes, revision } = await this.read(projectId, path);
     return { revision, size: bytes.length, ...previewContent(path, bytes, this.context.codec) };
-  }
-
-  async workingTree(projectId: string) {
-    const tree: Record<string, Uint8Array> = Object.create(null);
-    await this.walk(projectId, async path => {
-      tree[path] = await this.context.fs.read(this.internal(projectId, path));
-    });
-    return tree;
   }
 }

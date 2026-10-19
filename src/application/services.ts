@@ -2,6 +2,14 @@ import type { Project } from '@/core/projects';
 import type { EditorDraft, EditorDraftRecord } from '@/core/documents/state';
 import type { ProjectFile, ContentPreview, FileKind } from '@/core/workspace/types';
 import type { Version } from '@/core/git/types';
+import type {
+  GitRepositoryInfo,
+  GitRepositoryCommand,
+  GitCredentialInput,
+  GitTransferState,
+  GitCloneInput,
+  GitCommandResult,
+} from '@/core/git/repository';
 import type { RunListQuery, RunPage, RunDetail, RunView, RunChange } from '@/core/runs/queries';
 import type { TracePage, TextPage } from '@/core/runs/trace-storage';
 import type {
@@ -32,10 +40,13 @@ import type { WorkbenchPreferences } from '@/core/preferences';
 import type { ProposalState } from '@/core/runs/proposals';
 
 export interface FilePreview extends ContentPreview {
+  mode?: number;
   revision: string;
   size: number;
 }
 export interface ReviewFile {
+  beforeMode?: number | null;
+  afterMode?: number | null;
   path: string;
   status: NonNullable<GitFileStatus['staged']>;
   stagedOnly?: boolean;
@@ -64,6 +75,7 @@ export interface WorkspaceOperationSummary {
   changedPaths: string[];
 }
 export interface WorkspaceSnapshot {
+  repository: GitRepositoryInfo;
   files: ProjectFile[];
   versions: Version[];
   gitStatus: GitStatus;
@@ -72,6 +84,44 @@ export interface WorkspaceSnapshot {
   historyCursor?: string;
 }
 export interface WorkspaceApi {
+  rebaseBranch(
+    projectId: string,
+    source: { name: string; oid: string },
+    expected: GitStatus,
+  ): Promise<'up-to-date' | 'fast-forward' | 'completed' | 'conflicts'>;
+  continueRebase(projectId: string, expected: GitStatus): Promise<'completed' | 'conflicts'>;
+  skipRebase(projectId: string, expected: GitStatus): Promise<'completed' | 'conflicts'>;
+  abortRebase(projectId: string, expected: GitStatus): Promise<void>;
+  mergeBranch(
+    projectId: string,
+    source: { name: string; oid: string },
+    expected: GitStatus,
+  ): Promise<import('@/core/git/merge').GitMergePlan['kind']>;
+  conflictPreview(projectId: string, path: string): Promise<GitConflictPreview>;
+  resolveConflict(
+    projectId: string,
+    path: string,
+    choice: import('@/core/git/merge').GitConflictChoice,
+    expected: GitStatus,
+  ): Promise<void>;
+  continueMerge(projectId: string, expected: GitStatus): Promise<void>;
+  abortMerge(projectId: string, expected: GitStatus): Promise<void>;
+  repository(projectId: string): Promise<GitRepositoryInfo>;
+  gitCommand(
+    projectId: string,
+    command: GitRepositoryCommand,
+    expected: GitStatus,
+  ): Promise<GitCommandResult | void>;
+  cloneProject(input: GitCloneInput, credential?: GitCredentialInput): Promise<Project>;
+  saveGitCredential(
+    projectId: string,
+    name: string,
+    url: string,
+    input: GitCredentialInput | null,
+  ): Promise<void>;
+  gitTransfer(projectId?: string): GitTransferState | undefined;
+  subscribeGitTransfer(listener: (value: GitTransferState) => void): () => void;
+  cancelGitTransfer(projectId: string): void;
   editorDraft(projectId: string, path: string): Promise<EditorDraftRecord>;
   saveEditorDraft(
     projectId: string,
@@ -85,7 +135,7 @@ export interface WorkspaceApi {
   files(projectId: string): Promise<ProjectFile[]>;
   read(projectId: string, path: string): Promise<{ bytes: Uint8Array; revision: string }>;
   preview(projectId: string, path: string): Promise<FilePreview>;
-  head(projectId: string): Promise<string>;
+  head(projectId: string): Promise<string | null>;
   snapshot(projectId: string, openPath?: string): Promise<WorkspaceSnapshot>;
   historyPage(projectId: string, query?: GitHistoryQuery): Promise<GitHistoryPage>;
   write(
@@ -104,8 +154,12 @@ export interface WorkspaceApi {
   ): Promise<string>;
   remove(projectId: string, path: string, revision: string): Promise<string>;
   move(projectId: string, from: string, to: string, revision: string): Promise<string>;
-  restore(projectId: string, ref: string, expectedHead: string): Promise<string>;
-  changes(projectId: string, before: string | undefined, after: string): Promise<ReviewFile[]>;
+  restore(projectId: string, ref: string, expectedHead: string | null): Promise<string | null>;
+  changes(
+    projectId: string,
+    before: string | null | undefined,
+    after: string,
+  ): Promise<ReviewFile[]>;
   taskChanges(runId: string): Promise<ReviewFile[]>;
   taskChangeSummary(runId: string): Promise<FileChangeSummary[]>;
   undoTask(runId: string): Promise<void>;
@@ -130,8 +184,23 @@ export interface WorkspaceApi {
   diff(projectId: string, area: 'staged' | 'unstaged', paths?: string[]): Promise<ReviewFile[]>;
   discard(projectId: string, paths: string[], expected: GitStatus): Promise<void>;
   subscribe(
-    listener: (change: { projectId: string; paths: readonly string[]; commit: string }) => void,
+    listener: (change: {
+      projectId: string;
+      paths: readonly string[];
+      commit: string | null;
+    }) => void,
   ): () => void;
+}
+export interface GitConflictPreview {
+  projectId: string;
+  status: GitStatus;
+  path: string;
+  conflict: import('@/core/git/repository').GitConflict;
+  base: FilePreview | null;
+  ours: FilePreview | null;
+  theirs: FilePreview | null;
+  working: FilePreview | null;
+  relatedPaths: string[];
 }
 export interface ModelsApi {
   readonly recoveryIssues: readonly string[];

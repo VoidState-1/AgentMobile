@@ -23,7 +23,10 @@ export class OperationJournal {
     return { namespace: this.namespace, projectId };
   }
   async prepare(
-    draft: Omit<OperationDraft, 'schemaVersion' | 'scope' | 'changedPaths' | 'bodyFingerprint'> & {
+    draft: Omit<
+      OperationDraft,
+      'schemaVersion' | 'scope' | 'changedPaths' | 'bodyFingerprint' | 'expectedBranch'
+    > & {
       projectId: string;
     },
     body: OperationBody,
@@ -32,10 +35,18 @@ export class OperationJournal {
     const header = await this.store.prepareOperation(
       {
         ...fields,
-        schemaVersion: 2,
+        schemaVersion: 3,
+        expectedBranch: await this.git.branch(projectId),
         scope: this.scope(projectId),
         changedPaths: [
-          ...new Set([...body.changes, ...(body.indexChanges ?? [])].map(change => change.path)),
+          ...new Set(
+            [
+              ...body.changes,
+              ...(body.indexChanges ?? []),
+              ...(body.conflictsChange?.before ?? []),
+              ...(body.conflictsChange?.after ?? []),
+            ].map(change => change.path),
+          ),
         ],
         bodyFingerprint: await this.git.revision(this.codec.encodeText(JSON.stringify(body))),
       },
@@ -63,6 +74,11 @@ export class OperationJournal {
       indexChanges: _indexChanges,
       textEditFingerprint: _textEditFingerprint,
       fileMove: _fileMove,
+      headChange: _headChange,
+      conflictsChange: _conflictsChange,
+      gitStateChange: _gitStateChange,
+      completionReceipt: _completionReceipt,
+      commitDependencies: _commitDependencies,
       ...header
     } = operation;
     const next = { ...header, revision: header.revision + 1 };

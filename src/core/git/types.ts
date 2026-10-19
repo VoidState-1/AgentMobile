@@ -1,6 +1,8 @@
 export interface Version {
   oid: string;
-  parentOid?: string;
+  parents: string[];
   message: string;
   timestamp: number;
+  author: { name: string; email: string };
+  committer: { name: string; email: string };
 }

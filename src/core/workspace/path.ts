@@ -1,10 +1,9 @@
 import { AppError } from '@/core/errors';
 export function safePath(input: string, allowRoot = false): string {
   if (allowRoot && input === '') return '';
-  const path = input.normalize('NFC');
+  const path = input;
   if (
     !path ||
-    path.length > 220 ||
     path !== path.trim() ||
     /[\\:\u0000-\u001f\u007f]/.test(path) ||
     path.startsWith('/') ||
@@ -31,14 +30,17 @@ export function isMarkdown(path: string): boolean {
 
 export function mimeFor(path: string): string {
   const ext = path.split('.').pop()?.toLowerCase();
-  return (
-    (
-      { png: 'image/png', jpg: 'image/jpeg', jpeg: 'image/jpeg', webp: 'image/webp' } as Record<
-        string,
-        string
-      >
-    )[ext ?? ''] ?? (isMarkdown(path) ? 'text/markdown' : 'application/octet-stream')
-  );
+  const images: Record<string, string> = {
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    webp: 'image/webp',
+  };
+  return ext && Object.hasOwn(images, ext)
+    ? images[ext]
+    : isMarkdown(path)
+      ? 'text/markdown'
+      : 'application/octet-stream';
 }
 
 export function isImage(path: string): boolean {

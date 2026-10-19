@@ -26,7 +26,7 @@ export class EditorDrafts {
     if (!Number.isSafeInteger(value.revision) || value.revision < 0 || !('draft' in value))
       throw new AppError('STORAGE', '文件草稿格式不匹配，请重建开发实例。');
     if (value.draft) this.validate(value.draft);
-    return value;
+    return { revision: value.revision, draft: value.draft };
   }
   private validate(draft: EditorDraft) {
     if (
@@ -67,8 +67,20 @@ export class EditorDrafts {
       if (draft) this.validate(draft);
       const next = { revision: current.revision + 1, draft };
       // Keep a revision tombstone so a delayed write cannot resurrect a discarded draft.
-      await this.store.put('editor-drafts', key, next);
+      await this.store.put('editor-drafts', key, { ...next, projectId, path: safePath(path) });
       return next;
     });
+  }
+  hasUnsaved(projectId: string): Promise<boolean> {
+    return this.queue.run(async () =>
+      (await this.store.all<EditorDraftRecord & { projectId: string }>('editor-drafts')).some(
+        record =>
+          record.projectId === projectId &&
+          record.draft &&
+          (record.draft.fresh ||
+            record.draft.pendingSave ||
+            record.draft.state.text !== record.draft.state.base),
+      ),
+    );
   }
 }

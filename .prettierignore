@@ -5,6 +5,7 @@ web-build/
 work/
 outputs/
 coverage/
+test-results/
 android/
 ios/
 package-lock.json
@@ -12,3 +13,7 @@ expo-env.d.ts
 
 
 src/features/document/generated.ts
+modules/agent-mobile-git/vendor/
+modules/agent-mobile-git/android/build/
+modules/agent-mobile-git/android/.cxx/
+modules/agent-mobile-git/ios/Frameworks/

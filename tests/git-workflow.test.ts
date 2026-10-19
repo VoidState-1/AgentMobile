@@ -8,6 +8,55 @@ import type { ExecutionView } from '../src/core/runs/types';
 import { testStorage, readOperations } from './storage';
 
 const cleanups: (() => Promise<void>)[] = [];
+it('空仓库保持 unborn HEAD，保存与暂存只创建私有对象，首次显式提交才生成公开历史', async () => {
+  const f = await testStorage();
+  cleanups.push(f.cleanup);
+  const workspace = createWorkspace(f.files, f.metadata, randomUUID);
+  const id = randomUUID();
+  await workspace.git.init(id);
+  await f.metadata.put('projects', id, {
+    id,
+    name: '空仓库',
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  });
+  expect((await workspace.snapshot(id)).versions).toEqual([]);
+  expect((await workspace.repository(id)).head).toMatchObject({ kind: 'unborn', oid: null });
+  await workspace.writeText(id, 'main.txt', Buffer.from('first'), null);
+  expect(await workspace.git.head(id)).toBeNull();
+  const status = await workspace.status(id);
+  await workspace.stage(id, ['main.txt'], {
+    ...status,
+    revisions: { 'main.txt': status.files[0].workingRevision },
+  });
+  expect(await workspace.git.head(id)).toBeNull();
+  await workspace.commitStaged(id, 'first real commit', await workspace.status(id));
+  const history = await workspace.git.historyPage(id);
+  expect(history.versions).toHaveLength(1);
+  expect(history.versions[0].parents).toEqual([]);
+});
+
+it('文件日志保存 Git 对象引用，不再把文件正文复制到 SQLite 操作体', async () => {
+  const f = await testStorage();
+  cleanups.push(f.cleanup);
+  const workspace = createWorkspace(f.files, f.metadata, randomUUID);
+  const project = await workspace.create('对象日志');
+  const content = 'user content\n'.repeat(6000);
+  await workspace.writeText(project.id, 'large.txt', Buffer.from(content), null);
+  const headers = await f.metadata.operations({
+    scope: { namespace: 'projects', projectId: project.id },
+    limit: 10,
+  });
+  const body = (await f.metadata.operationBody(headers[0].scope, headers[0].id))!;
+  expect(JSON.stringify(body).length).toBeLessThan(2048);
+  expect(body.changes[0].after).toEqual({
+    revision: await workspace.git.revision(Buffer.from(content)),
+    mode: 0o100644,
+  });
+  expect(
+    Buffer.from(await workspace.git.blob(project.id, body.changes[0].after!.revision)).toString(),
+  ).toBe(content);
+});
 afterEach(async () => {
   vi.unstubAllGlobals();
   for (const cleanup of cleanups.splice(0)) await cleanup();
@@ -80,6 +129,43 @@ it('Git 状态读取真实分支，分离 HEAD 时不编造分支名', async () 
 });
 
 describe('标准工作区、暂存区与提交', () => {
+  it('合法特殊文件名在保存、暂存中断恢复、提交和分支切换中保留真实内容', async () => {
+    const f = await fixture(),
+      id = f.project.id;
+    await f.workspace.gitCommand(
+      id,
+      { method: 'branchCreate', name: 'before-special' },
+      await f.workspace.status(id),
+    );
+    const paths = ['constructor', 'toString', '__proto__', 'hasOwnProperty/note.txt'];
+    for (const path of paths) await f.save(path, 'contents:' + path);
+    expect((await f.workspace.status(id)).files.map(file => file.path).sort()).toEqual(
+      [...paths].sort(),
+    );
+    const setIndex = f.workspace.git.setIndex;
+    f.workspace.git.setIndex = async (...args) => {
+      await setIndex(...args);
+      throw new Error('special path stage interrupted');
+    };
+    await expect(f.stage(...paths)).rejects.toThrow('stage interrupted');
+    const reopened = createWorkspace(f.files, f.metadata, randomUUID);
+    await reopened.recover();
+    expect(reopened.recoveryIssues).toEqual([]);
+    await reopened.commitStaged(id, 'special paths', await reopened.status(id));
+    for (const path of paths) expect(f.cli('show', 'HEAD:' + path)).toBe('contents:' + path);
+    await reopened.gitCommand(
+      id,
+      { method: 'checkout', name: 'before-special' },
+      await reopened.status(id),
+    );
+    expect((await reopened.files(id)).some(file => paths.includes(file.path))).toBe(false);
+    await reopened.gitCommand(id, { method: 'checkout', name: 'main' }, await reopened.status(id));
+    expect((await reopened.status(id)).files).toEqual([]);
+    for (const path of paths)
+      expect(Buffer.from((await reopened.read(id, path)).bytes).toString()).toBe(
+        'contents:' + path,
+      );
+  });
   it('反复保存不移动 HEAD；内部检查点不进入 git log，标准 CLI 可查看未暂存内容', async () => {
     const f = await fixture();
     const head = await f.workspace.git.head(f.project.id);
@@ -197,7 +283,7 @@ describe('标准工作区、暂存区与提交', () => {
     await expect(f.workspace.discard(f.project.id, ['a.md'], stale)).rejects.toThrow(
       'VERSION_CONFLICT',
     );
-    await expect(f.workspace.restore(f.project.id, stale.head, stale.head)).rejects.toThrow(
+    await expect(f.workspace.restore(f.project.id, stale.head!, stale.head)).rejects.toThrow(
       '未提交',
     );
     await f.workspace.discard(f.project.id, ['a.md'], await f.workspace.status(f.project.id));
@@ -207,9 +293,44 @@ describe('标准工作区、暂存区与提交', () => {
 });
 
 describe('跨 Git/元数据存储的中断恢复', () => {
+  it('合并历史保留全部父提交，分页遍历包含两个分支且不重复', async () => {
+    const f = await fixture();
+    const directory = f.resolve(f.workspace.git.dir(f.project.id));
+    const cli = (...args: string[]) =>
+      execFileSync('git', ['-C', directory, ...args], { encoding: 'utf8' }).trim();
+    cli('config', 'user.name', 'History Test');
+    cli('config', 'user.email', 'history@example.invalid');
+    cli('branch', 'feature');
+    cli('checkout', 'feature');
+    await f.files.write(f.workspace.git.dir(f.project.id) + '/feature.txt', Buffer.from('feature'));
+    cli('add', 'feature.txt');
+    cli('commit', '-m', 'feature commit');
+    const feature = cli('rev-parse', 'HEAD');
+    cli('checkout', 'main');
+    await f.files.write(f.workspace.git.dir(f.project.id) + '/main.txt', Buffer.from('main'));
+    cli('add', 'main.txt');
+    cli('commit', '-m', 'main commit');
+    const main = cli('rev-parse', 'HEAD');
+    cli('merge', '--no-ff', 'feature', '-m', 'merge commit');
+    const first = await f.workspace.git.historyPage(f.project.id, { limit: 1 });
+    expect(first.versions[0].parents).toEqual([main, feature]);
+    expect(first.versions[0].author).toEqual({
+      name: 'History Test',
+      email: 'history@example.invalid',
+    });
+    const ids = first.versions.map(value => value.oid);
+    let cursor = first.cursor;
+    while (cursor) {
+      const page = await f.workspace.git.historyPage(f.project.id, { cursor, limit: 1 });
+      ids.push(...page.versions.map(value => value.oid));
+      cursor = page.cursor;
+    }
+    expect(new Set(ids).size).toBe(ids.length);
+    expect(ids).toEqual(expect.arrayContaining([main, feature]));
+  });
   it('历史按固定 HEAD 分页，新增提交不混入后页；恢复查找越过 100 条且精确匹配操作标记', async () => {
     const f = await fixture();
-    const original = await f.workspace.git.head(f.project.id);
+    const original = (await f.workspace.git.head(f.project.id))!;
     let head = original;
     const target = await f.workspace.git.commitSnapshot(
       f.project.id,
@@ -231,7 +352,7 @@ describe('跨 Git/元数据存储的中断恢复', () => {
     await f.workspace.git.commitSnapshot(f.project.id, original, '后来新增', head);
     const next = await f.workspace.git.historyPage(f.project.id, { cursor: first.cursor });
     expect(next.head).toBe(first.head);
-    expect(next.versions[0].oid).toBe(first.versions.at(-1)!.parentOid);
+    expect(next.versions[0].oid).toBe(first.versions.at(-1)!.parents[0]);
     expect(await f.workspace.git.findOperation(f.project.id, 'target')).toBe(target);
     expect(await f.workspace.git.findOperation(f.project.id, 'not-found')).toBeUndefined();
     await expect(
@@ -341,7 +462,7 @@ describe('任务基线、保护与撤销', () => {
       {
         id: owner,
         projectId: f.project.id,
-        baseCommit: baseline.head,
+        baseCommit: baseline.head ?? undefined,
         baseSnapshot: baseline.working,
         baseIndexSnapshot: baseline.index,
         prompt: '编辑',
@@ -400,7 +521,7 @@ describe('任务基线、保护与撤销', () => {
     const task = await f.workspace.taskFinal({
       id: owner,
       projectId: f.project.id,
-      baseCommit: baseline.head,
+      baseCommit: baseline.head ?? undefined,
       baseSnapshot: baseline.working,
       baseIndexSnapshot: baseline.index,
       prompt: '编辑',
@@ -429,7 +550,7 @@ describe('任务基线、保护与撤销', () => {
     const task: ExecutionView = {
       id: owner,
       projectId: f.project.id,
-      baseCommit: baseline.head,
+      baseCommit: baseline.head ?? undefined,
       baseSnapshot: baseline.working,
       baseIndexSnapshot: baseline.index,
       prompt: '写文档',

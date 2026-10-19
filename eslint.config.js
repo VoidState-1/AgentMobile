@@ -4,7 +4,19 @@ const boundaries = require('./scripts/architecture-rule.cjs');
 
 module.exports = defineConfig([
   expoConfig,
-  { ignores: ['dist/**', 'work/**', 'outputs/**', 'android/**', 'ios/**'] },
+  {
+    ignores: [
+      'dist/**',
+      'work/**',
+      'outputs/**',
+      'android/**',
+      'ios/**',
+      'modules/agent-mobile-git/vendor/**',
+      'modules/agent-mobile-git/android/build/**',
+      'modules/agent-mobile-git/android/.cxx/**',
+      'modules/agent-mobile-git/ios/Frameworks/**',
+    ],
+  },
   {
     files: ['src/**/*.{ts,tsx}'],
     plugins: { architecture: { rules: { boundaries } } },

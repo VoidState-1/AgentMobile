@@ -1,0 +1,12 @@
+diff --git a/src/util/unix/posix.h b/src/util/unix/posix.h
+--- a/src/util/unix/posix.h
++++ b/src/util/unix/posix.h
+@@ -68,7 +68,7 @@
+  * are not actually managed this way, so treating it as a no-op across
+  * all Android is safe.
+  */
+-#ifdef __ANDROID__
++#if defined(__ANDROID__) && !defined(AGENT_MOBILE_POSIX_PERMISSIONS)
+ # define p_chmod(p,m) 0
+ #else
+ # define p_chmod(p,m) chmod(p, m)

@@ -243,9 +243,7 @@ export class DelegationSession implements DelegationPort {
       const files = await this.workspace.git.entries(this.parent.projectId, this.snapshotRef);
       if (
         paths.some(
-          path =>
-            path.toLowerCase() === 'project.json' ||
-            (definition.workspace !== 'proposal' && !files.some(file => file.path === path)),
+          path => definition.workspace !== 'proposal' && !files.some(file => file.path === path),
         )
       )
         throw new AppError('VALIDATION', '子任务资料范围包含不存在或受保护的路径。');
@@ -336,7 +334,9 @@ export class DelegationSession implements DelegationPort {
       state: view.state,
       inputSnapshotRef: child.record.inputSnapshotRef,
       response: view.response.slice(0, 12000),
-      references: entries.filter(entry => launch?.selectedPaths?.includes(entry.path)),
+      references: entries
+        .filter(entry => launch?.selectedPaths?.includes(entry.path))
+        .map(({ path, revision }) => ({ path, revision })),
       warnings: view.error
         ? [view.error]
         : view.state === 'completed'

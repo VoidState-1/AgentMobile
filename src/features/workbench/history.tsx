@@ -10,6 +10,8 @@ import { ViewTabs } from '@/shared/ui/selection';
 import { memo, useState } from 'react';
 import { Pressable, ScrollView, View } from 'react-native';
 import type { GitCapability } from './use-workbench';
+import { GitRepositoryPane } from './git-repository';
+import { IntegrationControls, ConflictSheet } from './git-conflicts';
 
 export const HistoryPane = memo(function HistoryPane({
   controller,
@@ -17,12 +19,13 @@ export const HistoryPane = memo(function HistoryPane({
   controller: GitCapability;
 }) {
   const theme = useWorkbenchTheme();
-  const [tab, setTab] = useState<'changes' | 'history'>('changes');
+  const [tab, setTab] = useState<'changes' | 'history' | 'repository'>('changes');
   const status = controller.gitStatus;
-  const staged = status?.files.filter(file => file.staged) ?? [];
-  const unstaged = status?.files.filter(file => file.unstaged) ?? [];
+  const staged = status?.files.filter(file => file.staged && !file.conflict) ?? [];
+  const unstaged = status?.files.filter(file => file.unstaged && !file.conflict) ?? [];
   const disabled =
     controller.busy || !!controller.projectActive || controller.dirty || controller.projectLoading;
+  const mutationDisabled = disabled || status?.state !== 'none';
   const message = controller.commitDrafts[controller.projectId ?? ''] ?? '';
   const section = (files: GitFileStatus[], area: 'staged' | 'unstaged') => (
     <View style={{ gap: 2 }}>
@@ -42,7 +45,7 @@ export const HistoryPane = memo(function HistoryPane({
             compact
             variant="ghost"
             label={area === 'staged' ? '全部取消暂存' : '全部暂存'}
-            disabled={disabled}
+            disabled={mutationDisabled}
             onPress={() => {
               void controller.changeStage(
                 files.map(file => file.path),
@@ -89,7 +92,7 @@ export const HistoryPane = memo(function HistoryPane({
                 size={44}
                 icon={RotateCcw}
                 label={'丢弃更改 ' + file.path}
-                disabled={disabled}
+                disabled={mutationDisabled}
                 onPress={() => controller.discardGit(file.path)}
               />
             )}
@@ -97,7 +100,7 @@ export const HistoryPane = memo(function HistoryPane({
               size={44}
               icon={area === 'staged' ? X : Plus}
               label={(area === 'staged' ? '取消暂存 ' : '暂存 ') + file.path}
-              disabled={disabled}
+              disabled={mutationDisabled}
               onPress={() => {
                 void controller.changeStage([file.path], area === 'unstaged');
               }}
@@ -126,8 +129,11 @@ export const HistoryPane = memo(function HistoryPane({
         options={[
           { value: 'changes', label: '更改', count: status?.files.length || undefined },
           { value: 'history', label: '提交历史', count: controller.versions.length },
+          { value: 'repository', label: '仓库' },
         ]}
       />
+      <IntegrationControls controller={controller} />
+      <ConflictSheet controller={controller} />
       {tab === 'changes' ? (
         <>
           {controller.projectActive && (
@@ -142,7 +148,7 @@ export const HistoryPane = memo(function HistoryPane({
           )}
           {section(unstaged, 'unstaged')}
           {section(staged, 'staged')}
-          {!!staged.length && (
+          {!!staged.length && status?.state === 'none' && (
             <View style={{ gap: 8, paddingTop: 4 }}>
               <Field
                 label="提交说明"
@@ -167,6 +173,8 @@ export const HistoryPane = memo(function HistoryPane({
             </View>
           )}
         </>
+      ) : tab === 'repository' ? (
+        <GitRepositoryPane controller={controller} />
       ) : (
         controller.versions.map((version, index) => (
           <ActionRow
@@ -177,7 +185,12 @@ export const HistoryPane = memo(function HistoryPane({
               void controller.reviewVersion(version);
             }}
             title={version.message.split('\n')[0]}
-            meta={dateLabel(version.timestamp) + ' · ' + version.oid.slice(0, 7)}
+            meta={
+              dateLabel(version.timestamp) +
+              ' · ' +
+              version.oid.slice(0, 7) +
+              (version.parents.length > 1 ? ' · 合并提交' : '')
+            }
             leading={
               <GitCommitHorizontal size={18} color={index === 0 ? theme.accent : theme.muted} />
             }

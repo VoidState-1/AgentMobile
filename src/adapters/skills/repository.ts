@@ -75,7 +75,11 @@ export class GitSkillRepository implements SkillRepository {
       ],
     };
   }
-  snapshot = async () => this.at(await this.workspace.git.head(libraryId));
+  snapshot = async () => {
+    const head = await this.workspace.git.head(libraryId);
+    if (!head) throw new AppError('STORAGE', '技能库尚未初始化提交。');
+    return this.at(head);
+  };
   async replace(bundles: SkillBundle[], remove: string[], expectedCommit: string, message: string) {
     if (this.workspace.needsRecovery(libraryId))
       throw new AppError('VALIDATION', '技能库需要恢复，请重新打开应用。');

@@ -125,7 +125,8 @@ it('一次刷新中清单、Git 状态和选中文件预览共用一次内容读
   };
   const snapshot = await workspace.snapshot(project.id, 'documents/notes.md');
   expect(snapshot.preview?.path).toBe('documents/notes.md');
-  expect([...reads.values()]).toEqual([1, 1]);
+  expect(reads.size).toBe(snapshot.files.length);
+  expect([...reads.values()].every(count => count === 1)).toBe(true);
 });
 
 it('可信内容指纹支持温刷新；同时间同大小的未知修改仍失效，写前检查真实内容', async () => {
@@ -165,7 +166,7 @@ it('可信内容指纹支持温刷新；同时间同大小的未知修改仍失�
   const reopened = createWorkspace(f.files, f.metadata, randomUUID);
   await reopened.recover();
   await reopened.snapshot(project.id);
-  expect(reads).toHaveLength(2); // A new reader never trusts another process's index.
+  expect(reads).toHaveLength(original.files.length); // A new reader never trusts another process's index.
 });
 
 it('没有可信内容指纹时不以 mtime/size 复用修订；失败恢复清空已暖索引', async () => {
@@ -179,10 +180,10 @@ it('没有可信内容指纹时不以 mtime/size 复用修订；失败恢复清�
     if (!path.includes('/.git/')) reads++;
     return read(path);
   };
-  await workspace.files(project.id);
+  const initialFiles = await workspace.files(project.id);
   reads = 0;
   await workspace.files(project.id);
-  expect(reads).toBe(2);
+  expect(reads).toBe(initialFiles.length);
   f.files.contentStamp = async path =>
     createHash('sha256')
       .update(await fs.readFile(f.resolve(path)))
@@ -201,8 +202,8 @@ it('没有可信内容指纹时不以 mtime/size 复用修订；失败恢复清�
     workspace.write(project.id, 'documents/fault.md', Buffer.from('中断内容'), null),
   ).rejects.toThrow('中断回执');
   reads = 0;
-  await workspace.files(project.id);
-  expect(reads).toBe(3);
+  const interruptedFiles = await workspace.files(project.id);
+  expect(reads).toBe(interruptedFiles.length);
   f.metadata.writeBusiness = writeBusiness;
   await workspace.recover();
   expect((await workspace.snapshot(project.id)).files.map(file => file.path)).toContain(

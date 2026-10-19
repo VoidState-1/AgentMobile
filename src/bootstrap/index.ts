@@ -38,7 +38,9 @@ let rebuilding = false;
 
 async function initialize() {
   const storage = await createStorage();
-  const workspace = createWorkspace(storage.fs, storage.metadata, Crypto.randomUUID);
+  const workspace = createWorkspace(storage.fs, storage.metadata, Crypto.randomUUID, {
+    credentials: storage.credentials,
+  });
   const models = new ModelConfigurationService(
     storage.metadata,
     storage.credentials,

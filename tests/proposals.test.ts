@@ -59,7 +59,7 @@ async function fixture(
     agentDefinitionRevision: 1,
     launchSnapshotRef: 'root',
     agentSettingsSnapshot: defaultAgentSettings(),
-    baseCommit: baseline.head,
+    baseCommit: baseline.head ?? undefined,
     baseSnapshot: baseline.working,
     baseIndexSnapshot: baseline.index,
   };

@@ -2,6 +2,10 @@ const path = require('node:path');
 const { getDefaultConfig } = require('expo/metro-config');
 
 const config = getDefaultConfig(__dirname);
+config.resolver.blockList = [
+  ...[config.resolver.blockList ?? []].flat(),
+  /[\\/]modules[\\/]agent-mobile-git[\\/](vendor|android[\\/](build|\.cxx)|ios[\\/]Frameworks)[\\/].*/,
+];
 const gitDirectory = path.dirname(require.resolve('isomorphic-git'));
 config.resolver.resolveRequest = (context, moduleName, platform) => {
   if (moduleName === '@earendil-works/pi-ai') {

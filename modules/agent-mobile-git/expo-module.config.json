@@ -1,0 +1,10 @@
+{
+  "platforms": ["android", "apple"],
+  "android": {
+    "modules": ["expo.modules.agentmobile.git.AgentMobileGitModule"]
+  },
+  "apple": {
+    "podspecPath": "AgentMobileGit.podspec",
+    "modules": ["AgentMobileGitModule"]
+  }
+}

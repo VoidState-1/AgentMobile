@@ -1,0 +1,15 @@
+{
+  "libgit2": {
+    "version": "1.9.7",
+    "commit": "49e408b3208bc3093757a1c2db938d3590f3f412",
+    "url": "https://codeload.github.com/libgit2/libgit2/tar.gz/49e408b3208bc3093757a1c2db938d3590f3f412",
+    "sha256": "173c45822177d73bb1a97555d864ad04a3e0486eb0bc3455443a4669a35d8aa2"
+  },
+  "json": {
+    "version": "3.12.0",
+    "headerUrl": "https://raw.githubusercontent.com/nlohmann/json/v3.12.0/single_include/nlohmann/json.hpp",
+    "headerSha256": "aaf127c04cb31c406e5b04a63f1ae89369fccde6d8fa7cdda1ed4f32dfc5de63",
+    "licenseUrl": "https://raw.githubusercontent.com/nlohmann/json/v3.12.0/LICENSE.MIT",
+    "licenseSha256": "46a65cffd1ea955132d95a8dd921640714a8d6b537d2e4e482d31145ae95b603"
+  }
+}
