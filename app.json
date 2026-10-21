@@ -13,6 +13,14 @@
     },
     "android": {
       "package": "com.agentmobile.app",
+      "allowBackup": false,
+      "blockedPermissions": [
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO",
+        "android.permission.SYSTEM_ALERT_WINDOW"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#F5F6F8",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -47,7 +55,8 @@
         }
       ],
       "expo-sharing",
-      "./plugins/with-dev-menu"
+      "./plugins/with-dev-menu",
+      "./plugins/with-android-permissions"
     ],
     "experiments": {
       "typedRoutes": true

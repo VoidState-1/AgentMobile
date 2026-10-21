@@ -327,10 +327,35 @@ Json fileOperation(const fs::path &root, const Json &request) {
   }
   throw Failure("VALIDATION", "不支持的文件操作");
 }
+/** App-owned repositories never use linked worktrees, alternate ODBs or redirected control paths. */
+void validateRepositoryLayout(const fs::path &root) {
+  const auto directory = root / ".git";
+  struct stat info;
+  if (::lstat(directory.c_str(), &info) < 0) { if (errno == ENOENT) return; ioError("无法检查 Git 目录"); }
+  require(S_ISDIR(info.st_mode), "Git 目录必须位于项目内部，不能重定向");
+  for (const auto *name : {"objects", "objects/info", "objects/pack", "refs", "logs", "agent-mobile", "agent-mobile/tmp", "agent-mobile/plans", "rebase-merge"}) {
+    const auto path = directory / name;
+    if (::lstat(path.c_str(), &info) < 0) { if (errno == ENOENT) continue; ioError("无法检查 Git 存储目录"); }
+    require(S_ISDIR(info.st_mode), "Git 存储目录不能是链接或特殊文件");
+  }
+  for (const auto *name : {"HEAD", "config", "config.worktree", "index", "packed-refs", "shallow", "ORIG_HEAD", "FETCH_HEAD", "MERGE_HEAD", "MERGE_MSG", "MERGE_MODE", "REBASE_HEAD"}) {
+    const auto path = directory / name;
+    if (::lstat(path.c_str(), &info) < 0) { if (errno == ENOENT) continue; ioError("无法检查 Git 控制文件"); }
+    require(S_ISREG(info.st_mode), "Git 控制文件不能是链接或特殊文件");
+  }
+  for (const auto *name : {"commondir", "gitdir", "objects/info/alternates", "objects/info/http-alternates"}) {
+    if (::lstat((directory / name).c_str(), &info) == 0) throw Failure("VALIDATION", "Git 存储不能指向项目外部");
+    if (errno != ENOENT) ioError("无法检查 Git 存储重定向");
+  }
+}
 Repo open(const fs::path &root) {
   git_repository *value = nullptr;
   check(git_repository_open_ext(&value, root.c_str(), GIT_REPOSITORY_OPEN_NO_SEARCH, nullptr));
-  return Repo(value, git_repository_free);
+  Repo repo(value, git_repository_free);
+  const auto *workdir = git_repository_workdir(value), *gitdir = git_repository_path(value), *common = git_repository_commondir(value);
+  require(workdir && gitdir && common && fs::equivalent(workdir, root) && fs::equivalent(gitdir, root / ".git") && fs::equivalent(common, root / ".git"),
+    "Git 工作树和元数据必须绑定当前项目");
+  return repo;
 }
 Index index(git_repository *repo) {
   git_index *value = nullptr;
@@ -1265,6 +1290,7 @@ Json mergePlan(git_repository *repo, const fs::path &root, const Json &request) 
 
 Json dispatch(const fs::path &root, const Json &request, am_git_callbacks callbacks) {
   const auto method = request.at("method").get<std::string>();
+  validateRepositoryLayout(root);
   if (method == "clone" || method == "cloneState" || method == "publishClone" || method == "discardClone") return cloneOperation(root, request, callbacks);
   if (method == "recoverLocks") {
     if (callbacks.progress) callbacks.progress(callbacks.context, "recover-locks", 0, 1, 0);
@@ -1386,8 +1412,8 @@ Json dispatch(const fs::path &root, const Json &request, am_git_callbacks callba
       auto snapshot = commitAt(repo.get(), request.at("snapshot")); treeId = *git_commit_tree_id(snapshot.get());
     } else {
       for (const auto &pathValue : request.at("paths")) {
-        auto path = safePath(pathValue); struct stat info;
-        if (::lstat((root / path).c_str(), &info) == 0) check(git_index_add_bypath(idx.get(), path.c_str()));
+        auto path = safePath(pathValue); auto full = filePath(root, path); struct stat info;
+        if (::lstat(full.c_str(), &info) == 0) check(git_index_add_bypath(idx.get(), path.c_str()));
         else { int result = git_index_remove_bypath(idx.get(), path.c_str()); if (result != GIT_ENOTFOUND) check(result); }
       }
       check(git_index_write(idx.get())); check(git_index_write_tree(&treeId, idx.get()));

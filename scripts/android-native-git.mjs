@@ -52,15 +52,17 @@ const formalOutput = await adb(
   '-r',
   '-e',
   'class',
-  ['GitRepositoryTest', 'GitMergeTest', 'GitRebaseTest']
+  ['GitRepositoryTest', 'GitMergeTest', 'GitRebaseTest', 'GitPermissionTest']
     .map(name => 'expo.modules.agentmobile.git.' + name)
     .join(','),
   runner,
 );
 await fs.writeFile(path.join(outputDirectory, 'formal-repository.log'), formalOutput);
 const formalCount = Number(formalOutput.match(/OK \((\d+) tests?\)/)?.[1] ?? 0);
-if (formalCount < 17 || formalOutput.includes('FAILURES!!!')) throw new Error(formalOutput);
-process.stdout.write(`Formal repository, merge and rebase tests: ${formalCount} passed\n`);
+if (formalCount < 22 || formalOutput.includes('FAILURES!!!')) throw new Error(formalOutput);
+process.stdout.write(
+  `Formal repository, merge, rebase and permission tests: ${formalCount} passed\n`,
+);
 async function instrument(method, phase) {
   const args = [
     'shell',

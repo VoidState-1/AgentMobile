@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                                   |
 | -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------ |
+| 2.4.0    | 2026-10-21T19:36:27+08:00 | 9a6b3c38be2c3f7cc35e064b684038040b9f63e8 | 同步尚未提交源码：Git 存储/工作树重定向拒绝、底层提交路径检查和原生权限回归。              |
 | 2.3.0    | 2026-10-19T17:56:09+08:00 | 414863fdcd788534b2232fea740024864a8726a4 | 对应已提交源码：收敛为本地 Git、HTTPS、合并/变基与恢复，移除超出范围的扩展。               |
 | 2.2.0    | 2026-10-19T16:39:00+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：变基重放、分支 CAS、状态恢复、共用冲突服务及开发专用 UI fixture 入口。   |
 | 2.1.0    | 2026-10-19T14:43:24+08:00 | 262940983352666ec86b8389fc656ed368f5680d | 同步尚未提交源码：三方合并、冲突编辑、完成标记、冻结属性与合并会话恢复。                   |
@@ -23,6 +24,8 @@ Android 使用[最小 chmod 补丁](../modules/agent-mobile-git/patches/android-
 ## 2. 目录、线程与授权
 
 正式 execute 接收 projectId、operationId 和受控请求；仓库路径由原生层在应用私有 workspaces 目录定位，拒绝根路径 symlink 越界。调用方不能指定 gitdir、任意原生根目录或 shell。Agent/界面不直接取得 Native Module；Agent 只持有原有受控工具。
+
+每次原生请求在派发前检查 `.git` 根目录、固定存储目录、应用临时目录和关键控制文件的类型，拒绝链接或特殊文件；不接受 `commondir/gitdir`、对象库 alternates 等存储重定向。打开仓库后再核对 libgit2 实际使用的 workdir、gitdir、commondir 与当前项目一致，不能由 `core.worktree` 改指其他目录。底层直接 commit 也执行与正文访问相同的父目录链接检查。这些检查补强应用自有私有仓库的边界，不把 Native Module 变成可向不可信脚本开放的通用 Git API。
 
 Android 使用工作线程池；共享 C++ 核心以每仓库 timed_mutex 和私有父目录的 flock 串行化单次 RPC，覆盖 React Context 重载后的旧工作线程及其他应用进程。等待租约的任务可取消，已关闭桥实例不能再启动工作。JNI 保存 JavaVM/全局引用，在 libgit2 内部 pack 线程回调时 Attach/Detach，禁止复用另一线程的 JNIEnv 或局部引用。iOS 使用 Swift/Objective-C++ 入口和同一 C++ 核心。
 
@@ -91,7 +94,7 @@ npm run test:git:android -- <device-serial>
 
 `GitMergeTest` 验证真实三方 stages、目录/文件和重命名冲突、换行/合并属性、快进/unborn、执行位、特殊文件名和双父提交。`tests/git-merge.test.ts` 用标准 Git CLI 构造计划，验证应用日志/会话恢复；它不替代原生序列化验收。`scripts/android-native-git-merge-ui.mjs` 驱动手机三方预览、解决、继续与确认中止。
 
-`GitRebaseTest` 验证内存计划、作者/说明、原有空提交、变空省略、分支 CAS 部分效果、冲突/属性及状态重启；`tests/git-rebase.test.ts` 验证会话和统一日志中断。默认 Android 验证脚本会先运行正式 Repository/Merge/Rebase 类，再运行隔离 probe。`scripts/android-native-git-rebase-ui.mjs` 驱动原生变基入口、冲突侧、继续/跳过/中止。应用两进程验证完成后、UI 消耗活动 fixture 前，可运行 `node scripts/android-native-git-rebase-interop.mjs <serial>`：仅复制自己的活动测试项目，用标准 Git 检查 stages、当前 patch、继续和 fsck，并校验含引号和 `$()` 的作者名按原文保留。
+`GitRebaseTest` 验证内存计划、作者/说明、原有空提交、变空省略、分支 CAS 部分效果、冲突/属性及状态重启；`tests/git-rebase.test.ts` 验证会话和统一日志中断。`GitPermissionTest` 验证提交父目录链接、跨项目 Git 目录、工作树配置和对象/临时目录重定向的拒绝。默认 Android 验证脚本会先运行正式 Repository/Merge/Rebase/Permission 类，再运行隔离 probe。`scripts/android-native-git-rebase-ui.mjs` 驱动原生变基入口、冲突侧、继续/跳过/中止。应用两进程验证完成后、UI 消耗活动 fixture 前，可运行 `node scripts/android-native-git-rebase-interop.mjs <serial>`：仅复制自己的活动测试项目，用标准 Git 检查 stages、当前 patch、继续和 fsck，并校验含引号和 `$()` 的作者名按原文保留。
 
 独立测试 APK 为 com.agentmobile.git.validation，仅写自己的 fixture。测试结果保存在忽略的 work/native-git 中；宿主 Git CLI 可核对导出的标准仓库。软件集成入口 scripts/native-git-application-entry.tsx 使用真实 AppServices/SQLite；运行前启动 Metro 4182，并按提示重建测试用开发实例（设备凭证保留）。然后执行：
 
