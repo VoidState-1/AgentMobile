@@ -4,6 +4,7 @@
 
 | 文档版本 | 更新时间                  | 最新 Git 提交 ID（代码基线）             | 内容变化                                                                                                                  |
 | -------- | ------------------------- | ---------------------------------------- | ------------------------------------------------------------------------------------------------------------------------- |
+| 3.1.0    | 2026-10-21T21:43:20+08:00 | bc078214d4dc13f1cea4f74d6f066f32a8fc8f9c | 尚未提交源码：同步工作台页签保留、运行详情读模型缓存、Markdown patch、系统过渡和当前长列表边界。                          |
 | 3.0.0    | 2026-10-18T19:00:33+08:00 | 34f542b6f4e917f475d36c9f5ea8b369f5d74dda | 同步尚未提交源码：接入 CodeMirror 分块编辑、统一 Markdown-it 阅读、受控 WebView 通信与持久草稿。                          |
 | 2.10.0   | 2026-10-17T19:44:00+08:00 | 076e0ceb551f0ec46e0f20a17d30d18bacbc88a2 | 同步尚未提交源码：模型编辑器改为对象式行内布局，去掉逐行分割与能力来源标签，检测/默认选择压缩，更多操作复用页内浮层菜单。 |
 | 2.9.0    | 2026-10-17T18:58:00+08:00 | 9d738c260a4851403d6cc0059a8cb239ffc27094 | 同步尚未提交源码：目录检测移入模型栏刷新图标，结果改用非模态 Toast；更多操作改为页内浮层菜单。                            |
@@ -115,6 +116,7 @@ MCP 的 [UnknownCalls](../src/features/mcp/unknown.tsx) 同时用于全局列表
 | projectId/conversationId/tab/appearance/commitDrafts                      | Zustand 界面状态                                   |
 | 项目选择/主题持久偏好                                                     | PreferencesService；Zustand 只是投影               |
 | EditorDocument、drawerOpen、弹层、review、confirmation、busy/error/notice | React 内存                                         |
+| 已访问工作台页签及页内筛选/折叠状态                                       | React 内存；未访问页签不预先挂载                   |
 | Agent 活跃执行                                                            | RunKernel；页面不拥有执行生命周期                  |
 
 commitDrafts 是按项目分开的界面说明草稿，当前没有写入 PreferencesService；对话目标草稿则是真正持久化的数据。不要因为两者都叫草稿而假设行为相同。
@@ -131,6 +133,8 @@ commitDrafts 是按项目分开的界面说明草稿，当前没有写入 Prefer
 查询使用 refreshId/historyRequest/scope 和当前 UI 选择作晚到结果过滤。显示投影的 snapshotProjectId/taskScope 不属于当前选择时直接显示空/加载状态，不先用旧项目数据冒充新项目。
 
 历史加载更多按 id/OID 去重，刷新首批后保留用户已展开旧页。切换项目或会话时重建查询 scope，旧 cursor 不带入新范围。
+
+历史运行详情是可丢弃的 UI 读模型，按 runId 与摘要 revision 缓存并合并同键在途查询，最多保留 50 个条目；失败项从缓存移除，超限按最近访问顺序淘汰。缓存只保存 RunsApi 的公开 detail/trace/children 投影，不作为业务事实来源。实时运行退出内核活动列表后，对话行先保留最后公开 RunView，终态详情到达后再切换。
 
 ### 4.1 配置页共用机制
 
@@ -166,7 +170,7 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。文件�
 
 最终 response 单独来自 RunDetail，不依赖前 50 个节点已全部载入。推理标签使用 visibility，不通过模型名称推断开源/闭源身份；unavailable 显示不可用状态。
 
-[trace-groups](../src/features/workbench/trace-groups.ts) 将 edit_text 与 write_text/delete_file/move_file 一起归入“修改”，不误标为远程 MCP；工具详情使用有界替换摘要和原有错误/回执展示。它只合并相邻 tool 节点。正文和公开推理始终构成分组边界，不能为折叠工具而挪动顺序。读取、搜索、图片、修改、Git、Skills、MCP、子 Agent 使用各自图标；单调用直接展开详情，多调用以次数摘要默认折叠，展开内容最高 280px 并可独立滚动。含子任务或异常回执的组默认展开，收起后仍显示异常摘要。分页追加沿用首个节点 ID，保留展开状态；原始轨迹与持久化结构不变。
+[trace-groups](../src/features/workbench/trace-groups.ts) 将 edit_text 与 write_text/delete_file/move_file 一起归入“修改”，不误标为远程 MCP；工具详情使用有界替换摘要和原有错误/回执展示。它只合并相邻 tool 节点。正文和公开推理始终构成分组边界，不能为折叠工具而挪动顺序。读取、搜索、图片、修改、Git、Skills、MCP、子 Agent 使用各自图标；单调用直接显示详情，多调用以次数摘要默认折叠，展开内容最高 280px 并可独立滚动。调用数变化时稳定的 ScrollView 与 ToolStep 宿主不卸载，保留现有工具行状态。含子任务或异常回执的组默认展开，收起后仍显示异常摘要。分页追加沿用首个节点 ID，保留展开状态；原始轨迹与持久化结构不变。
 
 产物使用紧凑文件行：文件名打开当前项目文件，变化图标查看该任务的历史差异。已移动/删除的文件不能直接打开，历史差异仍可查看。
 
@@ -182,7 +186,7 @@ Web 在编辑或目标草稿尚未保存时设置 beforeunload 提示。文件�
 
 差异视图遇到二进制、超预算或两侧类型变化时展示前后字节数与原因，不显示乱码或虚构行数；可预览文本/图片仍展示内容差异。
 
-[文档内核](../src/features/document/browser/editor.js) 使用单个 CodeMirror 文档保存原始 Markdown，Markdown-it 渲染关闭范围，支持 CommonMark、表格、删除线、任务列表与嵌套结构。旧自制解析器和原文 TextInput 已移除。对话正文/公开推理通过共享 [render](../src/features/document/render.ts) 和 MarkdownReader 渲染；Web 使用安全 DOM，原生使用按内容高度布局的只读 WebView。
+[文档内核](../src/features/document/browser/editor.js) 使用单个 CodeMirror 文档保存原始 Markdown，Markdown-it 渲染关闭范围，支持 CommonMark、表格、删除线、任务列表与嵌套结构。旧自制解析器和原文 TextInput 已移除。对话正文/公开推理通过共享 [render](../src/features/document/render.ts) 和 MarkdownReader 渲染；Web DOM 与原生只读 WebView 均递归 patch 兼容节点，只更新变化区段并尽量保留未变节点。Markdown 结构变化时重建不兼容节点，图片 revision 变化仍强制重载资源。
 
 阅读块左滑进入；编辑块右滑保存、左滑放弃。允许多个区域同时开放。相邻区域之间光标、选区、退格连续；跨块修改建立关联并一起保存/放弃。灰底横向铺满，零外边距、零圆角，文字对齐正文，上下保留 8px 内边距。没有块内标签、画笔或保存/取消图标。
 
@@ -194,7 +198,9 @@ HTML 渲染关闭，不执行脚本。图片从 Markdown 文件目录解析，�
 
 [theme](../src/shared/theme.ts) 提供语义颜色、typography（正文、标签、辅助信息、元数据、标题）与 workbenchMetrics（顶栏、热区、边距、正文和圆角）；appearance 为 system/light/dark，持久化选择并同步导航与状态栏。业务组件取 theme token，避免只适配浅色的硬编码背景和文字。
 
-shared/ui 提供基础文本、按钮、输入和复合交互；业务文字通过 T 的 variant 选择排版角色。ESLint 禁止页面直接导入原生 Text/TextInput/Modal；TextInput 类型导入可用，只有共享弹层、全屏编辑器和项目侧栏可拥有 Modal 外壳。保持紧凑、清晰的工具风格，关键按钮可访问名称应稳定，便于屏幕阅读器与 Playwright/ADB 定位。模型 Key 等秘密字段不以普通结果文字展示。
+shared/ui 提供基础文本、按钮、输入和复合交互；业务文字通过 T 的 variant 选择排版角色。ESLint 禁止页面直接导入原生 Text/TextInput/Modal；TextInput 类型导入可用，只有共享弹层、全屏编辑器和项目侧栏可拥有 Modal 外壳。工作台页签按首次访问惰性挂载，挂载后保留实例和页内状态；非活动页立即禁用触摸并移出无障碍树。主页签淡入，弹层与窄屏侧栏使用系统过渡，useReducedMotion 启用时即时切换。保持紧凑、清晰的工具风格，关键按钮可访问名称应稳定，便于屏幕阅读器与 Playwright/ADB 定位。模型 Key 等秘密字段不以普通结果文字展示。
+
+当前文件树、项目/对话侧栏和 Git 历史仍以 ScrollView 渲染已加载条目，没有大数据集虚拟化；页面保留只减少往返切换时的重新挂载，不限制首次读取和长列表的渲染成本。图片缩略图仅随已保留的列表实例存活，尚无跨实例字节预算缓存。
 
 设计验收遵循五条规则：屏幕空间承载有效信息；界面元素表达相关的对象、状态与操作；结构本身说明关系；操作依附对象，低频动作进入上下文菜单；文案只补充布局与反馈无法表达的信息。不以机械并列输入框、缩小字体、每项附注或增加信息图标代替信息结构设计。
 
@@ -206,4 +212,4 @@ useAction 的 pending ref 防止同一个界面 action 重复执行；这只是�
 
 影响保存/切换/订阅需覆盖：保存期间输入保护、同路径重开、旧查询迟到、跨项目通知、草稿切换、深浅主题、360px/短视口、键盘与未保存保护。避免只测试渲染了某个按钮。
 
-验证：[轨迹分组单元测试](../tests/trace-groups.test.ts)、[workbench E2E](../tests/e2e/workbench.spec.ts)、[workspace-live E2E](../tests/e2e/workspace-live.spec.ts)、[trace E2E](../tests/e2e/trace.spec.ts)、[conversations E2E](../tests/e2e/conversations.spec.ts)。
+验证：[Markdown patch 单元覆盖](../tests/document-editor.test.ts)、[运行详情缓存测试](../tests/run-view-cache.test.ts)、[轨迹分组单元测试](../tests/trace-groups.test.ts)、[工作台切页状态 E2E](../tests/e2e/navigation-and-config.spec.ts)、[workbench E2E](../tests/e2e/workbench.spec.ts)、[workspace-live E2E](../tests/e2e/workspace-live.spec.ts)、[trace E2E](../tests/e2e/trace.spec.ts)、[conversations E2E](../tests/e2e/conversations.spec.ts)。

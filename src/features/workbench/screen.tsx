@@ -13,7 +13,7 @@ import {
   X,
 } from '@/shared/ui/icons';
 import { Brand, Button, IconButton, Input, T, Toolbar } from '@/shared/ui/primitives';
-import { useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   ActivityIndicator,
   BackHandler,
@@ -24,6 +24,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { RunActivity } from './run-activity';
 import type { FilesCapability, ShellCapability } from './use-workbench';
@@ -75,7 +76,15 @@ function DevelopmentRebuild({ controller }: { controller: ShellCapability }) {
   );
 }
 
-function Navigation({ controller, changes }: { controller: ShellCapability; changes: number }) {
+function Navigation({
+  controller,
+  changes,
+  onSelect,
+}: {
+  controller: ShellCapability;
+  changes: number;
+  onSelect(tab: ShellCapability['tab']): void;
+}) {
   const theme = useWorkbenchTheme();
   return (
     <View
@@ -98,7 +107,7 @@ function Navigation({ controller, changes }: { controller: ShellCapability; chan
             accessibilityLabel={name}
             accessibilityState={{ selected }}
             aria-selected={selected}
-            onPress={() => controller.selectTab(id)}
+            onPress={() => onSelect(id)}
             style={({ pressed }) => ({
               flex: 1,
               minHeight: 52,
@@ -139,6 +148,42 @@ function Navigation({ controller, changes }: { controller: ShellCapability; chan
         );
       })}
     </View>
+  );
+}
+
+const WorkbenchPaneChildren = memo(
+  function WorkbenchPaneChildren({ children }: { active: boolean; children: ReactNode }) {
+    return <>{children}</>;
+  },
+  (previous, next) => !previous.active && !next.active,
+);
+
+function WorkbenchPane({ active, children }: { active: boolean; children: ReactNode }) {
+  const reduceMotion = useReducedMotion();
+  const animatedStyle = useAnimatedStyle(() => {
+    const progress = withTiming(active ? 1 : 0, { duration: reduceMotion ? 0 : 150 });
+    return { opacity: progress, transform: [{ translateY: 4 * (1 - progress) }] };
+  }, [active, reduceMotion]);
+  return (
+    <Animated.View
+      aria-hidden={!active}
+      accessibilityElementsHidden={!active}
+      importantForAccessibility={active ? 'auto' : 'no-hide-descendants'}
+      pointerEvents={active ? 'auto' : 'none'}
+      style={[
+        {
+          position: 'absolute',
+          top: 0,
+          right: 0,
+          bottom: 0,
+          left: 0,
+          display: active ? 'flex' : 'none',
+        },
+        animatedStyle,
+      ]}
+    >
+      <WorkbenchPaneChildren active={active}>{children}</WorkbenchPaneChildren>
+    </Animated.View>
   );
 }
 
@@ -355,6 +400,16 @@ export function WorkbenchScreen() {
   const { width } = useWindowDimensions();
   const wide = width >= 1100;
   const { drawerOpen, setDrawerOpen, tab, selectTab } = controller;
+  const [visitedTabs, setVisitedTabs] = useState<Set<ShellCapability['tab']>>(
+    () => new Set(['agent']),
+  );
+  const navigateTab = useCallback(
+    (next: ShellCapability['tab']) => {
+      setVisitedTabs(previous => (previous.has(next) ? previous : new Set(previous).add(next)));
+      selectTab(next);
+    },
+    [selectTab],
+  );
   const [keyboard, setKeyboard] = useState(false);
   const [fileQuery, setFileQuery] = useState('');
   useEffect(() => {
@@ -372,11 +427,11 @@ export function WorkbenchScreen() {
         return true;
       }
       if (tab === 'agent') return false;
-      selectTab('agent');
+      navigateTab('agent');
       return true;
     });
     return () => back.remove();
-  }, [drawerOpen, setDrawerOpen, tab, selectTab]);
+  }, [drawerOpen, setDrawerOpen, tab, navigateTab]);
 
   if (controller.loading)
     return (
@@ -463,29 +518,51 @@ export function WorkbenchScreen() {
               )}
               {controller.formatMismatch ? (
                 <DevelopmentRebuild controller={controller} />
-              ) : controller.tab === 'settings' ? (
-                <WorkbenchSettings controller={capabilities.settings} />
-              ) : !controller.projectId ? (
-                <ProjectEmptyState controller={controller} wide={wide} />
               ) : (
                 <>
-                  {controller.runs.some(
-                    run => run.conversationId !== controller.conversationId,
-                  ) && <RunActivity controller={capabilities.runs} />}
+                  {!!controller.projectId &&
+                    controller.runs.some(
+                      run => run.conversationId !== controller.conversationId,
+                    ) && <RunActivity controller={capabilities.runs} />}
                   <View style={{ flex: 1, minHeight: 0 }}>
-                    {controller.tab === 'agent' ? (
-                      <Conversation
-                        key={controller.conversationId}
-                        controller={capabilities.conversation}
-                      />
-                    ) : controller.tab === 'files' ? (
-                      <FilesPane
-                        key={controller.projectId}
-                        controller={capabilities.files}
-                        query={fileQuery}
-                      />
-                    ) : (
-                      <HistoryPane controller={capabilities.git} />
+                    {visitedTabs.has('agent') && (
+                      <WorkbenchPane active={tab === 'agent'}>
+                        {controller.projectId ? (
+                          <Conversation
+                            key={controller.conversationId}
+                            controller={capabilities.conversation}
+                          />
+                        ) : (
+                          <ProjectEmptyState controller={controller} wide={wide} />
+                        )}
+                      </WorkbenchPane>
+                    )}
+                    {visitedTabs.has('files') && (
+                      <WorkbenchPane active={tab === 'files'}>
+                        {controller.projectId ? (
+                          <FilesPane
+                            key={controller.projectId}
+                            controller={capabilities.files}
+                            query={fileQuery}
+                          />
+                        ) : (
+                          <ProjectEmptyState controller={controller} wide={wide} />
+                        )}
+                      </WorkbenchPane>
+                    )}
+                    {visitedTabs.has('history') && (
+                      <WorkbenchPane active={tab === 'history'}>
+                        {controller.projectId ? (
+                          <HistoryPane key={controller.projectId} controller={capabilities.git} />
+                        ) : (
+                          <ProjectEmptyState controller={controller} wide={wide} />
+                        )}
+                      </WorkbenchPane>
+                    )}
+                    {visitedTabs.has('settings') && (
+                      <WorkbenchPane active={tab === 'settings'}>
+                        <WorkbenchSettings controller={capabilities.settings} />
+                      </WorkbenchPane>
                     )}
                   </View>
                 </>
@@ -494,6 +571,7 @@ export function WorkbenchScreen() {
                 <Navigation
                   controller={controller}
                   changes={capabilities.git.gitStatus?.files.length ?? 0}
+                  onSelect={navigateTab}
                 />
               )}
             </View>

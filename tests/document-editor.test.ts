@@ -11,7 +11,7 @@ import {
 import { createWorkspace } from '@/bootstrap/workspace';
 import { openedEditor, confirmedEditorSave } from '@/features/workbench/editor-model';
 import { resolveProjectPath } from '@/features/document/image-path';
-import { markdownRenderer } from '@/features/document/render';
+import { markdownRenderer, stableMarkdownRange } from '@/features/document/render';
 import { safeImageData, externalLink } from '@/features/document/resources';
 import { contentCodec } from '@/adapters/storage/codec';
 import { testStorage } from './storage';
@@ -74,6 +74,18 @@ it('Markdown-it 完整语法与安全策略共享，原始 HTML 和外部图片�
     '\\secret',
   ])
     expect(() => resolveProjectPath('documents/notes.md', target)).toThrow();
+});
+
+it('流式 Markdown 更新只重建变化区段，并保留其后的稳定块', () => {
+  expect(
+    stableMarkdownRange(
+      ['<p>已完成段落</p>', '<p>当前片段 a</p>', '<blockquote>后续内容</blockquote>'],
+      ['<p>已完成段落</p>', '<p>当前片段 ab</p>', '<blockquote>后续内容</blockquote>'],
+    ),
+  ).toEqual({ prefix: 1, suffix: 1 });
+  expect(
+    stableMarkdownRange(['<p>旧标题</p>', '<p>正文</p>'], ['<h1>新标题</h1>', '<p>正文</p>']),
+  ).toEqual({ prefix: 0, suffix: 1 });
 });
 
 it('草稿是元数据，版本校验和清理墓碑阻止延迟写入复活已放弃内容', async () => {

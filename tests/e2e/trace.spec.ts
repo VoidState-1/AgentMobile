@@ -77,7 +77,7 @@ test('超过一页的工作轨迹独立展示最终回答，并按需展开长�
   await expect(page.getByTestId('run-response')).not.toContainText('回答尾部');
   await page.getByRole('button', { name: '展开更多回答', exact: true }).click();
   await expect(page.getByTestId('run-response')).toContainText('回答尾部');
-  await expect(page.getByTestId('trace-tool')).toHaveCount(0);
+  await expect(page.getByTestId('trace-tool').filter({ visible: true })).toHaveCount(0);
   await page.getByRole('button', { name: '展开连续工具调用 50 次', exact: true }).click();
   await expect(page.getByTestId('trace-tool')).toHaveCount(50);
   await page.getByRole('button', { name: '加载更多工作步骤', exact: true }).click();

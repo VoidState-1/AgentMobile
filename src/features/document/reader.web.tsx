@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef } from 'react';
 import { Linking } from 'react-native';
 import { useWorkbenchTheme } from '@/shared/theme';
-import { markdownRenderer } from './render';
+import { markdownRenderer, reconcileMarkdown } from './render';
 import { safeImageData, externalLink } from './resources';
 import type { MarkdownReaderProps } from './reader';
 import './markdown.css';
@@ -14,20 +14,25 @@ export function MarkdownReader({
 }: MarkdownReaderProps) {
   const theme = useWorkbenchTheme();
   const node = useRef<HTMLDivElement>(null);
+  const previousImageVersion = useRef(imageVersion);
   const html = useMemo(() => markdownRenderer.render(content), [content]);
   useEffect(() => {
     const root = node.current;
     if (!root) return;
-    let current = true;
-    root.innerHTML = html;
+    if (previousImageVersion.current !== imageVersion) root.replaceChildren();
+    previousImageVersion.current = imageVersion;
+    reconcileMarkdown(root, html);
     for (const placeholder of root.querySelectorAll<HTMLElement>('[data-image-target]')) {
+      if (placeholder.dataset.loading === 'true') continue;
+      placeholder.dataset.loading = 'true';
       const target = placeholder.dataset.imageTarget!;
       void (loadImage ? loadImage(target) : Promise.reject(new Error('图片不可用')))
         .then(uri => {
-          if (!current || !placeholder.isConnected) return;
+          if (!placeholder.isConnected) return;
           if (!safeImageData(uri)) throw new Error('图片不可用');
           const image = document.createElement('img');
           image.alt = placeholder.dataset.alt || '图片';
+          image.dataset.target = target;
           image.src = uri;
           image.onerror = () => {
             image.replaceWith(placeholder);
@@ -36,12 +41,10 @@ export function MarkdownReader({
           placeholder.replaceWith(image);
         })
         .catch(() => {
-          if (current) placeholder.querySelector('small')!.textContent = '图片不可用';
+          if (placeholder.isConnected)
+            placeholder.querySelector('small')!.textContent = '图片不可用';
         });
     }
-    return () => {
-      current = false;
-    };
   }, [html, loadImage, imageVersion]);
   const variables: Record<string, string> = {};
   for (const [key, value] of Object.entries(theme))

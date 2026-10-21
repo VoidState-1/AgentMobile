@@ -2,7 +2,7 @@ import { workbenchMetrics as metrics, useWorkbenchTheme } from '@/shared/theme';
 import { EmptyState } from '@/shared/ui/empty-state';
 import { ArrowDown } from '@/shared/ui/icons';
 import { Button, IconButton } from '@/shared/ui/primitives';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   FlatList,
@@ -43,11 +43,47 @@ export const Conversation = memo(function Conversation({
   const input = useRef<TextInput>(null);
   const stick = useRef(true);
   const [atBottom, setAtBottom] = useState(true);
-  const tasks: ExchangeRow[] = controller.tasks
-    .filter(task => task.id !== controller.conversationActive?.id)
-    .map(summary => ({ id: summary.id, summary }));
-  if (controller.conversationActive)
-    tasks.unshift({ id: controller.conversationActive.id, live: controller.conversationActive });
+  const controllerRef = useRef(controller);
+  useLayoutEffect(() => {
+    controllerRef.current = controller;
+  }, [controller]);
+  const exchangeActions = useMemo(
+    () => ({
+      openFile: (...args: Parameters<ConversationCapability['openFile']>) =>
+        controllerRef.current.openFile(...args),
+      changedPaths: (...args: Parameters<ConversationCapability['changedPaths']>) =>
+        controllerRef.current.changedPaths(...args),
+      reviewTask: (...args: Parameters<ConversationCapability['reviewTask']>) =>
+        controllerRef.current.reviewTask(...args),
+      taskChangeSummary: (
+        ...args: Parameters<NonNullable<ConversationCapability['taskChangeSummary']>>
+      ) => controllerRef.current.taskChangeSummary!(...args),
+      cancelChild: (...args: Parameters<ConversationCapability['cancelChild']>) =>
+        controllerRef.current.cancelChild(...args),
+      reviewProposal: (...args: Parameters<ConversationCapability['reviewProposal']>) =>
+        controllerRef.current.reviewProposal(...args),
+    }),
+    [],
+  );
+  const exchangeController = {
+    busy: controller.busy,
+    changedPaths: exchangeActions.changedPaths,
+    files: controller.files,
+    openFile: exchangeActions.openFile,
+    reviewTask: exchangeActions.reviewTask,
+    taskChangeSummary: controller.taskChangeSummary ? exchangeActions.taskChangeSummary : undefined,
+    runsApi: controller.runsApi,
+    cancelChild: exchangeActions.cancelChild,
+    reviewProposal: exchangeActions.reviewProposal,
+  };
+  const tasks: ExchangeRow[] = useMemo(() => {
+    const rows: ExchangeRow[] = controller.tasks
+      .filter(task => task.id !== controller.conversationActive?.id)
+      .map(summary => ({ id: summary.id, summary }));
+    if (controller.conversationActive)
+      rows.unshift({ id: controller.conversationActive.id, live: controller.conversationActive });
+    return rows;
+  }, [controller.tasks, controller.conversationActive]);
   const latestTaskId = tasks[0]?.id;
   const [visible, setVisible] = useState<Set<string>>(() => new Set());
   const viewable = useCallback(
@@ -84,7 +120,7 @@ export const Conversation = memo(function Conversation({
           <Exchange
             row={item}
             visible={index < initialRows || visible.has(item.id)}
-            controller={controller}
+            controller={exchangeController}
           />
         )}
         contentContainerStyle={{

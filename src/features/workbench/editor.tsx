@@ -6,6 +6,7 @@ import { IconButton, Input, T, Toolbar, ToolbarAction } from '@/shared/ui/primit
 import { Image } from 'expo-image';
 import { memo, useCallback, useState } from 'react';
 import { KeyboardAvoidingView, Modal, Platform, Pressable, Linking, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { DocumentHost } from '@/features/document/document-host';
 import { resolveProjectPath } from '@/features/document/image-path';
@@ -21,6 +22,7 @@ export const Editor = memo(function Editor({
   mobile: boolean;
 }) {
   const theme = useWorkbenchTheme();
+  const reduceMotion = useReducedMotion();
   const [nameFocused, setNameFocused] = useState(false);
   const document = controller.editor!;
   const { preview } = controller;
@@ -267,7 +269,11 @@ export const Editor = memo(function Editor({
     </KeyboardAvoidingView>
   );
   return mobile ? (
-    <Modal visible animationType="none" onRequestClose={controller.closeEditor}>
+    <Modal
+      visible
+      animationType={Platform.OS === 'web' || reduceMotion ? 'none' : 'slide'}
+      onRequestClose={controller.closeEditor}
+    >
       <SafeAreaView style={{ flex: 1, backgroundColor: theme.surface }} edges={['top', 'bottom']}>
         {body}
       </SafeAreaView>

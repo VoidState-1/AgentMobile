@@ -341,8 +341,8 @@ function ToolGroup({
     ['error', 'unknown', 'cancelled', 'interrupted'].includes(item.state),
   );
   const running = items.some(item => item.state === 'running');
+  const single = items.length === 1;
   const shown = expanded ?? (failed || items.some(item => !!item.childRunIds?.length));
-  if (items.length === 1) return <ToolStep item={items[0]} {...rest} />;
   const categories = new Map<ToolCategory, number>();
   for (const item of items) {
     const category = toolCategory(item.tool);
@@ -350,51 +350,62 @@ function ToolGroup({
   }
   return (
     <View testID="trace-tool-group">
-      <DisclosureRow
-        label={(shown ? '收起' : '展开') + '连续工具调用 ' + items.length + ' 次'}
-        expanded={shown}
-        onPress={() => setExpanded(!shown)}
-        trailing={running && <ActivityIndicator size={12} color={theme.accent} />}
-      >
-        <View
-          style={{ flex: 1, flexDirection: 'row', flexWrap: 'wrap', gap: 9, alignItems: 'center' }}
+      {!single && (
+        <DisclosureRow
+          label={(shown ? '收起' : '展开') + '连续工具调用 ' + items.length + ' 次'}
+          expanded={shown}
+          onPress={() => setExpanded(!shown)}
+          trailing={running && <ActivityIndicator size={12} color={theme.accent} />}
         >
-          {[...categories].map(([category, count]) => {
-            const Icon = categoryIcons[category];
-            return (
-              <View key={category} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
-                <Icon size={15} color={failed ? theme.warning : theme.secondary} />
-                <T tone={failed ? 'warning' : 'secondary'} variant="caption">
-                  {toolCategoryNames[category]}
-                  {count > 1 ? ' ×' + count : ''}
-                </T>
-              </View>
-            );
-          })}
-          {failed && (
-            <T tone="warning" variant="caption">
-              {items.some(item => item.state === 'unknown') ? '远端结果未知' : '含未完成操作'}
-            </T>
-          )}
-        </View>
-      </DisclosureRow>
-      {shown && (
-        <ScrollView
-          nestedScrollEnabled
-          keyboardShouldPersistTaps="handled"
-          style={{
-            marginLeft: 6,
-            maxHeight: 280,
-            paddingLeft: 12,
-            borderLeftWidth: 1,
-            borderColor: theme.border,
-          }}
-        >
-          {items.map(item => (
-            <ToolStep key={item.id} item={item} {...rest} />
-          ))}
-        </ScrollView>
+          <View
+            style={{
+              flex: 1,
+              flexDirection: 'row',
+              flexWrap: 'wrap',
+              gap: 9,
+              alignItems: 'center',
+            }}
+          >
+            {[...categories].map(([category, count]) => {
+              const Icon = categoryIcons[category];
+              return (
+                <View key={category} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <Icon size={15} color={failed ? theme.warning : theme.secondary} />
+                  <T tone={failed ? 'warning' : 'secondary'} variant="caption">
+                    {toolCategoryNames[category]}
+                    {count > 1 ? ' ×' + count : ''}
+                  </T>
+                </View>
+              );
+            })}
+            {failed && (
+              <T tone="warning" variant="caption">
+                {items.some(item => item.state === 'unknown') ? '远端结果未知' : '含未完成操作'}
+              </T>
+            )}
+          </View>
+        </DisclosureRow>
       )}
+      <ScrollView
+        nestedScrollEnabled
+        keyboardShouldPersistTaps="handled"
+        style={[
+          single
+            ? undefined
+            : {
+                marginLeft: 6,
+                maxHeight: 280,
+                paddingLeft: 12,
+                borderLeftWidth: 1,
+                borderColor: theme.border,
+                display: shown ? 'flex' : 'none',
+              },
+        ]}
+      >
+        {items.map(item => (
+          <ToolStep key={item.id} item={item} {...rest} />
+        ))}
+      </ScrollView>
     </View>
   );
 }

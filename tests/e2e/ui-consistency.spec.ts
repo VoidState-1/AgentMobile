@@ -78,6 +78,8 @@ test('阅读编辑由顶栏切换，文件与 Git 共享状态，窄屏切换保
   expect(
     await gitBadge
       .getByText('修改', { exact: true })
+      .filter({ visible: true })
+      .first()
       .evaluate(node => getComputedStyle(node).color),
   ).toBe(fileColor);
   await page.screenshot({ path: 'work/mobile-ui/unified-git.png' });

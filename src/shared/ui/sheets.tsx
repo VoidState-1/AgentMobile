@@ -10,6 +10,7 @@ import {
   View,
   useWindowDimensions,
 } from 'react-native';
+import Animated, { useAnimatedStyle, useReducedMotion, withTiming } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Feedback } from './feedback';
 import { X } from './icons';
@@ -43,12 +44,35 @@ export function ModalFrame({
   const { width, height } = useWindowDimensions();
   const mobile = width < 700;
   const inset = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
+  const surfaceMotion = useAnimatedStyle(() => {
+    if (Platform.OS !== 'web') return {};
+    const progress = withTiming(visible ? 1 : 0, { duration: reduceMotion ? 0 : 190 });
+    return {
+      opacity: progress,
+      transform: [{ translateY: (mobile ? 30 : 8) * (1 - progress) }],
+    };
+  }, [visible, mobile, reduceMotion]);
+  const backdropMotion = useAnimatedStyle(
+    () => ({
+      opacity:
+        Platform.OS === 'web'
+          ? withTiming(visible ? 1 : 0, { duration: reduceMotion ? 0 : 160 })
+          : 1,
+    }),
+    [visible, reduceMotion],
+  );
   if (!visible) return null;
   const close = () => {
     if (!busy) onClose();
   };
   return (
-    <Modal visible transparent animationType="none" onRequestClose={close}>
+    <Modal
+      visible={visible}
+      transparent
+      animationType={Platform.OS === 'web' || reduceMotion ? 'none' : 'slide'}
+      onRequestClose={close}
+    >
       <KeyboardAvoidingView
         behavior={Platform.OS === 'web' ? undefined : 'padding'}
         style={[
@@ -56,17 +80,20 @@ export function ModalFrame({
           {
             justifyContent: mobile ? 'flex-end' : 'center',
             padding: mobile ? 0 : 16,
-            backgroundColor: theme.overlay,
           },
         ]}
       >
+        <Animated.View
+          pointerEvents="none"
+          style={[StyleSheet.absoluteFill, { backgroundColor: theme.overlay }, backdropMotion]}
+        />
         <Pressable
           accessibilityLabel="关闭面板"
           disabled={busy}
           onPress={close}
           style={StyleSheet.absoluteFill}
         />
-        <View
+        <Animated.View
           style={[
             styles.surface,
             {
@@ -79,6 +106,7 @@ export function ModalFrame({
               borderBottomRightRadius: mobile ? 0 : 8,
               paddingBottom: mobile ? inset.bottom : 0,
             },
+            surfaceMotion,
           ]}
         >
           <Toolbar
@@ -88,7 +116,7 @@ export function ModalFrame({
           />
           <View style={[styles.content, size === 'list' && styles.list]}>{children}</View>
           {footer && <View style={[styles.footer, { borderColor: theme.border }]}>{footer}</View>}
-        </View>
+        </Animated.View>
       </KeyboardAvoidingView>
     </Modal>
   );

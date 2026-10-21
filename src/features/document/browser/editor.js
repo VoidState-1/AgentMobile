@@ -1088,8 +1088,9 @@ function applyTheme(theme) {
 }
 function hydrateImages() {
   for (const placeholder of document.querySelectorAll('[data-image-target]')) {
+    if (placeholder.dataset.loading === 'true') continue;
     const target = placeholder.dataset.imageTarget;
-    placeholder.removeAttribute('data-image-target');
+    placeholder.dataset.loading = 'true';
     let result = imageCache.get(target);
     if (!result) {
       result = requestHost('image', { target }).catch(() => null);
@@ -1120,10 +1121,75 @@ function hydrateImages() {
   }
 }
 function renderReader() {
-  $('reader').innerHTML = md.render(host.content || '');
+  if (renderedImageVersion !== imageVersion) $('reader').replaceChildren();
+  renderedImageVersion = imageVersion;
+  patchMarkdown($('reader'), md.render(host.content || ''));
   $('reader').style.color = host.tone === 'secondary' ? 'var(--secondary)' : 'var(--text)';
   hydrateImages();
   reportHeight();
+}
+let renderedImageVersion;
+function markdownNodeSignature(node) {
+  if (node.nodeType !== Node.ELEMENT_NODE) return node.textContent || '';
+  if (node instanceof HTMLImageElement && node.dataset.target)
+    return `image:${node.dataset.target}:${node.alt}`;
+  if (node.hasAttribute('data-image-target'))
+    return `image:${node.dataset.imageTarget}:${node.dataset.alt || ''}`;
+  return node.outerHTML;
+}
+function compatibleMarkdownNodes(current, next) {
+  if (current.nodeType !== next.nodeType) return false;
+  if (current.nodeType !== Node.ELEMENT_NODE) return true;
+  if (
+    current instanceof HTMLImageElement &&
+    current.dataset.target &&
+    next.hasAttribute('data-image-target')
+  )
+    return current.dataset.target === next.dataset.imageTarget;
+  if (current.tagName !== next.tagName || current.attributes.length !== next.attributes.length)
+    return false;
+  return [...current.attributes].every(
+    attribute => next.getAttribute(attribute.name) === attribute.value,
+  );
+}
+function patchMarkdownChildren(current, next) {
+  const previous = [...current.childNodes];
+  const incoming = [...next.childNodes];
+  let prefix = 0;
+  while (
+    prefix < previous.length &&
+    prefix < incoming.length &&
+    markdownNodeSignature(previous[prefix]) === markdownNodeSignature(incoming[prefix])
+  )
+    prefix++;
+  let suffix = 0;
+  while (
+    suffix < previous.length - prefix &&
+    suffix < incoming.length - prefix &&
+    markdownNodeSignature(previous[previous.length - suffix - 1]) ===
+      markdownNodeSignature(incoming[incoming.length - suffix - 1])
+  )
+    suffix++;
+  const anchor = suffix ? previous[previous.length - suffix] : null;
+  const oldMiddle = previous.slice(prefix, previous.length - suffix);
+  const newMiddle = incoming.slice(prefix, incoming.length - suffix);
+  const shared = Math.min(oldMiddle.length, newMiddle.length);
+  for (let index = 0; index < shared; index++) {
+    const oldNode = oldMiddle[index];
+    const newNode = newMiddle[index];
+    if (compatibleMarkdownNodes(oldNode, newNode)) {
+      if (oldNode.nodeType === Node.TEXT_NODE) oldNode.nodeValue = newNode.nodeValue;
+      else if (!(oldNode instanceof HTMLImageElement && oldNode.dataset.target))
+        patchMarkdownChildren(oldNode, newNode);
+    } else current.replaceChild(newNode, oldNode);
+  }
+  for (const node of oldMiddle.slice(shared)) current.removeChild(node);
+  for (const node of newMiddle.slice(shared)) current.insertBefore(node, anchor);
+}
+function patchMarkdown(root, html) {
+  const template = document.createElement('template');
+  template.innerHTML = html;
+  patchMarkdownChildren(root, template.content);
 }
 function reportHeight() {
   if (host.kind === 'reader')

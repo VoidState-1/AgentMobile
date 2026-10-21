@@ -13,16 +13,27 @@ for (const width of [360, 1280]) {
       await expect(page.getByTestId('workbench-header')).toContainText(
         name === '对话' ? 'Agent Mobile' : name,
       );
-      if (name !== '设置') await expect(page.getByTestId('project-empty-state')).toBeVisible();
+      if (name !== '设置')
+        await expect(
+          page.getByTestId('project-empty-state').filter({ visible: true }),
+        ).toBeVisible();
     }
     await page.getByRole('tab', { name: '文件', exact: true }).click();
     await page
       .getByTestId('project-empty-state')
+      .filter({ visible: true })
       .getByRole('button', { name: '新建项目', exact: true })
       .click();
     await page.getByLabel('项目名称', { exact: true }).fill('导航验证');
     await page.getByRole('button', { name: '创建工作区', exact: true }).click();
     await expect(page.getByLabel('任务目标', { exact: true })).toBeVisible();
+    await page.getByRole('tab', { name: 'Git', exact: true }).click();
+    const repositoryTab = page.getByRole('tab', { name: '仓库', exact: true });
+    await repositoryTab.click();
+    await page.getByRole('tab', { name: '文件', exact: true }).click();
+    await page.getByRole('tab', { name: 'Git', exact: true }).click();
+    await expect(repositoryTab).toHaveAttribute('aria-selected', 'true');
+    await page.getByRole('tab', { name: '对话', exact: true }).click();
     await page.getByLabel('任务目标', { exact: true }).fill('切换后保留草稿');
     for (const name of ['文件', 'Git', '设置', '对话']) {
       await page.getByRole('tab', { name, exact: true }).click();
